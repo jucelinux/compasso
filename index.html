@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no" />
+    <title>COMPASSO — round zero</title>
+    <style>
+      html, body {
+        margin: 0;
+        height: 100%;
+        background: #0b0b0f;
+        color: #6b6b7b;
+        font: 12px/1.5 ui-monospace, monospace;
+        overflow: hidden;
+      }
+      #app { display: grid; place-items: center; height: 100%; }
+      #hud {
+        position: fixed;
+        top: 8px;
+        left: 10px;
+        pointer-events: none;
+        white-space: pre;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="app"></div>
+    <div id="hud"></div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

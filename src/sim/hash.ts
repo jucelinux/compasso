@@ -1,0 +1,61 @@
+/**
+ * FNV-1a de 32 bits sobre um buffer empacotado. Barato o bastante pra rodar
+ * todo tick e cobrir todo estado relevante de gameplay.
+ */
+export function fnv1a(bytes: Uint8Array): string {
+  let h = 0x811c9dc5
+  for (let i = 0; i < bytes.length; i++) {
+    h ^= bytes[i]!
+    h = Math.imul(h, 0x01000193)
+  }
+  return (h >>> 0).toString(16).padStart(8, "0")
+}
+
+/** Empacotador incremental: floats como f64 little-endian, inteiros como u32. */
+export class Packer {
+  private readonly view: DataView
+  private readonly bytes: Uint8Array
+  private offset = 0
+
+  constructor(byteLength: number) {
+    const buffer = new ArrayBuffer(byteLength)
+    this.view = new DataView(buffer)
+    this.bytes = new Uint8Array(buffer)
+  }
+
+  f64(v: number): this {
+    this.view.setFloat64(this.offset, v, true)
+    this.offset += 8
+    return this
+  }
+
+  u32(v: number): this {
+    this.view.setUint32(this.offset, v >>> 0, true)
+    this.offset += 4
+    return this
+  }
+
+  u8(v: number): this {
+    this.view.setUint8(this.offset, v & 0xff)
+    this.offset += 1
+    return this
+  }
+
+  bool(v: boolean): this {
+    return this.u8(v ? 1 : 0)
+  }
+
+  reset(): this {
+    this.offset = 0
+    return this
+  }
+
+  digest(): string {
+    return fnv1a(this.bytes.subarray(0, this.offset))
+  }
+}
+
+/** FNV-1a sobre uma string UTF-8. Usado para o `tuningHash` do replay. */
+export function hashString(text: string): string {
+  return fnv1a(new TextEncoder().encode(text))
+}

@@ -1,0 +1,20 @@
+{
+  "sim": {
+    "hz": 60
+  },
+  "arena": {
+    "width": 640,
+    "height": 360
+  },
+  "player": {
+    "size": 24,
+    "speed": 180
+  },
+  "drifter": {
+    "size": 18,
+    "speed": 120
+  },
+  "harness": {
+    "recordSeconds": 30
+  }
+}
