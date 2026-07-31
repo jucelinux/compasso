@@ -5,8 +5,8 @@
  * byte a byte. Fixtures de verdade vêm do F9; esta existe pra ter um baseline
  * antes de existir jogo.
  */
-import { writeFileSync } from "node:fs"
-import { mkdirSync } from "node:fs"
+import { execSync } from "node:child_process"
+import { mkdirSync, writeFileSync } from "node:fs"
 import { resolve } from "node:path"
 import { createRng } from "../sim/rng.ts"
 import type { InputFrame } from "../sim/types.ts"
@@ -31,7 +31,14 @@ for (let tick = 0; tick < TICKS; tick++) {
   inputs.push(unpackInput(dir | (action ? 16 : 0)))
 }
 
-const replay = createReplay({ seed: SEED, tuning, label: "smoke", inputs })
+let gitSha: string | null = null
+try {
+  gitSha = execSync("git rev-parse --short HEAD", { encoding: "utf8", cwd: projectRoot }).trim()
+} catch {
+  gitSha = null // sem repo: o replay ainda roda, só perde a procedência
+}
+
+const replay = createReplay({ seed: SEED, tuning, label: "smoke", inputs, gitSha })
 mkdirSync(resolve(projectRoot, "replays"), { recursive: true })
 const path = resolve(projectRoot, "replays", "smoke.json")
 writeFileSync(path, stringifyReplay(replay) + "\n")

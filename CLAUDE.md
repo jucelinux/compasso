@@ -13,15 +13,17 @@ the rig. Do not write code before that.
 
 ## 1. The project
 
-- **Name:** _(TBD)_
-- **Genre:** _(TBD — fill in before the first round)_
-- **One-line pitch:** _(TBD)_
+- **Name:** COMPASSO
+- **Genre:** arena action, short run, with a roguelite layer of modifiers
+- **One-line pitch:** time only moves when you move
 - **Target:** web first; the build runs in desktop and mobile browsers.
 
-> While genre and pitch are empty, do not generate any game content. Ask.
+Settled on 31/07 and recorded in `DECISIONS.md`. Do not reopen these without a new line
+there. The details that follow from them — one verb, geometric primitives only, 0.05x
+creep, three lives, 8 fixed directions, i-frames until the end of the next dash — live in
+`DECISIONS.md` and are binding in the same way.
 
-The rig in `HARNESS.md` is genre-independent and can be built while these fields are still
-empty. That is the intended order.
+The rig in `HARNESS.md` is genre-independent, which is why round zero came first.
 
 ---
 

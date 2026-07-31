@@ -17,12 +17,16 @@ export interface Recorder {
   readonly windowTicks: number
 }
 
-export function createRecorder(seed: number, tuning: Tuning): Recorder {
+export function createRecorder(
+  seed: number,
+  tuning: Tuning,
+  gitSha: string | null = null,
+): Recorder {
   const windowTicks = Math.round(tuning.harness.recordSeconds * tuning.sim.hz)
   const all: InputFrame[] = []
 
   const build = (label: string, inputs: readonly InputFrame[]): Replay =>
-    createReplay({ seed, tuning, label, inputs })
+    createReplay({ seed, tuning, label, inputs, gitSha })
 
   return {
     push: (input) => {

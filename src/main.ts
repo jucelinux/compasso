@@ -3,6 +3,7 @@ import { createSim } from "./sim/sim.ts"
 import type { SimState, Tuning } from "./sim/types.ts"
 import { createKeyboard } from "./input/keyboard.ts"
 import { createRecorder, downloadReplay } from "./input/recorder.ts"
+import { browserGitSha } from "./harness/gitSha.ts"
 import { createRenderer } from "./render/renderer.ts"
 
 const tuning = tuningJson as Tuning
@@ -21,7 +22,7 @@ const hud = document.getElementById("hud")!
 
 const sim = createSim(seed, tuning)
 const keyboard = createKeyboard()
-const recorder = createRecorder(seed, tuning)
+const recorder = createRecorder(seed, tuning, browserGitSha())
 const renderer = await createRenderer(mount, tuning)
 
 const clone = (s: Readonly<SimState>): SimState => structuredClone(s) as SimState
