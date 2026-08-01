@@ -84,3 +84,9 @@ Sem prosa. Se precisar de parágrafo, é decisão de arquitetura e vai pro `CLAU
 - 31/07 · recompensa · combo com escalada de cor, tamanho e tremor · bar do Candy Crush; 2 abates seguidos precisam valer visivelmente menos que 9
 - 31/07 · fundo · parallax que anda no tempo de MUNDO · H disse que fundo estático "não comunicava"; agora ele é a leitura mais direta da dilatação
 - 31/07 · identidade · abate passivo em 15-20% com 13 powerups · ainda longe do limite de 40% que aposentaria o verbo único
+- 01/08 · dificuldade · reprovada de novo · H: "não achei tão desafiador... nem tão roguelike quanto a proposta"; mais inimigos na tela não virou mais dificuldade
+- 01/08 · progressão · cota cresce de forma plana demais · H sente que "a quantidade de kills era a mesma de acordo com o nível"; +2 por onda não lê como escalada
+- 01/08 · DASH · segunda vez que o H aponta · "não me parece um diferencial... a célula se move com soluços... senti falta de fluidez"; ele já tinha apontado em 31/07 e adiado a decisão
+- 01/08 · parallax · REPROVADO, e a crítica é justa · reusei a mesma textura em três escalas; movimento sem conteúdo próprio não é parallax, é a mesma imagem escorregando
+- 01/08 · defeito · Salmonella gira no próprio eixo · render aplica rotação constante a todo patógeno; um flagelado tem que apontar para onde vai
+- 01/08 · gráfico · estagnou, e o H esperava quase fotorrealismo · canvas 2D procedural tem teto; o salto de verdade é shader WebGL, e é o que eu consigo fazer sem desenhar

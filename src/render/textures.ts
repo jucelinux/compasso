@@ -422,3 +422,91 @@ export function plasmaTexture(w: number, h: number, base: number, dark: number):
 
   return Texture.from(canvas)
 }
+
+/**
+ * Camadas de fundo, cada uma com CONTEÚDO PRÓPRIO e emenda invisível.
+ *
+ * A primeira tentativa de parallax reusava a mesma textura em três escalas, e o
+ * humano reprovou com razão em 01/08: mesma imagem escorregando não é
+ * profundidade. Aqui cada camada é outra coisa — hemácias fora de foco lá no
+ * fundo, malha de fibrina no meio, plaquetas e detritos na frente.
+ *
+ * Tudo é desenhado três vezes (x-w, x, x+w) para a emenda horizontal fechar.
+ */
+export type LayerKind = "hemacias" | "fibrina" | "detritos"
+
+export function bloodLayer(w: number, h: number, kind: LayerKind, seed: number): Texture {
+  const canvas = document.createElement("canvas")
+  canvas.width = w
+  canvas.height = h
+  const c = canvas.getContext("2d")
+  if (c === null) throw new Error("canvas 2d indisponível")
+
+  const wrap = (draw: (x: number) => void, x: number): void => {
+    draw(x - w)
+    draw(x)
+    draw(x + w)
+  }
+
+  if (kind === "hemacias") {
+    // Discos bicôncavos grandes e fora de foco: a profundidade do vaso.
+    for (let i = 0; i < 30; i++) {
+      const x = hashNoise(i, seed, 1) * w
+      const y = hashNoise(i, seed, 2) * h
+      const rad = 26 + hashNoise(i, seed, 3) * 44
+      const tilt = hashNoise(i, seed, 4) * Math.PI
+      wrap((xx) => {
+        c.save()
+        c.translate(xx, y)
+        c.rotate(tilt)
+        c.scale(1, 0.62 + hashNoise(i, seed, 5) * 0.3)
+        const g = c.createRadialGradient(0, 0, rad * 0.05, 0, 0, rad)
+        g.addColorStop(0, "rgba(92,10,22,0.55)")
+        g.addColorStop(0.45, "rgba(150,22,38,0.42)")
+        g.addColorStop(0.82, "rgba(178,34,52,0.30)")
+        g.addColorStop(1, "rgba(120,16,30,0)")
+        c.fillStyle = g
+        c.beginPath()
+        c.arc(0, 0, rad, 0, Math.PI * 2)
+        c.fill()
+        c.restore()
+      }, x)
+    }
+  } else if (kind === "fibrina") {
+    // Malha de fibras: dá direção e faz o deslocamento ser legível.
+    c.lineCap = "round"
+    for (let i = 0; i < 22; i++) {
+      const y0 = hashNoise(i, seed, 7) * h
+      const amp = 12 + hashNoise(i, seed, 8) * 46
+      const thick = 0.6 + hashNoise(i, seed, 9) * 2.2
+      wrap((xx) => {
+        c.beginPath()
+        c.lineWidth = thick
+        c.strokeStyle = `rgba(236,150,160,${0.05 + hashNoise(i, seed, 10) * 0.09})`
+        for (let k = 0; k <= 26; k++) {
+          const px = xx + (k / 26) * w
+          const py = y0 + Math.sin(k * 0.55 + i) * amp
+          if (k === 0) c.moveTo(px, py)
+          else c.lineTo(px, py)
+        }
+        c.stroke()
+      }, 0)
+    }
+  } else {
+    // Plaquetas e detritos: partícula pequena e nítida, que corre rápido.
+    for (let i = 0; i < 130; i++) {
+      const x = hashNoise(i, seed, 11) * w
+      const y = hashNoise(i, seed, 12) * h
+      const rad = 0.8 + hashNoise(i, seed, 13) * 2.6
+      const a = 0.1 + hashNoise(i, seed, 14) * 0.3
+      wrap((xx) => {
+        c.beginPath()
+        c.ellipse(xx, y, rad * 1.7, rad, hashNoise(i, seed, 15) * 3.14, 0, Math.PI * 2)
+        c.fillStyle = `rgba(255,214,214,${a})`
+        c.fill()
+      }, x)
+    }
+  }
+
+  return Texture.from(canvas)
+}

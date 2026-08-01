@@ -1,5 +1,12 @@
 import { Application, Container, Graphics, Sprite, Text, TextStyle } from "pixi.js"
-import { organCellTexture, pathogenTexture, plasmaTexture, playerTexture } from "./textures.ts"
+import {
+  bloodLayer,
+  organCellTexture,
+  pathogenTexture,
+  plasmaTexture,
+  playerTexture,
+  type LayerKind,
+} from "./textures.ts"
 import { MODIFIERS, MOD_SHIELD, applyModifiers } from "../sim/modifiers.ts"
 import type { SimState, Tuning } from "../sim/types.ts"
 
@@ -85,22 +92,20 @@ export async function createRenderer(mount: HTMLElement, tuning: Tuning): Promis
    * O humano disse que o fundo estático "não comunicava com o resto": agora ele
    * é a leitura mais direta da dilatação — parado, o sangue quase não escorre.
    */
-  const drift: Array<{ sprite: Sprite; speed: number }> = []
-  for (let layer = 0; layer < 3; layer++) {
-    const tex = plasmaTexture(
-      tuning.arena.width,
-      tuning.arena.height,
-      COLOR_PLASMA,
-      layer === 0 ? COLOR_BG : 0x3a1018,
-    )
+  const LAYERS: ReadonlyArray<{ kind: LayerKind; speed: number; alpha: number; bob: number }> = [
+    { kind: "hemacias", speed: 18, alpha: 0.85, bob: 3 },
+    { kind: "fibrina", speed: 52, alpha: 0.7, bob: 7 },
+    { kind: "detritos", speed: 124, alpha: 0.9, bob: 13 },
+  ]
+  const drift: Array<{ sprite: Sprite; speed: number; bob: number; slot: number }> = []
+  LAYERS.forEach((layer, li) => {
+    const tex = bloodLayer(tuning.arena.width, tuning.arena.height, layer.kind, li * 91 + 7)
     for (let copy = 0; copy < 2; copy++) {
       const sp = new Sprite(tex)
-      sp.alpha = layer === 0 ? 1 : 0.28 - layer * 0.07
-      sp.scale.set(1 + layer * 0.25)
-      sp.position.set(copy * tuning.arena.width, 0)
-      drift.push({ sprite: sp, speed: 26 + layer * 34 })
+      sp.alpha = layer.alpha
+      drift.push({ sprite: sp, speed: layer.speed, bob: layer.bob, slot: copy })
     }
-  }
+  })
   let driftX = 0
 
   const playerSprite = new Sprite(playerTexture(tuning.player.size, COLOR_CELL, COLOR_NUCLEUS))
@@ -225,6 +230,9 @@ export async function createRenderer(mount: HTMLElement, tuning: Tuning): Promis
   }
   let pops: Pop[] = []
   const popPool: Text[] = []
+
+  /** Direção de marcha suavizada, por patógeno. Só o render precisa disto. */
+  const heading = new Map<number, number>()
 
   let seenIds = new Set<number>()
   let prevCombo = 0
@@ -507,6 +515,9 @@ export async function createRenderer(mount: HTMLElement, tuning: Tuning): Promis
       }
       prevCellsLost = cur.cellsLost
       seenIds = live
+      if (heading.size > 400) {
+        for (const key of heading.keys()) if (!live.has(key)) heading.delete(key)
+      }
 
       if (prevLives >= 0 && cur.lives < prevLives) {
         flash = 1
@@ -520,12 +531,14 @@ export async function createRenderer(mount: HTMLElement, tuning: Tuning): Promis
       if (cur.phase === "run" && cur.frozen === 0) {
         driftX -= (cur.worldScale * 1) / 60
       }
-      for (let i = 0; i < drift.length; i++) {
-        const d = drift[i]!
-        const span = tuning.arena.width * d.sprite.scale.x
-        let x = ((driftX * d.speed) % span) + (i % 2) * span
-        if (x > 0) x -= span * 2
-        d.sprite.position.set(x, -(d.sprite.scale.y - 1) * tuning.arena.height * 0.5)
+      for (const d of drift) {
+        const span = tuning.arena.width
+        let x = ((driftX * d.speed) % span) + d.slot * span
+        while (x > 0) x -= span
+        while (x < -span) x += span
+        // Balanço vertical por camada: a mais próxima oscila mais, que é o que
+        // dá sensação de corrente em vez de esteira.
+        d.sprite.position.set(x, Math.sin(driftX * 0.4 + d.speed) * d.bob)
       }
 
       const frozen = cur.frozen > 0
@@ -568,7 +581,34 @@ export async function createRenderer(mount: HTMLElement, tuning: Tuning): Promis
         g.position.set(p ? lerp(p.x, e.x, t) : e.x, p ? lerp(p.y, e.y, t) : e.y)
         const age = Math.min(1, (cur.tick - e.bornTick) / 12)
         g.scale.set(0.25 + 0.75 * age)
-        g.rotation = e.id * 0.7 + cur.tick * 0.012
+
+        /*
+         * Orientação pela DIREÇÃO DE MARCHA, não rotação no próprio eixo.
+         * Um flagelado girando parado é exatamente o que o humano apontou em
+         * 01/08: os flagelos ficam atrás da cabeça, então a cabeça tem que
+         * apontar pra onde ele vai. Só o cacho de cocos (S. aureus) roda solto,
+         * porque cacho não tem frente.
+         */
+        const form = tuning.enemy.kinds[e.kind]?.form ?? "esfera"
+        if (form === "cacho" || form === "esfera" || form === "coroa") {
+          g.rotation = e.id * 0.7 + cur.tick * 0.008
+        } else if (p !== undefined) {
+          const vx = e.x - p.x
+          const vy = e.y - p.y
+          if (vx * vx + vy * vy > 0.0004) {
+            const want = Math.atan2(vy, vx)
+            // Vira suave: um bacilo não pivota instantaneamente.
+            let delta = want - (heading.get(e.id) ?? want)
+            while (delta > Math.PI) delta -= Math.PI * 2
+            while (delta < -Math.PI) delta += Math.PI * 2
+            heading.set(e.id, (heading.get(e.id) ?? want) + delta * 0.25)
+          }
+          const h = heading.get(e.id)
+          if (h !== undefined) {
+            // Ondulação do corpo enquanto nada, proporcional ao quanto se move.
+            g.rotation = h + Math.sin(cur.tick * 0.25 + e.id) * 0.12
+          }
+        }
       }
       for (let i = cur.enemies.length; i < enemyPool.length; i++) enemyPool[i]!.visible = false
 
