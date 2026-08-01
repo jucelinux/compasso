@@ -5,13 +5,19 @@ log de decisão morre.
 
 ---
 
-## Próxima rodada — dificuldade sem teto
+## Aberto agora
 
-- **Folga como curva única.** `creep` sobe e `recoveryTicks` cai conforme a run avança.
-  Hoje são constantes.
-- **Tirar o teto de spawn.** `minSpawnIntervalSeconds` satura no kill ~60 e a dificuldade
-  congela ali. Enquanto spawn for o único eixo, qualquer teto encerra o jogo cedo.
-- **Ondas.** Cota de kills por onda, não temporizador — ver a nota abaixo.
+- **Gate não medido.** O gate de 31/07 passou com modificador PERMANENTE entre runs —
+  ele voltou porque estava mais forte. Esse mecanismo não existe mais. Até uma nova
+  medição, o projeto não tem métrica de direção válida.
+- **`replays/run-01.json` não cobre mais morte nem reinício.** Gravada antes das ondas.
+  Precisa de uma gravação nova do build atual.
+- **Bot de ritmo.** Achou a onda 1 de 78s e a inversão da curva de tensão (dash =
+  imunidade). Vive em tmp de job e morre com ele. Se a próxima rodada de tuning precisar,
+  vai ser reescrito do zero — vale commitar em `src/harness/` quando isso acontecer a
+  segunda vez.
+- **Escolha a cada ~18s.** Melhor que os 7s da cota baixa, mas 12–20 escolhas por run
+  ainda pode ser interrupção demais. Medir depois que o humano jogar.
 
 ## Vindo do tema (célula imunológica), como mecânica e não como arte
 

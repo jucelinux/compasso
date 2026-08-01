@@ -12,8 +12,13 @@ const SMOKE = resolve(projectRoot, "replays", "smoke.json")
 const BASELINE_HASH = "6844a433"
 
 /**
- * Run real do humano, 7,6 min: passa por morte, escolha de modificador e
- * reinício — a camada de que o gate depende, que a fixture sintética não toca.
+ * Run real do humano, 7,6 min de input de verdade.
+ *
+ * ATENÇÃO: gravada ANTES das ondas. Sob as regras atuais este log fica 79% do
+ * tempo preso na tela de escolha, que o input dele não conhecia — não morre e
+ * não atravessa reinício. Continua valendo como fixture de determinismo sobre
+ * input humano real; NÃO cobre mais a camada de que o gate depende. Substituir
+ * por uma gravação do build com ondas.
  */
 const RUN_01 = resolve(projectRoot, "replays", "run-01.json")
 const RUN_01_HASH = "18d05eac"
@@ -40,7 +45,7 @@ describe("determinismo", () => {
     expect(divergence, `divergiu no tick ${divergence}`).toBe(-1)
   })
 
-  it("run real: bate com o baseline e atravessa morte e escolha", () => {
+  it("input humano real: bate com o baseline", () => {
     const result = runReplay(loadReplay(RUN_01), tuning())
     expect(result.finalHash).toBe(RUN_01_HASH)
     expect(result.ticks).toBeGreaterThan(20000)
