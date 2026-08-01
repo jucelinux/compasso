@@ -169,19 +169,25 @@ It has never been pointed at the model's self-assessments.
 
 ---
 
-## 5. Proposals, not yet adopted
+## 5. Proposals
 
 Raw material for `TASTE-LOOP.md`. Each needs the human's verdict before it graduates.
 
-### P1 — Frontier probe before the first round on any axis
+> **All five below were accepted on 01/08 and have graduated.** They are kept here with
+> their original reasoning because the changelog in `TASTE-LOOP.md` §12 records *what*
+> changed and this records *why it was ever in doubt*. New proposals go under §5b.
+
+### P1 — Frontier probe before the first round on any axis · ADOPTED → §3.0
 
 Before optimizing an axis, produce **2–4 materially different samples spanning the
 plausible range**, cheap and disposable, and let the human pick. Not variants of one idea —
 different idioms. Cost: one round-trip. It would have saved three rounds here.
 
-Open question: which axes deserve this? Doing it for everything is its own waste.
+Open question at the time: which axes deserve this? Doing it for everything is its own
+waste. **Resolved on adoption:** probe on the *first* round of an axis only; skip on later
+rounds, because by then the idiom is settled. Cheap rule, no judgement call needed.
 
-### P2 — `TASTE.md` §2 splits in two
+### P2 — `TASTE.md` §2 splits in two · ADOPTED → §8, and `TASTE.md` §2a/§2b
 
 Today §2 is "declared biases of the model". Split:
 
@@ -200,19 +206,19 @@ Seed entries from this project, each with evidence:
   survived code review and a green suite.
 - *Unreliable when self-reporting its own ceiling.* See §4.
 
-### P3 — The bar becomes negotiated, not assigned
+### P3 — The bar becomes negotiated, not assigned · ADOPTED → §4
 
 `TASTE-LOOP.md` §4 currently: the human sets the bar. Proposed: the human sets the
 **direction and ambition**; the model reports **where the frontier actually is**, with
 samples; the human picks a point on it. Neither party can do both halves.
 
-### P4 — A fourth question at round close
+### P4 — A fourth question at round close · ADOPTED → §3.9
 
 `TASTE-LOOP.md` §3.9 asks three questions. Add: **"Did this round operate below a ceiling
 either side knows about but did not name?"** Cheap to ask; it is the detector that was
 missing for three rounds.
 
-### P5 — Constraints proposed as virtues must be split
+### P5 — Constraints proposed as virtues must be split · ADOPTED → §8
 
 When either party proposes a constraint as a design virtue, state explicitly which part is
 virtue and which part is limitation. *"Only geometric primitives — the restriction becomes
@@ -246,7 +252,18 @@ the measurement, not the reasoning. **Evidence that rung 2 pays.** No rule chang
 
 ### L4 · 01/08 · The capability frontier was never surfaced from the model's side
 
-Case 01 above. **Not yet adopted** — proposals P1–P5 are open.
+Case 01 above. **Adopted** — P1–P5 all graduated the same day. The concrete artifact is
+`TASTE.md` §2b, the capability surface, which did not exist before and is the half of the
+collaboration the framework had no slot for.
+
+### L5 · 01/08 · Distilling is a debt that accrues silently
+
+`TASTE.md` §1 was distilled on 31/07 and still described the pre-pivot game while
+`DECISIONS.md` grew to 133 lines. §8 says to distill past ~30 lines; nothing *checks*.
+Same class as L1 — a state file with no maintenance trigger — but a different mechanism:
+L1 was a verdict that superseded a declaration, this is slow accumulation with no single
+moment where it becomes wrong. **Open:** the round-close questions catch supersession, not
+drift. No proposal yet.
 
 ---
 

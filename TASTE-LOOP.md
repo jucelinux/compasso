@@ -42,6 +42,11 @@ ask: what property of the artifact can be asserted mechanically and re-checked f
 
 ## 3. One round
 
+0. **Probe the frontier — first round on an axis only.** Before optimizing, produce 2–4
+   cheap, disposable samples spanning *different idioms*, not variants of one idea, and let
+   the human pick. This exists because neither party can see the frontier alone: the human
+   cannot see where the agent's ceiling is highest, and the agent is an unreliable reporter
+   of its own ceiling (§4). Skip on later rounds of the same axis — the idiom is settled.
 1. **Narrow the axis.** One axis per round. "Make it better" is too vague to produce a
    gradient — the lead agent decomposes the goal into separately judgeable pieces.
 2. **Two materially different variants**, A and B. Not one and a fine-tune of it.
@@ -52,9 +57,10 @@ ask: what property of the artifact can be asserted mechanically and re-checked f
 7. **Record the verdict** in the same turn it is given.
 8. **Propagate it.** Recording is not the same as applying. If the verdict supersedes
    something a *state* file still declares, fix that file now — see section 8.
-9. **Close the round.** Answer three questions out loud, in the same turn:
+9. **Close the round.** Answer four questions out loud, in the same turn:
    *Did this round produce a gate reading, or not?* · *What did the loop itself get wrong?*
-   · *Does anything in this file need to change?* See section 12.
+   · ***Did this round operate below a ceiling either side knows about but did not name?*** ·
+   *Does anything in this file need to change?* See section 12.
 
 ---
 
@@ -75,6 +81,29 @@ Every domain needs three things defined before the loop can run:
 If any of the three is missing, the loop degrades into "ask the human every round."
 
 One bar per axis, not one bar overall. A general "be as good as X" gives no gradient.
+
+### The bar is negotiated, not assigned
+
+Neither party can set it alone, and assigning it to the human wastes rounds. He knows what
+the thing should *be*; he does not know what is reachable, because the agent's capability
+surface is invisible to him and is not a fact about "AI" in general — it is specific to this
+model, this harness and this stack.
+
+| Who | Supplies |
+|---|---|
+| Human | Direction and ambition level — *what this should feel like, and how far to push* |
+| Agent | Where the frontier actually is, **with samples** — *here is the reachable set* |
+| Human | Picks a point on it |
+
+A bar outside the reachable set is not ambition; it is a wasted round. On 01/08 this project
+spent one asking for near-photorealism, which no amount of effort was going to reach, while
+a stronger reachable idiom sat unused for three rounds.
+
+**Agent self-report does not count as the frontier.** It is a hypothesis, and it goes to
+rungs 1–3 of the ladder like any other. The same day the agent wrote *"the real jump is a
+WebGL shader"* into the decision log as fact, and it was wrong about the direction — the
+real jump was animation, of which the game had exactly zero frames. Fluent, confident,
+recorded, and pointing away from the answer. Samples are evidence; paragraphs are not.
 
 ---
 
@@ -145,11 +174,25 @@ DATE · AXIS · WINNER · short reason
 Never edit old lines. Never write prose — a decision log that becomes an essay is a
 decision log nobody rereads, including the agent.
 
-### `TASTE.md` — distilled rubric, ~15 lines max
+### `TASTE.md` — three sections, and they are not the same kind of thing
 
-Once `DECISIONS.md` passes ~30 lines, distill recurring patterns into rules. The history
-stays for auditing; what enters the critic's prompt is the distillate. A rubric that does
-not fit is a rubric that gets ignored.
+**§1 Human taste** — distilled rubric, ~15 lines max. Once `DECISIONS.md` passes ~30 lines,
+distill recurring patterns into rules. The history stays for auditing; what enters the
+critic's prompt is the distillate. A rubric that does not fit is a rubric that gets ignored.
+Rewrite it whole when distilling; never accumulate.
+
+**§2a Agent biases** — tendencies the human should push back on. Its purpose is to give him
+standing to ask *"is this you going where you like again?"* and get an honest yes.
+
+**§2b Agent capability surface** — where the ceiling is high, where it is low, and **what
+shape of constraint raises it**. This is the half that was missing until 01/08, and its
+absence cost three rounds: the constraint *"the model does not draw"* was recorded as an
+obstacle to route around and never as a question about where the ceiling is highest. The
+answer — rule-governed pixel art, which converts drawing into constraint satisfaction — was
+available the entire time.
+
+**Every §2b entry must cite an artifact that demonstrated it.** Not a self-assessment. See
+section 4 on why the agent's word about its own ceiling is worth nothing on its own.
 
 ### `BACKLOG.md` stays separate
 
@@ -179,6 +222,21 @@ took it at its word.
 State files should say **as of DATE** on any list they call binding. A date is the cheapest
 possible staleness signal: it does not prove the list is current, but it makes "when was
 this last checked" answerable without archaeology.
+
+### A constraint proposed as a virtue must be split
+
+When either party proposes a constraint and argues it as a design virtue, record **both
+halves**: which part is virtue, and which part is limitation.
+
+> *"Only geometric primitives — the restriction becomes identity; it denies the crutch of
+> pretty assets."* — 31/07
+
+That was true. It was also a cover story for *the agent cannot draw*, and only the flattering
+half reached the decision log as the headline. Recording one half buried the question
+"what else does this limitation make us good at?" for three rounds.
+
+Both halves are usually true. The virtue half is the one that feels like insight, which is
+exactly why it is the one that gets written down alone.
 
 ### Disagreement outranks agreement
 
@@ -293,3 +351,9 @@ is the same log-versus-state split as section 8, applied to the method itself.
 | 01/08 | Log vs state files, and the *propagate* step (§3.8, §8) | Three constraints stayed declared as binding for a day after the core that implied them fell |
 | 01/08 | Round close, and this section (§3.9, §12) | The method was never itself under review; every round improved the game and none improved the loop |
 | 01/08 | "Agent is confident about work it cannot see" as a named failure mode (§10) | Five real visual defects survived code review and a green test suite; only rendering the output found them. If an axis has no artifact the agent can inspect, the agent's confidence on that axis is worth nothing |
+| 01/08 | Frontier probe as step 0 (§3) | The agent's strongest visual idiom sat unused for three rounds; the human discovered it by dissatisfaction, which is the most expensive detector available |
+| 01/08 | The bar becomes negotiated (§4) | The human set a bar outside the reachable set, because the agent's capability surface is invisible to him and undocumented |
+| 01/08 | Agent self-report is a hypothesis, not a fact (§4) | "The real jump is a WebGL shader" went into the decision log as fact and was wrong about the direction |
+| 01/08 | `TASTE.md` §2 splits into biases and capability surface (§8) | §2 collected tendencies but never boundaries or maxima, so nothing ever asked where the ceiling was highest |
+| 01/08 | Fourth round-close question: did we operate below a named ceiling? (§3.9) | Nothing in the loop detected three rounds spent below the frontier |
+| 01/08 | Constraints proposed as virtues must be split (§8) | "Only geometric primitives — the restriction becomes identity" was virtue and limitation; only the virtue half was recorded |

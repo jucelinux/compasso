@@ -29,8 +29,32 @@ try {
   await d.shot(resolve(dir, "2-a-toda.png"))
   await d.page.keyboard.up("ArrowLeft")
 
-  // Fica parada no meio do campo até morrer: devagar é o que machuca.
-  await d.page.waitForTimeout(30_000)
+  /*
+   * Para chegar à tela de morte é preciso ANDAR.
+   *
+   * A primeira versão ficava 30s parada, supondo que devagar machuca. Machuca —
+   * mas parada o mundo anda a 5%, então quase nada chega até você, e depois do
+   * primeiro toque os i-frames não caem porque cair exige engolir. A captura
+   * saía com o nome "morte" mostrando uma run viva. Artefato com nome mentiroso
+   * é pior que artefato nenhum.
+   */
+  const passo: ReadonlyArray<[string[], number]> = [
+    [["ArrowRight"], 1200],
+    [["ArrowDown"], 1000],
+    [["ArrowLeft"], 1200],
+    [["ArrowUp"], 1000],
+  ]
+  const fase = async (): Promise<string> =>
+    (await d.page.locator("#hud").textContent())?.match(/fase (\w+)/)?.[1] ?? "?"
+
+  let n = 0
+  while (n < 4 * 40 && (await fase()) === "run") {
+    const [keys, ms] = passo[n % passo.length]!
+    await d.hold(keys, ms)
+    n++
+  }
+  if ((await fase()) !== "dead") throw new Error("não morreu — a captura de morte mentiria")
+  await d.page.waitForTimeout(600)
   await d.shot(resolve(dir, "3-morte.png"))
 
   console.log(`capturas em ${dir}`)

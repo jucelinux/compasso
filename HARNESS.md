@@ -141,6 +141,17 @@ npm run build      # production web build
 Do not build any of this before there is a playable game whose quality is worth judging.
 Listed here so the design is not lost, not so it gets built early.
 
+**Status as of 01/08.** Part of the first item exists and is no longer deferred: Playwright
+is a devDependency, `src/harness/drive.ts` drives the real build in a real browser, and two
+entry points sit on top of it — `npm run shot` (stills of the current build) and `npm run
+rec` (drives the game to death and restart, then dumps a replay through shift+F9). It was
+built early, against the rule below, for a reason the rule did not anticipate: five real
+visual defects had just survived code review and a green test suite, so the agent had no
+way to check its own work on that axis at all. That is a capability gap, not a judging
+apparatus, which is why it does not count as breaking the trigger.
+
+Still deferred, and still correctly so:
+
 - **Capture rig** — Playwright drives the build from a replay, tick-by-tick, emits a ~3s
   clip plus `frameMs` / `inputLatencyMs`. Needed because stills show none of hitstop,
   input latency, or animation weight.

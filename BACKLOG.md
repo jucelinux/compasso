@@ -23,6 +23,12 @@ todos superados. `DECISIONS.md` guarda o histórico; este arquivo guarda só o p
 - **Nenhum replay do humano no core atual.** `replays/core-atual.json` é sintético e serve
   para determinismo; não serve para julgar ritmo. Só uma gravação dele resolve.
 - **Vigiar o abate passivo.** Se passar de ~40%, o verbo único virou enfeite.
+- **A invulnerabilidade continua sem prazo, só que agora é estéril.** A regra de 01/08
+  trocou a condição, não a removeu: antes bastava ficar abaixo de 0.85 e você ainda comia
+  cinco dos seis tipos; agora, para permanecer protegido, você não pode comer nada. Visto
+  numa captura — 30s parada, um toque tomado, influenza encostada e nada acontecendo. Não é
+  exploit, porque parada o mundo anda a 5% e a cota não enche; é limbo. Fica registrado
+  porque "regra sem número" é preferência do H, e o preço dela é este.
 
 ## Aberto com o humano
 
