@@ -113,6 +113,11 @@ export function createSim(seed: number, tuning: Tuning): Sim {
       invulnSkipCurrent: false,
     },
     enemies: [],
+    trails: [],
+    shocks: [],
+    orbiters: [],
+    dashCharges: 1,
+    killsSincePulse: 0,
     cells: [],
     cellsLost: 0,
     lostByCells: false,
@@ -205,6 +210,24 @@ export function createSim(seed: number, tuning: Tuning): Sim {
     s.worldScale = wave.creep
     s.frozen = 0
     s.shields = run.shields
+    s.trails = []
+    s.shocks = []
+    s.dashCharges = run.dashCharges
+    s.killsSincePulse = 0
+    // Anticorpos distribuídos na órbita: vetores unitários, girados por matriz.
+    s.orbiters = []
+    for (let i = 0; i < run.orbiters; i++) {
+      const t = i / Math.max(1, run.orbiters)
+      // Quatro pontos cardeais bastam e evitam trigonometria na sim.
+      const cardinal: ReadonlyArray<readonly [number, number]> = [
+        [1, 0],
+        [0, 1],
+        [-1, 0],
+        [0, -1],
+      ]
+      const c = cardinal[Math.floor(t * 4) % 4]!
+      s.orbiters.push({ ox: c[0], oy: c[1] })
+    }
     if (s.wave > s.bestWave) s.bestWave = s.wave
 
     // O organismo entra em cena a partir da onda marcada e persiste na run.
@@ -229,6 +252,10 @@ export function createSim(seed: number, tuning: Tuning): Sim {
     s.cells = []
     s.cellsLost = 0
     s.lostByCells = false
+    s.trails = []
+    s.shocks = []
+    s.orbiters = []
+    s.killsSincePulse = 0
     s.player.x = width / 2
     s.player.y = height / 2
     s.player.invulnerable = false
@@ -289,14 +316,41 @@ export function createSim(seed: number, tuning: Tuning): Sim {
       const half = tuning.player.size / 2
       p.x = clamp(p.x + p.dashDx * run.dashSpeed * dt, half, width - half)
       p.y = clamp(p.y + p.dashDy * run.dashSpeed * dt, half, height - half)
+      // RASTRO: larga um ponto por tick de dash. É o modificador virando desenho.
+      if (run.trailTicks > 0) {
+        s.trails.push({ id: nextId++, x: p.x, y: p.y, life: run.trailTicks })
+      }
       p.dashTicks--
       if (p.dashTicks === 0) {
-        p.recoverTicks = wave.recoveryTicks
+        // SEGUNDO FÔLEGO: só repousa quando as cargas acabam.
+        s.dashCharges--
+        if (s.dashCharges <= 0) {
+          p.recoverTicks = wave.recoveryTicks
+          s.dashCharges = run.dashCharges
+        }
         if (p.invulnSkipCurrent) p.invulnSkipCurrent = false
         else p.invulnerable = false
       }
     } else if (p.recoverTicks > 0) {
       p.recoverTicks--
+    }
+
+    // --- rastro e pulso envelhecem em tempo REAL, não de mundo: são o seu
+    // gesto, não o relógio do mundo. Parar não faz o rastro durar para sempre.
+    for (const t of s.trails) t.life--
+    s.trails = s.trails.filter((t) => t.life > 0)
+    for (const sh of s.shocks) sh.life--
+    s.shocks = s.shocks.filter((sh) => sh.life > 0)
+
+    // --- anticorpos: giram por matriz fixa e são renormalizados todo tick, para
+    // o erro de ponto flutuante não desmontar a órbita ao longo de uma run.
+    const { orbitCos, orbitSin } = tuning.powers
+    for (const o of s.orbiters) {
+      const nx = o.ox * orbitCos - o.oy * orbitSin
+      const ny = o.ox * orbitSin + o.oy * orbitCos
+      const len = Math.sqrt(nx * nx + ny * ny) || 1
+      o.ox = nx / len
+      o.oy = ny / len
     }
 
     // --- vírus: cada tipo persegue o seu alvo, e só no tempo que o jogador liberou
@@ -338,32 +392,86 @@ export function createSim(seed: number, tuning: Tuning): Sim {
     const survivors: Enemy[] = []
     const spawned: Array<{ kind: string; x: number; y: number }> = []
 
+    /** Morte de um vírus, de qualquer origem: conta, divide e alimenta o PULSO. */
+    const killed = (e: Enemy): void => {
+      s.kills++
+      s.waveKills++
+      const spec = kindOf(e.kind)
+      // Estilhaços saem PERPENDICULARES ao dash e longe o bastante para ficarem
+      // fora do alcance de toque. Nascendo em cima do jogador, o divisor matava
+      // sem que houvesse resposta possível.
+      for (let i = 0; i < spec.splits; i++) {
+        const side = i % 2 === 0 ? -1 : 1
+        const off = tuning.enemy.splitOffset * side
+        spawned.push({
+          kind: KIND_SHARD,
+          x: e.x - p.dashDy * off,
+          y: e.y + p.dashDx * off,
+        })
+      }
+      if (run.shockEvery > 0) {
+        s.killsSincePulse++
+        if (s.killsSincePulse >= run.shockEvery) {
+          s.killsSincePulse = 0
+          s.shocks.push({
+            id: nextId++,
+            x: p.x,
+            y: p.y,
+            radius: run.shockRadius,
+            life: tuning.powers.shockLifeTicks,
+          })
+        }
+      }
+    }
+
     for (const e of s.enemies) {
       const half = sizeOf(e) / 2
       const ex = e.x - p.x
       const ey = e.y - p.y
       const dist = Math.sqrt(ex * ex + ey * ey)
 
+      // RETAGUARDA / ANTICORPO / RASTRO: três formas novas de morrer, todas
+      // com desenho próprio na tela. Foi por isto que a versão de porcentagem
+      // foi jogada fora.
+      let cutBy: "arc" | "back" | "orb" | "trail" | null = null
+      if (dashing && run.backRadius > 0 && dist <= run.backRadius) cutBy = "back"
+      if (cutBy === null && run.orbiters > 0) {
+        for (const o of s.orbiters) {
+          const gx = p.x + o.ox * tuning.powers.orbitRadius - e.x
+          const gy = p.y + o.oy * tuning.powers.orbitRadius - e.y
+          if (Math.sqrt(gx * gx + gy * gy) <= tuning.powers.orbitKillRadius + half) {
+            cutBy = "orb"
+            break
+          }
+        }
+      }
+      if (cutBy === null && run.trailTicks > 0) {
+        for (const t of s.trails) {
+          const gx = t.x - e.x
+          const gy = t.y - e.y
+          if (Math.sqrt(gx * gx + gy * gy) <= run.trailRadius + half) {
+            cutBy = "trail"
+            break
+          }
+        }
+      }
+
+      if (cutBy !== null) {
+        e.hp--
+        if (e.hp <= 0) {
+          killed(e)
+          continue
+        }
+        survivors.push(e)
+        continue
+      }
+
       if (dashing && dist <= run.killRadius) {
         const facing = dist < 0.0001 ? 1 : (ex / dist) * p.dashDx + (ey / dist) * p.dashDy
         if (facing >= run.killArc) {
           e.hp--
           if (e.hp <= 0) {
-            s.kills++
-            s.waveKills++
-            const spec = kindOf(e.kind)
-            // Estilhaços saem PERPENDICULARES ao dash e longe o bastante para
-            // ficarem fora do alcance de toque. Nascendo em cima do jogador, o
-            // divisor matava sem que houvesse resposta possível.
-            for (let i = 0; i < spec.splits; i++) {
-              const side = i % 2 === 0 ? -1 : 1
-              const off = tuning.enemy.splitOffset * side
-              spawned.push({
-                kind: KIND_SHARD,
-                x: e.x - p.dashDy * off,
-                y: e.y + p.dashDx * off,
-              })
-            }
+            killed(e)
             continue
           }
           // Sobreviveu ao corte: é empurrado, para o segundo golpe ser possível.
@@ -401,6 +509,33 @@ export function createSim(seed: number, tuning: Tuning): Sim {
         continue
       }
       survivors.push(e)
+    }
+
+    // PULSO: o anel já matou quando nasceu; o que fica na tela é só o desenho.
+    const freshShocks = s.shocks.filter((sh) => sh.life === tuning.powers.shockLifeTicks)
+    if (freshShocks.length > 0) {
+      const left: Enemy[] = []
+      for (const e of survivors) {
+        let popped = false
+        for (const sh of freshShocks) {
+          const gx = sh.x - e.x
+          const gy = sh.y - e.y
+          if (Math.sqrt(gx * gx + gy * gy) <= sh.radius) {
+            popped = true
+            break
+          }
+        }
+        if (popped) {
+          e.hp--
+          if (e.hp <= 0) {
+            killed(e)
+            continue
+          }
+        }
+        left.push(e)
+      }
+      survivors.length = 0
+      survivors.push(...left)
     }
 
     s.enemies = survivors
@@ -516,6 +651,11 @@ export function createSim(seed: number, tuning: Tuning): Sim {
       .bool(s.lostByCells)
       .u32(s.enemies.length)
       .u32(s.cells.length)
+      .u32(s.trails.length)
+      .u32(s.shocks.length)
+      .u32(s.orbiters.length)
+      .u32(s.dashCharges)
+      .u32(s.killsSincePulse)
       .u32(s.cursor)
       .u8(s.prevBits)
       .u32(s.rngState)
@@ -524,6 +664,9 @@ export function createSim(seed: number, tuning: Tuning): Sim {
       for (let i = 0; i < e.kind.length; i++) packer.u8(e.kind.charCodeAt(i))
     }
     for (const c of s.cells) packer.u32(c.id).f64(c.x).f64(c.y).u32(c.hp)
+    for (const t of s.trails) packer.f64(t.x).f64(t.y).u32(t.life)
+    for (const sh of s.shocks) packer.f64(sh.x).f64(sh.y).f64(sh.radius).u32(sh.life)
+    for (const o of s.orbiters) packer.f64(o.ox).f64(o.oy)
     for (const n of s.owned) packer.u32(n)
     for (const id of s.offer) packer.u32(id)
 

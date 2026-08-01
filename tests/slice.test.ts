@@ -104,12 +104,23 @@ const clearWave = (sim: Sim): void => {
   sim.step(NONE)
 }
 
-/** Leva a run até a morte, respeitando os i-frames entre os toques. */
+/**
+ * Leva a run até a morte, respeitando os i-frames entre os toques.
+ * Atravessa a tela de escolha: com ANTICORPO ou RASTRO em jogo, os toques
+ * matam vírus de tabela e a cota pode fechar no meio do processo.
+ */
 const die = (sim: Sim): void => {
-  while (sim.state().phase === "run") {
+  let guard = 0
+  while (sim.state().phase !== "dead") {
+    if (sim.state().phase === "pick") {
+      sim.step(SPACE)
+      sim.step(NONE)
+      continue
+    }
     putEnemyOnPlayer(sim)
     sim.step(NONE)
     if (sim.state().phase === "run") fullDash(sim)
+    if (++guard > 200) throw new Error("die() não convergiu")
   }
 }
 
@@ -619,5 +630,122 @@ describe("o organismo — segunda forma de perder, sem segundo verbo", () => {
     expect(sim.state().wave).toBe(1)
     expect(sim.state().cellsLost).toBe(0)
     expect(sim.state().lostByCells).toBe(false)
+  })
+})
+
+describe("modificadores são comportamento, não porcentagem", () => {
+  /** Dá um modificador direto, sem depender do sorteio da oferta. */
+  const give = (sim: Sim, id: number, n = 1): void => {
+    const s = mut(sim)
+    s.owned[id] = n
+    // Uma onda nova é o que recalcula stats e monta órbita/cargas.
+    s.wave--
+    clearWave(sim)
+    sim.step(SPACE)
+  }
+
+  it("RASTRO deixa pontos que cortam mesmo sem o dash encostar", () => {
+    const sim = createSim(70, tuning)
+    give(sim, 0)
+    advance(sim, 3, RIGHT)
+    expect(sim.state().trails.length).toBeGreaterThan(0)
+
+    const s = mut(sim)
+    const t = s.trails[0]!
+    s.enemies = [virus(t.x, t.y)]
+    const before = s.kills
+    sim.step(NONE) // parado: só o rastro pode matar
+    expect(sim.state().kills).toBe(before + 1)
+  })
+
+  it("PULSO solta um anel a cada N mortes", () => {
+    const sim = createSim(71, tuning)
+    give(sim, 1)
+    const every = tuning.powers.shockEvery
+    expect(sim.state().shocks).toHaveLength(0)
+
+    for (let i = 0; i < every; i++) {
+      untilReady(sim)
+      putEnemyAhead(sim)
+      sim.step(RIGHT)
+    }
+    expect(sim.state().shocks.length).toBeGreaterThan(0)
+    expect(sim.state().killsSincePulse).toBe(0)
+  })
+
+  it("RETAGUARDA corta o que está atrás — o que sem ele te cobrava", () => {
+    // Delta, não absoluto: `give` limpa uma onda inteira para recalcular stats.
+    const atras = (owned: number) => {
+      const sim = createSim(72, tuning)
+      if (owned > 0) give(sim, 3, owned)
+      untilReady(sim)
+      const s = mut(sim)
+      s.enemies = [virus(s.player.x - 4, s.player.y)]
+      const kills0 = s.kills
+      const lives0 = s.lives
+      sim.step(RIGHT)
+      return { kills: sim.state().kills - kills0, lives: sim.state().lives, lives0 }
+    }
+    // Sem o modificador o de trás não morre — ele COBRA, que era a queixa.
+    expect(atras(0).kills).toBe(0)
+    expect(atras(0).lives).toBeLessThan(atras(0).lives0)
+    // Com ele, morre antes de encostar.
+    expect(atras(1).kills).toBe(1)
+    expect(atras(1).lives).toBe(atras(1).lives0)
+  })
+
+  it("ANTICORPO orbita e mata sozinho, com o jogador parado", () => {
+    const sim = createSim(73, tuning)
+    give(sim, 5)
+    expect(sim.state().orbiters).toHaveLength(1)
+
+    const s = mut(sim)
+    const o = s.orbiters[0]!
+    s.enemies = [
+      virus(s.player.x + o.ox * tuning.powers.orbitRadius, s.player.y + o.oy * tuning.powers.orbitRadius),
+    ]
+    const before = s.kills
+    sim.step(NONE)
+    expect(sim.state().kills).toBe(before + 1)
+  })
+
+  it("a órbita não se desmonta ao longo de uma run inteira", () => {
+    const sim = createSim(74, tuning)
+    give(sim, 5)
+    advance(sim, 20000)
+    const o = sim.state().orbiters[0]!
+    expect(Math.sqrt(o.ox * o.ox + o.oy * o.oy)).toBeCloseTo(1, 6)
+  })
+
+  it("SEGUNDO FÔLEGO encadeia dois dashes antes de repousar", () => {
+    const semCarga = createSim(75, tuning)
+    advance(semCarga, tuning.dash.durationTicks, RIGHT)
+    expect(semCarga.state().player.recoverTicks).toBeGreaterThan(0)
+
+    const comCarga = createSim(75, tuning)
+    give(comCarga, 6)
+    advance(comCarga, tuning.dash.durationTicks, RIGHT)
+    expect(comCarga.state().player.recoverTicks).toBe(0) // ainda pode ir
+    expect(comCarga.state().dashCharges).toBe(1)
+  })
+
+  it("nenhum modificador é imperceptível: todos põem algo na tela ou num contador", () => {
+    // O critério do bar: se escolher não muda nada visível, a carta não vale.
+    const base = applyModifiers(tuning, MODIFIERS.map(() => 0))
+    for (const mod of MODIFIERS) {
+      if (mod.id === MOD_REPAIR) continue // age no organismo, testado à parte
+      const r = applyModifiers(tuning, MODIFIERS.map((m) => (m.id === mod.id ? 1 : 0)))
+      const visivel =
+        r.trailTicks !== base.trailTicks ||
+        r.shockEvery !== base.shockEvery ||
+        r.backRadius !== base.backRadius ||
+        r.orbiters !== base.orbiters ||
+        r.dashCharges !== base.dashCharges ||
+        r.lives !== base.lives ||
+        r.shields !== base.shields ||
+        Math.abs(r.killRadius - base.killRadius) > 8 ||
+        Math.abs(r.killArc - base.killArc) > 0.3
+      expect(visivel, `${mod.name} não muda nada perceptível`).toBe(true)
+    }
   })
 })

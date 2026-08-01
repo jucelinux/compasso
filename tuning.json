@@ -32,10 +32,10 @@
   "enemy": {
     "size": 16,
     "spawnIntervalSeconds": 0.34,
-    "spawnPerWave": 0.22,
+    "spawnPerWave": 0.3,
     "openingBase": 3,
-    "openingPerWave": 1,
-    "maxAlive": 48,
+    "openingPerWave": 2,
+    "maxAlive": 120,
     "kinds": {
       "comum": {
         "speed": 74,
@@ -133,5 +133,17 @@
   },
   "harness": {
     "recordSeconds": 30
+  },
+  "powers": {
+    "trailTicks": 20,
+    "trailRadius": 13,
+    "shockEvery": 8,
+    "shockRadius": 66,
+    "shockLifeTicks": 16,
+    "backRadius": 15,
+    "orbitRadius": 44,
+    "orbitCos": 0.99692,
+    "orbitSin": 0.07846,
+    "orbitKillRadius": 11
   }
 }

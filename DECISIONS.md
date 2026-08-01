@@ -59,3 +59,13 @@ Sem prosa. Se precisar de parágrafo, é decisão de arquitetura e vai pro `CLAU
 - 31/07 · cota · 13 +4 por onda · ondas de 7-12s no bot ≈ 20-30s no humano; alvo de run de ~2 min pela razão medida na run-03
 - 31/07 · organismo · só o invasor come célula · sem a guarda todo vírus comum comia de passagem indo pro jogador; o organismo cairia por motivo ilegível e a silhueta verde perderia sentido
 - 31/07 · medição · duração de ONDA é medida, duração de RUN é estimada · bot mede onda muito bem (7-11s) mas morre em 64s ou nunca conforme a seed; o alvo de 2 min sai da razão 2,7x da run-03, não de medição direta
+- 31/07 · variedade · aprovada · H: "consegui perceber mais textura aplicada ao jogo"; tipos de inimigo foi o que ele mais gostou
+- 31/07 · modificadores · REPROVADOS, e medido · 7 dos 10 mudam número abaixo do limiar de percepção: PASSO LONGO = +33ms, REFLEXO = -16ms, AR PARADO mexe creep de 0.050 pra 0.035
+- 31/07 · causa · um verbo só, e todo modificador é multiplicador nele · não dá pra sentir 22% a mais de algo que dura 150ms; modificador precisa virar COMPORTAMENTO, não porcentagem
+- 31/07 · arte · RESTRIÇÃO REABERTA, sprites e textura entram · H escolheu contra a minha recomendação de manter primitiva e subir o teto; custo aceito: pipeline de asset, arte como gargalo novo, e a linha de 31/07 "nega a muleta de asset bonito" cai
+- 31/07 · arte · textura procedural, porque o modelo não desenha · sem ferramenta de imagem, a saída é gerar membrana/núcleo/ruído em código; arte desenhada exige alguém que desenhe
+- 31/07 · gate · segue 2 de 3, sem leitura nova · H não mandou replay nesta rodada e não disse se quis rejogar; o terceiro strike não foi gasto
+- 31/07 · modificadores · reconstruídos como comportamento · RASTRO, PULSO, RETAGUARDA, ANTICORPO, SEGUNDO FÔLEGO; teste falha se algum voltar a ser imperceptível
+- 31/07 · pressão · teto de inimigos 48 -> 120 · nerfar poder era a resposta errada; o Vampire Survivors deixa você forte E enche a tela, que é o bar declarado
+- 31/07 · identidade · abate passivo em 13-18% · medido: os poderes amplificam o dash, não o substituem; se passar de ~40% o verbo único vira enfeite e a decisão de 31/07 cai
+- 31/07 · medição · o bot não morre mais · com poder passivo e mira perfeita ele passa de 6 min sempre; dificuldade desta rodada é NÃO VERIFICADA, só o replay do humano resolve

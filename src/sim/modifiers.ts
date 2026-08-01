@@ -3,9 +3,13 @@ import type { Tuning } from "./types.ts"
 /**
  * A camada roguelite: limpou a onda, escolhe 1 de 3. Morreu, perde tudo.
  *
- * O arco vive dentro da run — decisão de 31/07. O custo é conhecido: o carrinho
- * entre runs era o que produzia a segunda partida, então o gate precisa ser
- * remedido depois disto.
+ * RECONSTRUÍDA em 31/07. A versão anterior era porcentagem em cima de um verbo
+ * só, e o humano estava certo ao dizer que não sentia nada: sete dos dez
+ * modificadores mexiam um número abaixo do limiar de percepção — PASSO LONGO
+ * dava +33ms de dash, REFLEXO tirava 16ms de recuperação.
+ *
+ * A regra agora é: **todo modificador ou põe algo novo na tela, ou não entra.**
+ * É o critério do bar do Vampire Survivors, escrito no `TASTE.md`.
  */
 export interface Modifier {
   readonly id: number
@@ -14,19 +18,19 @@ export interface Modifier {
 }
 
 export const MODIFIERS: readonly Modifier[] = [
-  { id: 0, name: "PASSO LONGO", blurb: "dash dura mais" },
-  { id: 1, name: "PASSO RÁPIDO", blurb: "dash mais veloz" },
+  { id: 0, name: "RASTRO", blurb: "o dash deixa um risco que corta" },
+  { id: 1, name: "PULSO", blurb: "a cada 8 mortes, uma onda de choque" },
   { id: 2, name: "FÔLEGO", blurb: "+1 vida, agora" },
-  { id: 3, name: "AR PARADO", blurb: "o mundo escorre menos" },
-  { id: 4, name: "ESTEIRA", blurb: "corte mais largo" },
-  { id: 5, name: "SILÊNCIO", blurb: "eles demoram mais a vir" },
-  { id: 6, name: "REFLEXO", blurb: "levanta mais rápido" },
+  { id: 3, name: "RETAGUARDA", blurb: "o dash também corta atrás" },
+  { id: 4, name: "ESTEIRA", blurb: "corte muito mais largo" },
+  { id: 5, name: "ANTICORPO", blurb: "um corpo orbita e corta sozinho" },
+  { id: 6, name: "SEGUNDO FÔLEGO", blurb: "dois dashes antes de repousar" },
   { id: 7, name: "CORTE LARGO", blurb: "abre o leque do golpe" },
   { id: 8, name: "MEMBRANA", blurb: "absorve um toque por onda" },
   { id: 9, name: "REPARO", blurb: "regenera o organismo" },
 ]
 
-/** O modificador de vida é o único que mexe num contador, não numa curva. */
+/** Os únicos que agem num contador em vez de numa regra contínua. */
 export const MOD_EXTRA_LIFE = 2
 export const MOD_SHIELD = 8
 export const MOD_REPAIR = 9
@@ -40,9 +44,20 @@ export interface RunStats {
   creepBase: number
   recoveryBase: number
   spawnBase: number
-  /** Cosseno mínimo do arco de corte. Menor = leque mais largo. */
   killArc: number
   shields: number
+  /** Ticks que um ponto de rastro corta depois de largado. `0` = sem rastro. */
+  trailTicks: number
+  trailRadius: number
+  /** Mortes necessárias para soltar um pulso. `0` = sem pulso. */
+  shockEvery: number
+  shockRadius: number
+  /** Raio do corte às costas, ignorando o leque. `0` = sem retaguarda. */
+  backRadius: number
+  /** Corpos em órbita que cortam sozinhos. */
+  orbiters: number
+  /** Dashes encadeáveis antes da recuperação. `1` é o normal. */
+  dashCharges: number
 }
 
 /** Números que a onda aperta. Nenhum destes tem teto — foi o pedido. */
@@ -55,29 +70,37 @@ export interface WaveStats {
 
 export function applyModifiers(tuning: Tuning, owned: readonly number[]): RunStats {
   const n = (id: number): number => owned[id] ?? 0
+  const p = tuning.powers
 
   return {
-    dashDurationTicks: Math.round(tuning.dash.durationTicks * (1 + 0.22 * n(0))),
-    dashSpeed: tuning.dash.speed * (1 + 0.18 * n(1)),
-    killRadius: tuning.dash.killRadius * (1 + 0.3 * n(4)),
+    dashDurationTicks: tuning.dash.durationTicks,
+    dashSpeed: tuning.dash.speed,
+    // Esteira agora vale ser vista: +50% por carta, contra +30% da versão morta.
+    killRadius: tuning.dash.killRadius * (1 + 0.5 * n(4)),
     lives: tuning.run.lives + n(MOD_EXTRA_LIFE),
-    creepBase: tuning.time.creep * (1 - 0.3 * n(3)),
-    recoveryBase: tuning.dash.recoveryTicks - n(6),
-    spawnBase: tuning.enemy.spawnIntervalSeconds * (1 + 0.25 * n(5)),
-    // Nunca abaixo de -1: aí o leque viraria a aura que a decisão de 31/07 tirou.
-    killArc: Math.max(-0.9, tuning.dash.killArc - 0.35 * n(7)),
+    creepBase: tuning.time.creep,
+    recoveryBase: tuning.dash.recoveryTicks,
+    spawnBase: tuning.enemy.spawnIntervalSeconds,
+    // Nunca abaixo de -0.9: aí o leque viraria a aura que a decisão de 31/07 tirou.
+    killArc: Math.max(-0.9, tuning.dash.killArc - 0.45 * n(7)),
     shields: n(MOD_SHIELD),
+    trailTicks: n(0) > 0 ? p.trailTicks * n(0) : 0,
+    trailRadius: p.trailRadius,
+    shockEvery: n(1) > 0 ? Math.max(2, p.shockEvery - (n(1) - 1) * 2) : 0,
+    shockRadius: p.shockRadius * (1 + 0.35 * (n(1) - 1)),
+    backRadius: n(3) > 0 ? p.backRadius * n(3) : 0,
+    orbiters: n(5),
+    dashCharges: 1 + n(6),
   }
 }
 
 /**
  * A curva de tensão. "Te dei tempo pra entender seu movimento, mas seja rápido."
  *
- * `creep` sobe sem limite: por volta da onda 20 o mundo parado já anda a quase
- * meia velocidade, e ficar parado deixa de ser descanso. É esse eixo que carrega
- * a dificuldade depois que a recuperação encosta no piso de 1 tick — o único
- * piso que existe, e existe porque 0 faria os dashes se emendarem e a dilatação
- * sumir.
+ * `creep` sobe sem limite: lá na frente o mundo parado já anda a quase meia
+ * velocidade, e ficar parado deixa de ser descanso. A recuperação tem piso de 1
+ * tick — o único piso que existe, e existe porque 0 emendaria os dashes e a
+ * dilatação sumiria.
  */
 export function waveStats(tuning: Tuning, run: RunStats, wave: number): WaveStats {
   const step = Math.max(0, wave - 1)

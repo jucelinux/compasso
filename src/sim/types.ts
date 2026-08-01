@@ -70,6 +70,23 @@ export interface Tuning {
     readonly size: number
     readonly hp: number
   }
+  /**
+   * Números dos modificadores-comportamento. `orbitCos`/`orbitSin` são a matriz
+   * de rotação por tick pré-calculada: a sim não pode chamar `sin`/`cos`, que
+   * não são bit-a-bit entre engines.
+   */
+  readonly powers: {
+    readonly trailTicks: number
+    readonly trailRadius: number
+    readonly shockEvery: number
+    readonly shockRadius: number
+    readonly shockLifeTicks: number
+    readonly backRadius: number
+    readonly orbitRadius: number
+    readonly orbitCos: number
+    readonly orbitSin: number
+    readonly orbitKillRadius: number
+  }
   readonly pick: { readonly offerCount: number }
   readonly feel: {
     readonly hitFreezeTicks: number
@@ -115,6 +132,29 @@ export interface Enemy {
   bornTick: number
 }
 
+/** Ponto de rastro largado pelo dash. Corta enquanto vive. */
+export interface Trail {
+  id: number
+  x: number
+  y: number
+  life: number
+}
+
+/** Onda de choque do PULSO. Já matou quando nasceu; o que resta é o anel. */
+export interface Shock {
+  id: number
+  x: number
+  y: number
+  radius: number
+  life: number
+}
+
+/** Anticorpo em órbita. Guardado como vetor unitário, girado por matriz fixa. */
+export interface Orbiter {
+  ox: number
+  oy: number
+}
+
 /** Célula do organismo. Não se move, não ataca, e perdê-las encerra a run. */
 export interface Cell {
   id: number
@@ -157,6 +197,13 @@ export interface SimState {
   bestWave: number
   player: Player
   enemies: Enemy[]
+  trails: Trail[]
+  shocks: Shock[]
+  orbiters: Orbiter[]
+  /** Dashes ainda encadeáveis antes da recuperação obrigatória. */
+  dashCharges: number
+  /** Mortes acumuladas desde o último pulso. */
+  killsSincePulse: number
   cells: Cell[]
   /** Células perdidas nesta run. Só pra tela de morte dizer como você perdeu. */
   cellsLost: number

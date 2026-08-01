@@ -7,12 +7,19 @@ log de decisão morre.
 
 ## Aberto agora
 
+- **Dificuldade não verificada.** O bot ficou imortal depois dos modificadores-comportamento
+  (mira perfeita + abate passivo). Ele ainda mede duração de ONDA bem; morte, não mais.
+- **Vigiar o abate passivo.** Hoje 13–18%. Se passar de ~40%, o verbo único virou enfeite.
+- **Arte desenhada.** A restrição caiu, mas a textura é procedural porque o modelo não
+  desenha. Arte de verdade exige alguém que desenhe; `textures.ts` é o ponto de troca.
+
 - **Gate não medido.** O gate de 31/07 passou com modificador PERMANENTE entre runs —
   ele voltou porque estava mais forte. Esse mecanismo não existe mais. Até uma nova
   medição, o projeto não tem métrica de direção válida.
 - **Nenhuma fixture cobre morte → reinício.** `run-01` é anterior às ondas, `run-02` é
   anterior à tecla de reinício separada. Precisa de uma gravação do build atual.
-- **Sem fixture de morte→reinício ainda.** run-03 cobre morte, mas ninguém reiniciou.
+- **Sem fixture de morte→reinício ainda.** A run-02 atravessa a morte, mas foi gravada
+  antes da tecla de reinício própria, então ninguém reinicia em fixture nenhuma.
 - **O hitstop deixou o jogo um pouco mais fácil.** Bot ia até a onda 12–20, agora bate o
   teto de 6 min na onda 19–21. Efeito colateral de feel, não de tuning — não mexi na
   dificuldade nesta rodada de propósito, para a próxima leitura ser atribuível.

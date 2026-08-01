@@ -11,19 +11,17 @@ import type { Tuning } from "../src/sim/types.ts"
  */
 
 const SMOKE = resolve(projectRoot, "replays", "smoke.json")
-const BASELINE_HASH = "a2847ab3"
+const BASELINE_HASH = "bd5316d2"
 
 /**
  * Run real do humano, 7,6 min de input de verdade.
  *
- * ATENÇÃO: gravada ANTES das ondas. Sob as regras atuais este log fica 79% do
- * tempo preso na tela de escolha, que o input dele não conhecia — não morre e
- * não atravessa reinício. Continua valendo como fixture de determinismo sobre
- * input humano real; NÃO cobre mais a camada de que o gate depende. Substituir
- * por uma gravação do build com ondas.
+ * ATENÇÃO: gravada ANTES das ondas. Sob as regras atuais fica muito tempo preso
+ * na tela de escolha, que o input dele não conhecia. Vale como determinismo
+ * sobre input humano real; não morre.
  */
 const RUN_01 = resolve(projectRoot, "replays", "run-01.json")
-const RUN_01_HASH = "c08cf38c"
+const RUN_01_HASH = "5504a842"
 
 /**
  * Segunda run real: 5 min, 10 ondas, uma morte. Gravada antes da tecla de
@@ -32,14 +30,18 @@ const RUN_01_HASH = "c08cf38c"
  * morte → reinício sob as regras atuais; só uma gravação nova resolve.
  */
 const RUN_02 = resolve(projectRoot, "replays", "run-02.json")
-const RUN_02_HASH = "bddeb007"
+const RUN_02_HASH = "416c5f8d"
 
 /**
- * Terceira run real, build atual: 5,7 min, 7 ondas, uma morte, 84s na tela de
- * morte sem reiniciar. É a fixture que cobre morte sob as regras vigentes.
+ * Terceira run real: 5,7 min de input humano, gravada quando os modificadores
+ * ainda eram porcentagem.
+ *
+ * ATENÇÃO: com os modificadores-comportamento este input NÃO morre mais — o
+ * jogador ficou forte demais para aquele padrão de jogo fracassar. Vale como
+ * determinismo sobre input humano longo. Quem cobre morte hoje é a run-02.
  */
 const RUN_03 = resolve(projectRoot, "replays", "run-03.json")
-const RUN_03_HASH = "4fc3d1b6"
+const RUN_03_HASH = "9bf21588"
 
 const smoke = () => loadReplay(SMOKE)
 const tuning = () => loadTuning()
@@ -75,21 +77,30 @@ describe("determinismo", () => {
     expect(result.ticks).toBeGreaterThan(17000)
   })
 
-  it("terceira run humana: bate com o baseline e atravessa a morte", () => {
+  it("terceira run humana: bate com o baseline", () => {
     const replay = loadReplay(RUN_03)
     const result = runReplay(replay, tuning())
     expect(result.finalHash).toBe(RUN_03_HASH)
     expect(result.ticks).toBeGreaterThan(19000)
+  })
 
-    // O nome promete morte: então o teste verifica, em vez de afirmar. Foi assim
-    // que a run-01 ficou meses alegando cobrir algo que ela já não cobria.
-    const sim = createSim(replay.seed, tuning())
-    const phases = new Set<string>()
-    for (const input of replayInputs(replay)) {
-      sim.step(input)
-      phases.add(sim.state().phase)
+  it("quem cobre a morte é a run-02, e só ela — travado contra registro podre", () => {
+    // Este teste existe porque os comentários deste arquivo já mentiram duas
+    // vezes: a run-01 alegava cobrir morte depois das ondas, e a run-03 depois
+    // dos modificadores-comportamento. Agora quem afirma é o teste.
+    const reaches = (path: string): boolean => {
+      const replay = loadReplay(path)
+      const sim = createSim(replay.seed, tuning())
+      for (const input of replayInputs(replay)) {
+        sim.step(input)
+        if (sim.state().phase === "dead") return true
+      }
+      return false
     }
-    expect(phases.has("dead"), "run-03 não alcança mais a morte").toBe(true)
+    expect(reaches(RUN_02), "run-02 deveria atravessar a morte").toBe(true)
+    expect(reaches(RUN_03), "run-03 não morre mais: o jogador ficou forte demais").toBe(false)
+    expect(reaches(SMOKE)).toBe(false)
+    expect(reaches(RUN_01)).toBe(false)
   })
 
   it("hash evolui — não é constante", () => {

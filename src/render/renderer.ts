@@ -1,11 +1,13 @@
-import { Application, Container, Graphics, Text, TextStyle } from "pixi.js"
+import { Application, Container, Graphics, Sprite, Text, TextStyle } from "pixi.js"
+import { organCellTexture, plasmaTexture, playerTexture, virusTexture } from "./textures.ts"
 import { MODIFIERS, MOD_SHIELD, applyModifiers } from "../sim/modifiers.ts"
 import type { SimState, Tuning } from "../sim/types.ts"
 
 /**
- * Render. Só primitivas — círculo, polígono, linha, cor sólida. A decisão de
- * 31/07 continua valendo; o tema (célula imunológica na corrente sanguínea) é
- * cor e forma, não asset.
+ * Render. A restrição "só primitivas" foi REABERTA pelo humano em 31/07: corpos
+ * agora são texturas — geradas em código, em `textures.ts`, porque o modelo não
+ * desenha. Efeito (rastro, pulso, leque) segue primitiva, que é onde primitiva
+ * é melhor: nítida, barata e legível em movimento.
  *
  * A sim anda em passos fixos de 1/60 de tempo de mundo; aqui só interpolamos.
  * Nada aqui decide nada — efeito que muda regra mora na sim.
@@ -72,13 +74,28 @@ export async function createRenderer(mount: HTMLElement, tuning: Tuning): Promis
   const overlay = new Container()
   app.stage.addChild(world, hud, overlay)
 
-  // --- plasma: manchas fixas, só pra o dash ter referência de deslocamento
-  floor.rect(0, 0, tuning.arena.width, tuning.arena.height).fill(COLOR_PLASMA)
-  for (let i = 0; i < 26; i++) {
-    const x = ((i * 97) % tuning.arena.width) + 11
-    const y = ((i * 61) % tuning.arena.height) + 7
-    floor.circle(x, y, 3 + (i % 4)).fill({ color: COLOR_BG, alpha: 0.55 })
+  // --- plasma texturizado: veios e hemácias fora de foco
+  const plasma = new Sprite(plasmaTexture(tuning.arena.width, tuning.arena.height, COLOR_PLASMA, COLOR_BG))
+  world.addChildAt(plasma, 0)
+  floor.visible = false
+
+  const playerSprite = new Sprite(playerTexture(tuning.player.size, COLOR_CELL, COLOR_NUCLEUS))
+  playerSprite.anchor.set(0.5)
+  world.addChild(playerSprite)
+
+  const virusTex = new Map<string, ReturnType<typeof virusTexture>>()
+  const texFor = (kind: string) => {
+    let t = virusTex.get(kind)
+    if (t === undefined) {
+      const style = KIND_STYLE[kind] ?? KIND_STYLE["comum"]!
+      const spec = tuning.enemy.kinds[kind]
+      t = virusTexture(style.color, style.spikes, tuning.enemy.size * (spec?.sizeScale ?? 1), style.spikes * 7)
+      virusTex.set(kind, t)
+    }
+    return t
   }
+  const organTex = organCellTexture(tuning.cells.size, COLOR_CELL_ORG)
+  const powers = new Graphics()
 
   const mono = (size: number, fill: number): TextStyle =>
     new TextStyle({ fontFamily: "monospace", fontSize: size, fill })
@@ -118,45 +135,36 @@ export async function createRenderer(mount: HTMLElement, tuning: Tuning): Promis
   })
   overlay.addChild(deadText)
 
-  const shapeFor = (spikes: number): number[] => {
-    const pts: number[] = []
-    for (let i = 0; i < spikes * 2; i++) {
-      const a = (i / (spikes * 2)) * Math.PI * 2
-      const r = i % 2 === 0 ? 1 : 0.5
-      pts.push(Math.cos(a) * r, Math.sin(a) * r)
-    }
-    return pts
-  }
-
-  const enemyPool: Graphics[] = []
+  const enemyPool: Sprite[] = []
   const enemyKindAt: string[] = []
   /**
    * Cada tipo tem cor, número de pontas e tamanho próprios. Ler a ameaça pela
    * silhueta é o que faz a variedade valer — se todos parecessem iguais, ter
    * quatro comportamentos seria só dificuldade escondida.
    */
-  const enemyFor = (i: number, kind: string): Graphics => {
+  const enemyFor = (i: number, kind: string): Sprite => {
     let g = enemyPool[i]
     if (g === undefined) {
-      g = new Graphics()
+      g = new Sprite()
+      g.anchor.set(0.5)
       enemyPool[i] = g
       enemyLayer.addChild(g)
     }
-    // Só redesenha quando o slot troca de tipo: com 48 vírus em campo, refazer
-    // a geometria todo frame custaria justamente onde o jogo é sobre timing.
+    // Só troca a textura quando o slot muda de tipo: com 48 vírus em campo,
+    // refazer isso todo frame custaria justo onde o jogo é sobre timing.
     if (enemyKindAt[i] === kind) return g
     enemyKindAt[i] = kind
-    const style = KIND_STYLE[kind] ?? KIND_STYLE["comum"]!
-    const spec = tuning.enemy.kinds[kind]
-    const half = (tuning.enemy.size * (spec?.sizeScale ?? 1)) / 2
-    const pts = shapeFor(style.spikes).map((p) => p * half)
-    g.clear().poly(pts).fill(style.color).stroke({ width: 1, color: 0xffffff, alpha: 0.25 })
-    if (style.ring) g.circle(0, 0, half * 0.45).stroke({ width: 1.5, color: 0xffffff, alpha: 0.5 })
+    g.texture = texFor(kind)
     return g
   }
 
   const cellLayer = new Graphics()
-  world.addChildAt(cellLayer, 1)
+  const organLayer = new Container()
+  const organPool: Sprite[] = []
+  // Ordem explícita: montar por addChild na ordem de criação deixava o
+  // organismo por cima do jogador.
+  world.removeChildren()
+  world.addChild(plasma, organLayer, cellLayer, powers, enemyLayer, player, playerSprite, fx)
 
   // --- partículas: puramente decorativas, fora da sim
   let particles: Particle[] = []
@@ -216,9 +224,53 @@ export async function createRenderer(mount: HTMLElement, tuning: Tuning): Promis
       player.circle(x, y, size / 2 + 4).stroke({ width: 2, color: COLOR_SHIELD, alpha: 0.9 })
     }
 
-    const body = cur.player.invulnerable && cur.tick % 8 < 4 ? COLOR_HURT : dashing ? COLOR_CELL_DASH : COLOR_CELL
-    player.circle(x, y, size / 2).fill(body)
-    player.circle(x + 1, y - 1, size / 5).fill({ color: COLOR_NUCLEUS, alpha: 0.85 })
+    playerSprite.position.set(x, y)
+    playerSprite.tint =
+      cur.player.invulnerable && cur.tick % 8 < 4 ? COLOR_HURT : dashing ? COLOR_CELL_DASH : 0xffffff
+    // Estica na direção do dash: movimento secundário barato e muito legível.
+    const stretch = dashing ? 1.18 : 1
+    playerSprite.scale.set(stretch, dashing ? 0.88 : 1)
+    playerSprite.rotation = dashing ? Math.atan2(cur.player.dashDy, cur.player.dashDx) : 0
+  }
+
+  /**
+   * Rastro, pulso e anticorpo. Primitiva de propósito: são efeito, e efeito
+   * precisa ser nítido em movimento — é onde primitiva ganha de textura.
+   */
+  const drawPowers = (cur: SimState, t: number): void => {
+    powers.clear()
+    const stats = applyModifiers(tuning, cur.owned)
+
+    if (cur.trails.length > 0) {
+      for (const tr of cur.trails) {
+        const a = tr.life / Math.max(1, stats.trailTicks)
+        powers.circle(tr.x, tr.y, stats.trailRadius * (0.55 + 0.45 * a)).fill({
+          color: COLOR_CELL_DASH,
+          alpha: 0.06 + 0.22 * a,
+        })
+      }
+    }
+
+    for (const sh of cur.shocks) {
+      const a = sh.life / tuning.powers.shockLifeTicks
+      powers
+        .circle(sh.x, sh.y, sh.radius * (1.05 - a * 0.55))
+        .stroke({ width: 2 + 5 * a, color: COLOR_SHIELD, alpha: a * 0.85 })
+    }
+
+    for (const o of cur.orbiters) {
+      const ox = lerp(o.ox, o.ox, t)
+      const gx = cur.player.x + ox * tuning.powers.orbitRadius
+      const gy = cur.player.y + o.oy * tuning.powers.orbitRadius
+      powers
+        .circle(gx, gy, tuning.powers.orbitKillRadius)
+        .fill({ color: COLOR_SHIELD, alpha: 0.75 })
+        .stroke({ width: 1.5, color: 0xffffff, alpha: 0.6 })
+      powers
+        .moveTo(cur.player.x, cur.player.y)
+        .lineTo(gx, gy)
+        .stroke({ width: 1, color: COLOR_SHIELD, alpha: 0.16 })
+    }
   }
 
   const drawHud = (cur: SimState): void => {
@@ -252,6 +304,16 @@ export async function createRenderer(mount: HTMLElement, tuning: Tuning): Promis
       hudBars
         .rect(10, tuning.arena.height - 8, (tuning.arena.width - 20) * Math.min(1, cur.worldScale), 3)
         .fill(COLOR_CELL_DASH)
+    }
+
+    // Cargas de dash: SEGUNDO FÔLEGO precisa ser contável de relance.
+    if (cur.dashCharges > 1 || applyModifiers(tuning, cur.owned).dashCharges > 1) {
+      const total = applyModifiers(tuning, cur.owned).dashCharges
+      for (let i = 0; i < total; i++) {
+        hudBars
+          .rect(tuning.arena.width / 2 - total * 6 + i * 12, tuning.arena.height - 20, 8, 3)
+          .fill({ color: COLOR_CELL_DASH, alpha: i < cur.dashCharges ? 1 : 0.25 })
+      }
     }
 
     // A build inteira, sempre visível: escolher passa a ter memória.
@@ -356,18 +418,29 @@ export async function createRenderer(mount: HTMLElement, tuning: Tuning): Promis
 
       // --- organismo: o que você está defendendo
       cellLayer.clear()
-      for (const c of cur.cells) {
+      for (let i = 0; i < cur.cells.length; i++) {
+        const c = cur.cells[i]!
+        let sprite = organPool[i]
+        if (sprite === undefined) {
+          sprite = new Sprite(organTex)
+          sprite.anchor.set(0.5)
+          organLayer.addChild(sprite)
+          organPool[i] = sprite
+        }
         const frac = c.hp / tuning.cells.hp
-        cellLayer
-          .circle(c.x, c.y, tuning.cells.size / 2)
-          .fill({ color: COLOR_CELL_ORG, alpha: 0.16 + 0.24 * frac })
-          .stroke({ width: 2, color: COLOR_CELL_ORG, alpha: 0.5 + 0.5 * frac })
-        for (let i = 0; i < c.hp; i++) {
+        sprite.visible = true
+        sprite.position.set(c.x, c.y)
+        sprite.alpha = 0.45 + 0.55 * frac
+        // Pulsa: uma célula viva não fica parada.
+        const pulse = 1 + Math.sin(cur.tick * 0.04 + i) * 0.04
+        sprite.scale.set(pulse)
+        for (let k = 0; k < c.hp; k++) {
           cellLayer
-            .circle(c.x - (c.hp - 1) * 4 + i * 8, c.y + tuning.cells.size / 2 + 8, 2)
+            .circle(c.x - (c.hp - 1) * 4 + k * 8, c.y + tuning.cells.size / 2 + 10, 2)
             .fill(COLOR_CELL_ORG)
         }
       }
+      for (let i = cur.cells.length; i < organPool.length; i++) organPool[i]!.visible = false
 
       const prevById = new Map(prev.enemies.map((e) => [e.id, e]))
       for (let i = 0; i < cur.enemies.length; i++) {
@@ -413,6 +486,7 @@ export async function createRenderer(mount: HTMLElement, tuning: Tuning): Promis
       )
       if (shake > 0) shake -= 0.6
 
+      drawPowers(cur, t)
       drawHud(cur)
       drawOverlay(cur)
       app.render()
