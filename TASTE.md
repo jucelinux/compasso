@@ -10,7 +10,16 @@ projeto. A segunda é declarada de saída e serve como aviso operacional.
 _Destilado do `DECISIONS.md`. Máximo ~15 linhas. Reescreva por inteiro quando destilar;
 não vá acumulando._
 
-- _(vazio — preencher após o primeiro gate)_
+- Dificuldade vem de **encolher a folga**, não de somar inimigos. "Te dei tempo pra
+  entender seu movimento, mas seja rápido."
+- Recusa teto. Um número que satura e para de subir é bug de design, não balanceamento.
+- Legibilidade acima de tensão máxima quando os dois brigam (três vidas, i-frames sem timer).
+- Pressão constante acima de puzzle. O creep nunca chega a zero.
+- Recompensa em ondas, com arco — não gotejada nem só no fim.
+- Lê o jogo por imaginação antes de por sistema. Referência declarada: Atari, onde a forma
+  geométrica convida a preencher o resto. Tema não é enfeite pra ele; sugere mecânica.
+- Tolera cru. Julga sistema, não acabamento — "cru e básico, mas funcional" não era queixa.
+- Dá feedback em design, não em sintoma: chega com proposta de mecanismo, não com "tá chato".
 
 ---
 

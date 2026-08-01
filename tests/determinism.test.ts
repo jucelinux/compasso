@@ -11,6 +11,13 @@ import type { Tuning } from "../src/sim/types.ts"
 const SMOKE = resolve(projectRoot, "replays", "smoke.json")
 const BASELINE_HASH = "8aa9d583"
 
+/**
+ * Run real do humano, 7,6 min: passa por morte, escolha de modificador e
+ * reinício — a camada de que o gate depende, que a fixture sintética não toca.
+ */
+const RUN_01 = resolve(projectRoot, "replays", "run-01.json")
+const RUN_01_HASH = "521311db"
+
 const smoke = () => loadReplay(SMOKE)
 const tuning = () => loadTuning()
 
@@ -31,6 +38,12 @@ describe("determinismo", () => {
     const b = runReplay(smoke(), tuning()).hashes
     const divergence = a.findIndex((h, i) => h !== b[i])
     expect(divergence, `divergiu no tick ${divergence}`).toBe(-1)
+  })
+
+  it("run real: bate com o baseline e atravessa morte e escolha", () => {
+    const result = runReplay(loadReplay(RUN_01), tuning())
+    expect(result.finalHash).toBe(RUN_01_HASH)
+    expect(result.ticks).toBeGreaterThan(20000)
   })
 
   it("hash evolui — não é constante", () => {

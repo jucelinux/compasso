@@ -22,3 +22,10 @@ Sem prosa. Se precisar de parágrafo, é decisão de arquitetura e vai pro `CLAU
 - 31/07 · dash · duração fixa + recuperação, encadeia se a direção seguir pressionada · sem a recuperação o mundo fica em 1.0x o tempo todo e a dilatação some
 - 31/07 · dilatação · implementada dentro da sim, não na taxa do laço · mudar ticks/segundo faria replay de run com creep não reproduzir; determinismo morreria em silêncio
 - 31/07 · rng · rejection sampling no nextInt · módulo puro enviesa sorteio de 3 entre 6 modificadores
+- 31/07 · gate · PASSOU · replay de 7,6 min: morreu com 150 kills, escolheu modificador, iniciou segunda run voluntária até 212 kills
+- 31/07 · feel do dash · aprovado · H: "o dash ficou bom"; primeiro eixo a sair da fila de dúvidas
+- 31/07 · legibilidade · três vidas + i-frames legíveis para o escopo atual · H; revisitar se o jogo ficar mais denso
+- 31/07 · dificuldade · fácil, e por teto e não por rampa · minSpawnIntervalSeconds encostado no kill ~60 de 362; spawn é o único eixo existente
+- 31/07 · tensão · vem de encolher a folga, não de somar inimigos · H: "te dei tempo para entender seu movimento, mas seja rápido"; creep e recuperação viram curva
+- 31/07 · tema · célula imunológica defendendo o organismo · H escolheu sobre a versão micróbio-sobrevivente; mesmo ambiente, herói invertido, mas esta rende progressão
+- 31/07 · tema · arte adiada, decisão registrada · primitivas geométricas fazem o tema custar quase nada depois; sistema de recompensa ainda não está medido
