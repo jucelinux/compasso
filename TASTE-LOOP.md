@@ -279,6 +279,11 @@ Loop verdicts go in `DECISIONS.md` like any other, on the `LOOP` axis. They are 
 about how the project decides, which makes them the most expensive ones to get wrong and
 the cheapest ones to forget.
 
+**Raw material lives in `TASTE-LOOP-LEARNING.md`.** Cases, evidence and proposals go there
+first; a change graduates into this file only when the human accepts it. Keeping the two
+apart is what stops this document from turning into a diary of half-tested ideas — and it
+is the same log-versus-state split as section 8, applied to the method itself.
+
 ### Changelog
 
 | Date | What changed | What went wrong that caused it |
