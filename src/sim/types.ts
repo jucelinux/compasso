@@ -205,8 +205,8 @@ export interface Player {
   speed: number
   dashTicks: number
   dashCooldown: number
+  /** Cai no primeiro patógeno engolido por CONTATO. Sem timer, por decisão de 31/07. */
   invulnerable: boolean
-  invulnSkipCurrent: boolean
 }
 
 export interface SimState {

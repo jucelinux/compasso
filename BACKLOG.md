@@ -3,71 +3,52 @@
 O que está aberto. O que está assentado vive no `DECISIONS.md` — misturar os dois é como
 log de decisão morre.
 
+Reescrito por inteiro em 01/08. A versão anterior descrevia um jogo que não existia mais:
+falava de tela de escolha, de `textures.ts`, de bot imortal e de salto gráfico por shader,
+todos superados. `DECISIONS.md` guarda o histórico; este arquivo guarda só o presente.
+
 ---
 
 ## Aberto agora
 
-- **Salto gráfico por shader.** Canvas 2D procedural bateu no teto e o humano notou
-  ("a qualidade estagnou"). O degrau real é WebGL: subsurface scattering na membrana,
-  refração do fundo através do corpo, fluido de verdade no plasma, bloom. Não entrou nesta
-  rodada porque shader quebrado é tela preta, e tela preta queima a leitura dele.
-  Fotorrealismo mesmo exige alguém que desenhe.
-- **Nenhuma fixture do core novo.** Os quatro replays são de cores mortos: aquele input
-  não sabe pilotar uma célula contínua. Precisa de uma gravação do build atual.
-
-- **A questão do movimento.** H quer movimento orgânico e dash/câmera-lenta como habilidades.
-  Adiado por ele mesmo em 31/07. Quando voltar: fagocitose por contato já está decidida, e
-  o `CLAUDE.md` §1 precisa ser reescrito porque "o tempo só anda quando você anda" cai.
-
-- **Dificuldade não verificada.** O bot ficou imortal depois dos modificadores-comportamento
-  (mira perfeita + abate passivo). Ele ainda mede duração de ONDA bem; morte, não mais.
-- **Vigiar o abate passivo.** Hoje 13–18%. Se passar de ~40%, o verbo único virou enfeite.
-- **Arte desenhada.** A restrição caiu, mas a textura é procedural porque o modelo não
-  desenha. Arte de verdade exige alguém que desenhe; `textures.ts` é o ponto de troca.
-
-- **Gate não medido.** O gate de 31/07 passou com modificador PERMANENTE entre runs —
-  ele voltou porque estava mais forte. Esse mecanismo não existe mais. Até uma nova
-  medição, o projeto não tem métrica de direção válida.
-- **Nenhuma fixture cobre morte → reinício.** `run-01` é anterior às ondas, `run-02` é
-  anterior à tecla de reinício separada. Precisa de uma gravação do build atual.
-- **Sem fixture de morte→reinício ainda.** A run-02 atravessa a morte, mas foi gravada
-  antes da tecla de reinício própria, então ninguém reinicia em fixture nenhuma.
-- **O hitstop deixou o jogo um pouco mais fácil.** Bot ia até a onda 12–20, agora bate o
-  teto de 6 min na onda 19–21. Efeito colateral de feel, não de tuning — não mexi na
-  dificuldade nesta rodada de propósito, para a próxima leitura ser atribuível.
-- **O bot é bom demais para medir morte.** Promovido para `src/harness/bot.ts` (`npm run
-  pace`) e agora defende o organismo. Mede duração de onda muito bem, mas sobrevive 6 min
-  em 3 de 5 seeds porque nunca erra a mira. A duração de RUN é estimada pela razão medida
-  contra a run-03 (o humano leva ~2,7x o tempo do bot por onda), não medida direto. Nas 5
-  seeds a morte cai em 64s, 66s, 262s, 324s e nunca — variância grande demais para tunar
-  duração de run contra ele. Só o replay do humano resolve.
-- **Escolha a cada ~18s.** Melhor que os 7s da cota baixa, mas 12–20 escolhas por run
-  ainda pode ser interrupção demais. Medir depois que o humano jogar.
-
-## Vindo do tema (célula imunológica), como mecânica e não como arte
-
-- **Vírus com comportamento**, não só mais inimigos: um que se divide ao ser cortado, um
-  que só morre em dois toques, um que foge.
-- **Células do organismo a defender.** Segunda condição de derrota sem segundo verbo — o
-  jogador continua só dashando. Bate com "encolher a folga": defender tira sua liberdade
-  de posição, não seu tempo.
-- **Modificadores com nome de sistema imune.** Custa um rename quando o resto estiver medido.
-
-## Conhecido e adiado de propósito
-
-- **Ciclagem de paleta além do plasma.** A máquina já existe (`cycledPalette`); hoje só o
-  fundo usa. Membrana pulsando por troca de tabela sairia de graça.
-- **Palette swap de dano assado.** O flash de dano usa `tint` do Pixi, que é a única
-  multiplicação de cor do render. Assar uma folha vermelha do jogador custaria 192 quadros.
-- **Sprite de captura.** Sem Playwright no projeto, a conferência visual é ASCII no
-  terminal. Comparar quadros entre rodadas exigiria a dependência — propor antes.
-- **Mobile sem controle de toque.** Alvo inclui mobile; slice só tem teclado.
-- **Áudio.** Nada ainda.
-- **Fase 2 do harness.** Gatilho em `HARNESS.md` §7: mesmo eixo subjetivo julgado mais de
-  duas vezes por semana. Ainda não aconteceu.
+- **O jogo é lotado, mas não é perigoso.** Medido em 01/08 com o bot: 55% da run tem um
+  patógeno a menos de 60px, e o tempo em posição de tomar dano é **0,1s numa run de 127s**.
+  A causa é direta — 82% da run é passada acima de 0.78 de velocidade, e cinco dos seis
+  `engulfSpeed` ficam abaixo disso. O limiar que deveria transformar contato em decisão
+  nunca chega a apertar. **É a articulação medida da reprovação de 01/08** ("não achei tão
+  desafiador") e o lugar mais provável para a próxima rodada de design.
+- **A morte vem do organismo, não das suas vidas.** 3 de 5 seeds do bot acabam em
+  "organismo caiu". Se a intenção é que a pressão seja sobre o jogador, o número que manda
+  hoje não é esse.
+- **Nenhum replay do humano no core atual.** `replays/core-atual.json` é sintético e serve
+  para determinismo; não serve para julgar ritmo. Só uma gravação dele resolve.
+- **Vigiar o abate passivo.** Se passar de ~40%, o verbo único virou enfeite.
 
 ## Aberto com o humano
 
-- **Bar por eixo.** `TASTE-LOOP.md` §4 exige um padrão externo por eixo. O dash foi
-  aprovado sem bar declarado — funcionou uma vez, não escala. Próximo eixo a precisar:
-  a curva de tensão.
+- **Bar do eixo "curva de tensão".** `TASTE-LOOP.md` §4 exige um padrão externo por eixo, e
+  este — o que está falhando — não tem. Sem ele o loop degrada para "perguntar toda rodada".
+  Os outros seis estão em `TASTE.md` §1b.
+- **Poderes automáticos.** Escolha do H em 01/08, contra minha recomendação, com o custo
+  nomeado e aceito na hora: some a camada de draft e some a build permanente que ele tinha
+  elogiado. A queixa "nem tão roguelike quanto a proposta" veio na mesma sessão. Vale
+  reabrir — mas **depois** de a próxima leitura ter número, não antes.
+
+## Vindo do tema, como mecânica e não como arte
+
+- **Patógeno que pune velocidade.** Hoje correr é sempre certo. Algo que só possa ser
+  engolido devagar inverteria o eixo e faria a velocidade ser escolha em vez de default.
+- **Ciclagem de paleta além do plasma.** A máquina existe (`cycledPalette`); hoje só o
+  fundo usa. Membrana pulsando por troca de tabela sai de graça.
+
+## Conhecido e adiado de propósito
+
+- **Palette swap de dano assado.** O flash usa `tint` do Pixi, a única multiplicação de cor
+  do render. Assar a folha vermelha do jogador custa 192 quadros e não muda jogo nenhum.
+- **Arte desenhada à mão.** O pipeline em `sprites.ts` é o ponto de troca: a interface é
+  uma matriz de índices de paleta por quadro.
+- **Mobile sem controle de toque.** O alvo inclui mobile; o slice só tem teclado.
+- **Áudio.** Nada ainda.
+- **Fase 2 do harness.** Gatilho em `HARNESS.md` §7: mesmo eixo subjetivo julgado mais de
+  duas vezes por semana. `npm run shot` e `npm run rec` já cobrem parte do rig de captura.
+- **Empacotamento.** Tauri e Capacitor só depois do slice aprovado — `CLAUDE.md` §5.

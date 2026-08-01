@@ -118,3 +118,19 @@ Sem prosa. Se precisar de parágrafo, é decisão de arquitetura e vai pro `CLAU
 - 01/08 · método · achar o defeito REAL, não o aparente · eu vinha melhorando textura; o defeito era ausência de animação. O diagnóstico anterior ("canvas 2D tem teto, o salto é shader") nomeava o meio, não o problema
 - 01/08 · método · substrato testável antes de acabamento · índice de paleta sem DOM fez a arte rodar sob vitest e pegou 3 defeitos que eu não acharia lendo
 - 01/08 · método · restrição dura faz o desenho no meu lugar · paleta travada, sem rotação, posição inteira, silhueta dentro da hitbox; pixel art me serve porque é regida por regra, e eu obedeço melhor do que invento
+- 01/08 · i-frames · caem no primeiro abate POR CONTATO, sem timer · escolha do H entre três opções; regra sem número, como a de 31/07 que ela substitui
+- 01/08 · defeito · a invulnerabilidade não tinha fim · caía só ao atingir 85% de velocidade, e cinco dos seis engulfSpeed ficam abaixo disso — dava para farmar de graça sem prazo
+- 01/08 · hipótese REPROVADA pela medição · o buraco dos i-frames NÃO explica a queixa de dificuldade · bot explorador morre mais rápido (81s contra 126s) e o tempo invulnerável fica em ~2s por run; eu tinha apontado o buraco como candidato principal e o instrumento me corrigiu
+- 01/08 · ACHADO · o jogo é lotado, não perigoso · 55% da run com patógeno a menos de 60px, mas só 0,1s em posição de tomar dano; 82% da run acima de 0.78 de velocidade e cinco dos seis limiares de fagocitose ficam abaixo disso — o limiar nunca aperta
+- 01/08 · morte · vem do organismo, não das suas vidas · 3 de 5 seeds do bot acabam em "organismo caiu"
+- 01/08 · bot · mede folga, não só duração · média de distância, aperto, perigo, tempo invulnerável e escalões de velocidade; três políticas, sendo a exploradora uma regressão contra o buraco fechado
+- 01/08 · deps · playwright como devDependency · aprovado pelo H; já constava no stack do CLAUDE.md, e foi o que achou 5 dos consertos da rodada de pixel art
+- 01/08 · fixtures · npm run rec grava do build atual, dirigindo o browser · as quatro anteriores eram todas do gitSha 7c952a6, anterior ao core contínuo
+- 01/08 · determinismo · quatro baselines rebaseados, ato consciente · a regra de i-frames mudou e o campo morto invulnSkipCurrent saiu do hash
+- 01/08 · LOOP · o Taste Loop passa a ser revisado no fechamento de toda rodada · pedido do H: "essa é a primeira iteração desse princípio e ele pode evoluir a cada aprendizado"
+- 01/08 · LOOP · arquivos de LOG e arquivos de ESTADO passam a ser distinguidos no TASTE-LOOP §8 · a fragilidade que deixou CLAUDE.md §1 declarando três restrições mortas por um dia: registrar o veredito não é propagá-lo
+- 01/08 · LOOP · passo 8 (propagar) e passo 9 (fechar a rodada) entram no §3 · o §3 mandava registrar e parava aí
+- 01/08 · LOOP · "confiança sobre trabalho que o agente não consegue ver" vira modo de falha nomeado · cinco defeitos visuais passaram por revisão de código e suíte verde
+- 01/08 · consequência da regra nova de i-frames · morrer por toque ficou mais difícil · depois do primeiro toque você fica protegido até ESCOLHER engolir; o tempo invulnerável médio do bot subiu de 1,2s para 2,5s, e "organismo caiu" fica ainda mais dominante como modo de morte
+- 01/08 · defeito no próprio apparatus · o rec pendurava porque matava o wrapper do npx, não o vite · o órfão segurava a porta e mantinha o event loop vivo; agora chama o binário local em grupo próprio e mata o grupo
+- 01/08 · fixture · core-atual.json é a primeira do core contínuo e a única que atravessa morte E reinício · buraco declarado no BACKLOG desde 31/07, fechado

@@ -10,13 +10,16 @@
     "typecheck": "tsc --noEmit",
     "replay": "node src/harness/runner.ts",
     "smoke": "node src/harness/makeSmoke.ts",
-    "pace": "node src/harness/bot.ts"
+    "pace": "node src/harness/bot.ts",
+    "shot": "node src/harness/shot.ts",
+    "rec": "node src/harness/rec.ts"
   },
   "dependencies": {
     "pixi.js": "^8.6.6"
   },
   "devDependencies": {
     "@types/node": "^22.10.5",
+    "playwright": "^1.62.1",
     "typescript": "^5.7.2",
     "vite": "^7.0.0",
     "vitest": "^4.0.0"

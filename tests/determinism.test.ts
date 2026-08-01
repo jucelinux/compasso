@@ -11,7 +11,7 @@ import type { Tuning } from "../src/sim/types.ts"
  */
 
 const SMOKE = resolve(projectRoot, "replays", "smoke.json")
-const BASELINE_HASH = "8d2772c7"
+const BASELINE_HASH = "b8f8c33d"
 
 /**
  * Run real do humano, 7,6 min de input de verdade.
@@ -21,7 +21,7 @@ const BASELINE_HASH = "8d2772c7"
  * sobre input humano real; não morre.
  */
 const RUN_01 = resolve(projectRoot, "replays", "run-01.json")
-const RUN_01_HASH = "643040dc"
+const RUN_01_HASH = "2511f194"
 
 /**
  * Segunda run real: 5 min, 10 ondas, uma morte. Gravada antes da tecla de
@@ -30,7 +30,7 @@ const RUN_01_HASH = "643040dc"
  * morte → reinício sob as regras atuais; só uma gravação nova resolve.
  */
 const RUN_02 = resolve(projectRoot, "replays", "run-02.json")
-const RUN_02_HASH = "b5a9ea06"
+const RUN_02_HASH = "9a6a64d8"
 
 /**
  * Terceira run real: 5,7 min de input humano, gravada quando os modificadores
@@ -41,11 +41,25 @@ const RUN_02_HASH = "b5a9ea06"
  * morte → reinício: todas são anteriores à tecla própria de recomeço.
  */
 const RUN_03 = resolve(projectRoot, "replays", "run-03.json")
-const RUN_03_HASH = "f0f4def9"
+const RUN_03_HASH = "e8ccf977"
+
+/**
+ * Primeira fixture do core contínuo, gravada por `npm run rec` em 01/08 no
+ * `gitSha 669ee03`. Sintética, não humana: serve de âncora de determinismo, não
+ * para julgar ritmo. É a ÚNICA que atravessa morte → reinício, que é o gesto que
+ * o gate mede — as quatro anteriores são todas do `7c952a6`, anterior ao pivô.
+ */
+const CORE_ATUAL = resolve(projectRoot, "replays", "core-atual.json")
+const CORE_ATUAL_HASH = "ecbe2b79"
 
 const smoke = () => loadReplay(SMOKE)
 const tuning = () => loadTuning()
 
+/*
+ * Os quatro baselines foram REBASEADOS em 01/08, ato consciente: os i-frames
+ * passaram a cair no primeiro abate por contato em vez de ao atingir 85% da
+ * velocidade, e o campo morto `invulnSkipCurrent` saiu do hash junto.
+ */
 describe("determinismo", () => {
   it("mesma seed + mesmos inputs = mesmo hash", () => {
     expect(runReplay(smoke(), tuning()).finalHash).toBe(
@@ -108,6 +122,29 @@ describe("determinismo", () => {
     expect(reaches(RUN_01)).toBe(true)
     expect(reaches(RUN_02)).toBe(true)
     expect(reaches(RUN_03)).toBe(true)
+  })
+
+  it("a fixture do core atual bate com o baseline", () => {
+    const result = runReplay(loadReplay(CORE_ATUAL), tuning())
+    expect(result.finalHash).toBe(CORE_ATUAL_HASH)
+  })
+
+  it("a fixture do core atual atravessa morte E reinício", () => {
+    // Era o buraco declarado no BACKLOG desde 31/07: nenhuma fixture reiniciava,
+    // e reiniciar é exatamente o que o gate mede.
+    const replay = loadReplay(CORE_ATUAL)
+    const sim = createSim(replay.seed, tuning())
+    let morreu = false
+    let reiniciou = false
+    for (const input of replayInputs(replay)) {
+      sim.step(input)
+      const s = sim.state()
+      if (s.phase === "dead") morreu = true
+      if (morreu && s.phase === "run" && s.runIndex > 0) reiniciou = true
+    }
+    expect(morreu, "não morreu").toBe(true)
+    expect(reiniciou, "não reiniciou").toBe(true)
+    expect(sim.state().runIndex).toBeGreaterThan(0)
   })
 
   it("hash evolui — não é constante", () => {

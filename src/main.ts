@@ -68,8 +68,10 @@ function frame(now: number): void {
   renderer.draw(prev, sim.state(), accumulator / STEP)
 
   const s = sim.state()
+  // `fase` está aqui para o `npm run rec` saber quando a run morreu sem
+  // adivinhar por relógio. Instrumentação, como o resto desta linha.
   hud.textContent =
-    `run ${s.runIndex + 1} · seed ${seed} · tick ${s.tick} · ${sim.snapshot().hash}\n` +
+    `run ${s.runIndex + 1} · seed ${seed} · tick ${s.tick} · fase ${s.phase} · ${sim.snapshot().hash}\n` +
     `WASD/setas movem · espaço = impulso · R recomeça · shift+F9 grava a run`
 
   requestAnimationFrame(frame)

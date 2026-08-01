@@ -50,6 +50,11 @@ ask: what property of the artifact can be asserted mechanically and re-checked f
 5. **Clear margin → apply and continue. Tie or direction call → hold for the human.**
 6. **Human review in batches**, never per round.
 7. **Record the verdict** in the same turn it is given.
+8. **Propagate it.** Recording is not the same as applying. If the verdict supersedes
+   something a *state* file still declares, fix that file now — see section 8.
+9. **Close the round.** Answer three questions out loud, in the same turn:
+   *Did this round produce a gate reading, or not?* · *What did the loop itself get wrong?*
+   · *Does anything in this file need to change?* See section 12.
 
 ---
 
@@ -151,6 +156,30 @@ not fit is a rubric that gets ignored.
 Backlog is what is open. Decisions are what is settled. Mixing them is how decision logs
 die.
 
+### Log files vs state files — the distinction that was missing
+
+This split was added on 01/08, after the loop failed at exactly this seam. Every file the
+project keeps is one of two kinds, and they have opposite maintenance rules:
+
+| Kind | Files | Rule | Failure if ignored |
+|---|---|---|---|
+| **Log** | `DECISIONS.md` | Append only. Never edit. A superseded line is not a wrong line. | Grows; that is fine |
+| **State** | `CLAUDE.md` §1, `BACKLOG.md`, `TASTE.md` | Must be **re-derived** whenever a verdict supersedes them | Silently declares dead constraints as binding |
+
+A log is self-maintaining. A state file is not, and nothing about appending to the log
+tells you a state file went stale. That is why section 3 has a separate *propagate* step.
+
+**A pivot invalidates a batch, not a line.** When a core falls, it takes a cluster of
+dependent constraints with it, and each one has to be hunted down by hand. On 01/08 the
+`dash+creep` core fell; `CLAUDE.md` §1 kept declaring *geometric primitives only*, *8 fixed
+directions* and *i-frames until the end of the next dash* as binding for a full day after
+all three were dead. Nobody noticed, because every new session read that file first and
+took it at its word.
+
+State files should say **as of DATE** on any list they call binding. A date is the cheapest
+possible staleness signal: it does not prove the list is current, but it makes "when was
+this last checked" answerable without archaeology.
+
 ### Disagreement outranks agreement
 
 A round where the critic picks A, the human picks B, and the reason is recorded teaches
@@ -207,6 +236,10 @@ Two rules keep this honest:
 | Improvement stalls after passing the bar | Bar too general, or no "neither" option |
 | New session repeats settled arguments | Verdicts not written down the same turn |
 | Polish that gets thrown away | Loop started before the vertical slice |
+| New session works from constraints that are dead | Verdict recorded in the log but never propagated to the state files |
+| Backlog describes a game that no longer exists | Same cause; a pivot invalidates a batch and nothing sweeps for it |
+| Rounds improve the thing, the loop never improves | No round-close step; the method is never itself under review |
+| Agent is confident about work it cannot see | Axis has no artifact the agent can actually inspect — see section 12 |
 
 ---
 
@@ -223,3 +256,35 @@ Before the first round, answer the three questions in section 4. Concretely:
 
 Then build the harness that produces samples automatically. That harness is round zero,
 and it comes before any content.
+---
+
+## 12. Evolving the loop
+
+This document is not settled. It is the first iteration of a method, and it has already
+been wrong twice in two days. Treat it as the project treats the game: something that gets
+a verdict each round.
+
+**Rule: the loop is reviewed at the close of every round**, in the same turn, out loud.
+Three questions, and the answers are cheap:
+
+1. **Did this round produce a gate reading?** If not, say so plainly. A round that
+   improved something real but measured nothing is not a failed round — but it is a round
+   where the gate counter does not move, and pretending otherwise is how a project drifts
+   sideways while appearing to advance.
+2. **Where did the loop itself fail?** Not the work — the method. A rule that was followed
+   and still let something through is worth more than a rule that was skipped.
+3. **Does this file need to change?** If yes, change it in the same turn, and log it below.
+
+Loop verdicts go in `DECISIONS.md` like any other, on the `LOOP` axis. They are decisions
+about how the project decides, which makes them the most expensive ones to get wrong and
+the cheapest ones to forget.
+
+### Changelog
+
+| Date | What changed | What went wrong that caused it |
+|---|---|---|
+| 31/07 | Bar per axis, not one bar overall (§4) | A general "be as good as X" gave no gradient; the dash was approved with no bar declared and it did not scale to the next axis |
+| 31/07 | Restart must use its own key, not the action key | The gate measured a reflex instead of an intention: the human pressed the shared key 2.9s after dying and did not mean to continue |
+| 01/08 | Log vs state files, and the *propagate* step (§3.8, §8) | Three constraints stayed declared as binding for a day after the core that implied them fell |
+| 01/08 | Round close, and this section (§3.9, §12) | The method was never itself under review; every round improved the game and none improved the loop |
+| 01/08 | "Agent is confident about work it cannot see" as a named failure mode (§10) | Five real visual defects survived code review and a green test suite; only rendering the output found them. If an axis has no artifact the agent can inspect, the agent's confidence on that axis is worth nothing |

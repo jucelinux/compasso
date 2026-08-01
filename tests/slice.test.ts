@@ -174,6 +174,75 @@ describe("fagocitose por velocidade", () => {
   })
 })
 
+describe("i-frames caem ao engolir", () => {
+  /** Apanha de propósito no corona, que exige 92% e portanto machuca a 50%. */
+  const takeHit = (sim: Sim): void => {
+    mut(sim).enemies = []
+    let guard = 0
+    while (sim.state().player.speed < 0.5) {
+      sim.step(RIGHT)
+      mut(sim).player.x = tuning.arena.width / 2
+      if (++guard > 400) throw new Error("não acelerou")
+    }
+    mut(sim).enemies = [virus(mut(sim).player.x, mut(sim).player.y, "corona")]
+    sim.step(RIGHT)
+    mut(sim).enemies = []
+    // o toque congela alguns ticks; passa por eles
+    advance(sim, tuning.run.hitFreezeTicks + 1)
+    if (!sim.state().player.invulnerable) throw new Error("não ficou invulnerável")
+  }
+
+  it("engolir por contato derruba a proteção", () => {
+    const sim = createSim(21, tuning)
+    takeHit(sim)
+    let guard = 0
+    while (sim.state().player.speed < 0.5) {
+      sim.step(RIGHT)
+      mut(sim).player.x = tuning.arena.width / 2
+      if (++guard > 400) throw new Error("não reacelerou")
+    }
+    expect(sim.state().player.invulnerable).toBe(true)
+    mut(sim).enemies = [virus(mut(sim).player.x, mut(sim).player.y)]
+    sim.step(RIGHT)
+    expect(sim.state().kills).toBeGreaterThan(0)
+    expect(sim.state().player.invulnerable).toBe(false)
+  })
+
+  it("a proteção não expira sozinha — sem timer, decisão de 31/07", () => {
+    const sim = createSim(22, tuning)
+    takeHit(sim)
+    // cinco segundos parada, sem engolir nada
+    advance(sim, 300)
+    expect(sim.state().player.invulnerable).toBe(true)
+  })
+
+  it("velocidade alta sozinha NÃO derruba mais a proteção", () => {
+    // A regra antiga caía a 85% de velocidade, o que abria o buraco: bastava
+    // ficar logo abaixo disso para comer cinco dos seis patógenos de graça.
+    const sim = createSim(23, tuning)
+    takeHit(sim)
+    toFullSpeed(sim)
+    expect(sim.state().player.speed).toBeGreaterThan(0.9)
+    expect(sim.state().player.invulnerable).toBe(true)
+  })
+
+  it("abate passivo não conta: só o seu contato paga a conta", () => {
+    const sim = createSim(24, tuning)
+    takeHit(sim)
+    // Macrófago mata sozinho, longe do corpo; a proteção tem que sobreviver.
+    // O poder precisa estar ATIVO: sem ele a sim zera o array de macrófagos.
+    const macrofago = POWERS.findIndex((p) => p.name === "MACRÓFAGO")
+    mut(sim).active[macrofago] = 600
+    advance(sim, 1)
+    const m = sim.state().macrophages[0]!
+    mut(sim).enemies = [virus(m.x, m.y)]
+    const antes = sim.state().kills
+    advance(sim, 2)
+    expect(sim.state().kills, "o macrófago não matou").toBeGreaterThan(antes)
+    expect(sim.state().player.invulnerable).toBe(true)
+  })
+})
+
 describe("impulso é habilidade, não o verbo", () => {
   it("dispara na borda de subida e entra em recarga", () => {
     const sim = createSim(20, tuning)

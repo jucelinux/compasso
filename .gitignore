@@ -6,3 +6,6 @@ out/
 
 # Dumps do F9 caem na raiz; fixture de regressao mora em replays/ (HARNESS.md)
 /f9-*.json
+
+# capturas: ferramenta de leitura, nao artefato de projeto
+shots/

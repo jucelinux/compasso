@@ -14,14 +14,31 @@ the rig. Do not write code before that.
 ## 1. The project
 
 - **Name:** COMPASSO
-- **Genre:** arena action, short run, with a roguelite layer of modifiers
+- **Genre:** arena action, short run, with a roguelite layer of temporary powers
 - **One-line pitch:** time only moves when you move
 - **Target:** web first; the build runs in desktop and mobile browsers.
 
 Settled on 31/07 and recorded in `DECISIONS.md`. Do not reopen these without a new line
-there. The details that follow from them — one verb, geometric primitives only, 0.05x
-creep, three lives, 8 fixed directions, i-frames until the end of the next dash — live in
-`DECISIONS.md` and are binding in the same way.
+there.
+
+**Binding details, as of 01/08.** These are the ones that survive; each is a line in
+`DECISIONS.md` and is binding in the same way.
+
+- **One verb.** Moving *is* attacking. The dash is a resource with a cooldown, not the verb.
+- **Speed is the world clock.** Standing still, the world runs at `time.creep` (0.05);
+  at full speed, at 1.0. The player always moves in real time. That asymmetry *is* the game.
+- **Contact resolves by speed.** Fast enough engulfs, too slow hurts, and the threshold is
+  per pathogen (`engulfSpeed`).
+- **Three lives**, and i-frames with **no timer** — they drop on the first pathogen you
+  engulf by contact.
+- **Pixel art, native 640x360, locked palette.** No runtime rotation, integer positions
+  only, a round sprite fits inside the hitbox the sim collides with.
+
+**Dead — do not restore from old notes.** The 31/07 core fell at the gate after three
+negative readings, and these went with it: geometric primitives only, 8 fixed directions,
+dash+creep as the core, i-frames until the end of the next dash, and the between-waves
+pick screen. `DECISIONS.md` still carries those lines because it is an append-only log;
+superseded is not the same as wrong-at-the-time.
 
 The rig in `HARNESS.md` is genre-independent, which is why round zero came first.
 

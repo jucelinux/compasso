@@ -91,7 +91,6 @@ export function createSim(seed: number, tuning: Tuning): Sim {
       dashTicks: 0,
       dashCooldown: 0,
       invulnerable: false,
-      invulnSkipCurrent: false,
     },
     enemies: [],
     cells: [],
@@ -222,7 +221,6 @@ export function createSim(seed: number, tuning: Tuning): Sim {
     s.player.dashTicks = 0
     s.player.dashCooldown = 0
     s.player.invulnerable = false
-    s.player.invulnSkipCurrent = false
     startWave()
   }
 
@@ -484,6 +482,14 @@ export function createSim(seed: number, tuning: Tuning): Sim {
 
     // --- resolução: fagocitose por velocidade
     let hit = false
+    /*
+     * Abate POR CONTATO neste tick — o seu gesto, não o de um poder passivo.
+     * É o que derruba os i-frames, mais abaixo. Acumulado durante o laço e
+     * aplicado depois dele de propósito: se derrubasse no meio, o patógeno
+     * seguinte da lista poderia acertar você no mesmo tick, e a ordem do array
+     * viraria regra de jogo.
+     */
+    let contactKill = false
     const survivors: Enemy[] = []
     for (const e of s.enemies) {
       const eh = sizeOf(e) / 2
@@ -538,8 +544,10 @@ export function createSim(seed: number, tuning: Tuning): Sim {
        * velocidade máxima, S. aureus só a 70%, SARS-CoV-2 quase no talo.
        */
       if (!eaten && dist <= half + eh) {
-        if (st.enzyme || p.speed >= kindOf(e.kind).engulfSpeed) eaten = true
-        else if (!newborn && !p.invulnerable && !hit) {
+        if (st.enzyme || p.speed >= kindOf(e.kind).engulfSpeed) {
+          eaten = true
+          contactKill = true
+        } else if (!newborn && !p.invulnerable && !hit) {
           hit = true
           continue
         }
@@ -606,7 +614,6 @@ export function createSim(seed: number, tuning: Tuning): Sim {
 
     if (hit) {
       p.invulnerable = true
-      if (p.dashTicks > 0) p.invulnSkipCurrent = true
       s.frozen = tuning.run.hitFreezeTicks
       // Apanhar te FREIA: o custo do erro é perder o relógio junto com a vida.
       p.vx *= 0.15
@@ -621,10 +628,23 @@ export function createSim(seed: number, tuning: Tuning): Sim {
           return
         }
       }
-    } else if (p.invulnerable && p.speed >= 0.85) {
-      // Os i-frames caem quando você volta ao talo: regra sem número, como antes.
-      if (p.invulnSkipCurrent) p.invulnSkipCurrent = false
-      else p.invulnerable = false
+    } else if (p.invulnerable && contactKill) {
+      /*
+       * Os i-frames caem no primeiro patógeno que você engole. Regra sem número,
+       * como as outras duas que o humano aprovou.
+       *
+       * A regra anterior era "cai ao atingir 85% da velocidade", e tinha um
+       * buraco: como nada limitava o tempo, dava para tomar um toque, ficar logo
+       * abaixo de 0.85 e comer cinco dos seis patógenos com risco zero e sem
+       * prazo — a fagocitose só olha `engulfSpeed`, e cinco deles cedem abaixo
+       * de 0.85. Medido com o bot `exploradora` em 01/08: o buraco existia mas
+       * quase não era alcançável na prática. Fechado mesmo assim, porque
+       * invulnerabilidade sem fim é regra torta esperando um jogador melhor.
+       *
+       * Só abate por CONTATO conta. Nuvem, órbita e macrófago são o abate
+       * passivo, que já tem teto próprio declarado em 31/07.
+       */
+      p.invulnerable = false
     }
 
     if (s.cellsLost > 0 && s.cells.length === 0) {
@@ -679,7 +699,6 @@ export function createSim(seed: number, tuning: Tuning): Sim {
       .u32(s.player.dashTicks)
       .u32(s.player.dashCooldown)
       .bool(s.player.invulnerable)
-      .bool(s.player.invulnSkipCurrent)
       .f64(s.spawnTimer)
       .f64(s.worldScale)
       .u32(s.frozen)
