@@ -48,7 +48,7 @@ function frame(now: number): void {
   const s = sim.state()
   hud.textContent =
     `run ${s.runIndex + 1} · seed ${seed} · tick ${s.tick} · ${sim.snapshot().hash}\n` +
-    `WASD/setas dasham · espaço confirma · R recomeça · shift+F9 grava a run`
+    `WASD/setas movem · espaço = impulso · R recomeça · shift+F9 grava a run`
 
   requestAnimationFrame(frame)
 }

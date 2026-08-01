@@ -11,7 +11,7 @@ import type { Tuning } from "../src/sim/types.ts"
  */
 
 const SMOKE = resolve(projectRoot, "replays", "smoke.json")
-const BASELINE_HASH = "b92dd21c"
+const BASELINE_HASH = "8d2772c7"
 
 /**
  * Run real do humano, 7,6 min de input de verdade.
@@ -21,7 +21,7 @@ const BASELINE_HASH = "b92dd21c"
  * sobre input humano real; não morre.
  */
 const RUN_01 = resolve(projectRoot, "replays", "run-01.json")
-const RUN_01_HASH = "8c1b9f72"
+const RUN_01_HASH = "643040dc"
 
 /**
  * Segunda run real: 5 min, 10 ondas, uma morte. Gravada antes da tecla de
@@ -30,7 +30,7 @@ const RUN_01_HASH = "8c1b9f72"
  * morte → reinício sob as regras atuais; só uma gravação nova resolve.
  */
 const RUN_02 = resolve(projectRoot, "replays", "run-02.json")
-const RUN_02_HASH = "d7a32e77"
+const RUN_02_HASH = "b5a9ea06"
 
 /**
  * Terceira run real: 5,7 min de input humano, gravada quando os modificadores
@@ -41,7 +41,7 @@ const RUN_02_HASH = "d7a32e77"
  * morte → reinício: todas são anteriores à tecla própria de recomeço.
  */
 const RUN_03 = resolve(projectRoot, "replays", "run-03.json")
-const RUN_03_HASH = "5efee052"
+const RUN_03_HASH = "f0f4def9"
 
 const smoke = () => loadReplay(SMOKE)
 const tuning = () => loadTuning()
@@ -84,7 +84,7 @@ describe("determinismo", () => {
     expect(result.ticks).toBeGreaterThan(19000)
   })
 
-  it("run-02 e run-03 atravessam a morte — travado contra registro podre", () => {
+  it("as fixtures antigas morrem cedo no core novo — travado contra registro podre", () => {
     // Este teste existe porque os comentários deste arquivo já mentiram duas
     // vezes: a run-01 alegava cobrir morte depois das ondas, e a run-03 depois
     // dos modificadores-comportamento. Agora quem afirma é o teste.
@@ -97,12 +97,17 @@ describe("determinismo", () => {
       }
       return false
     }
-    expect(reaches(RUN_02), "run-02 deveria atravessar a morte").toBe(true)
-    // Voltou a morrer com os patógenos reais: o corona e a S. aureus repuseram
-    // a dificuldade que os modificadores-comportamento tinham comido.
-    expect(reaches(RUN_03), "run-03 deveria atravessar a morte").toBe(true)
-    expect(reaches(SMOKE)).toBe(false)
-    expect(reaches(RUN_01)).toBe(false)
+    /*
+     * Os quatro replays são de cores ANTIGOS. No core contínuo aquele input não
+     * sabe pilotar: ele fica devagar, e devagar agora machuca — as três runs
+     * humanas morrem cedo por isso, não por serem boas fixtures de morte.
+     * Continuam valendo como determinismo sobre input real. Precisamos de uma
+     * gravação nova do core novo, e este teste avisa se a situação mudar.
+     */
+    expect(reaches(SMOKE), "smoke não morre: input sintético mal se move").toBe(false)
+    expect(reaches(RUN_01)).toBe(true)
+    expect(reaches(RUN_02)).toBe(true)
+    expect(reaches(RUN_03)).toBe(true)
   })
 
   it("hash evolui — não é constante", () => {
@@ -114,12 +119,12 @@ describe("determinismo", () => {
 describe("tuning.json", () => {
   it("muda o comportamento sem editar código", () => {
     const base = runReplay(smoke(), tuning())
-    const faster: Tuning = { ...tuning(), dash: { ...tuning().dash, speed: 900 } }
+    const faster: Tuning = { ...tuning(), dash: { ...tuning().dash, speedMultiplier: 4 } }
     expect(runReplay(smoke(), faster).finalHash).not.toBe(base.finalHash)
   })
 
   it("divergência de tuningHash é aviso, não erro", () => {
-    const other: Tuning = { ...tuning(), dash: { ...tuning().dash, speed: 900 } }
+    const other: Tuning = { ...tuning(), dash: { ...tuning().dash, speedMultiplier: 4 } }
     const result = runReplay(smoke(), other)
     expect(result.tuningMatches).toBe(false)
     expect(result.ticks).toBe(smoke().inputs.length)

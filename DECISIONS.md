@@ -90,3 +90,13 @@ Sem prosa. Se precisar de parágrafo, é decisão de arquitetura e vai pro `CLAU
 - 01/08 · parallax · REPROVADO, e a crítica é justa · reusei a mesma textura em três escalas; movimento sem conteúdo próprio não é parallax, é a mesma imagem escorregando
 - 01/08 · defeito · Salmonella gira no próprio eixo · render aplica rotação constante a todo patógeno; um flagelado tem que apontar para onde vai
 - 01/08 · gráfico · estagnou, e o H esperava quase fotorrealismo · canvas 2D procedural tem teto; o salto de verdade é shader WebGL, e é o que eu consigo fazer sem desenhar
+- 01/08 · GATE · TERCEIRO NÃO — A TESE CAIU · três leituras negativas seguidas; pela regra de 31/07 o dash+creep como core está derrubado. Fracasso é resultado, não culpa
+- 01/08 · pivô, não fim · a escolha do H mantém a identidade · com velocidade = relógio, "o tempo só anda quando você anda" fica literalmente verdadeira; hoje ela só valia em rajadas de 9 ticks
+- 01/08 · CORE NOVO · movimento contínuo, a velocidade É a escala do tempo · parado 5%, a toda 100%; o jogador anda em tempo real, o mundo anda em tempo de mundo
+- 01/08 · ataque · fagocitose por velocidade · encostar rápido engole, encostar devagar machuca; cada patógeno exige uma velocidade mínima. Mantém "mover = atacar" e amarra ataque, relógio e risco no mesmo número
+- 01/08 · dash · vira habilidade com recarga · deixa de ser o core e passa a ser recurso
+- 01/08 · powerups · automáticos, temporários e aleatórios · CONTRA a minha recomendação, escolha do H; custo apontado e aceito: some a camada de draft roguelite e some a build permanente que ele tinha elogiado
+- 01/08 · tela de escolha · deixa de existir · consequência direta do powerup automático; as fases viram só `run` e `dead`
+- 01/08 · gate · contador zerado · o core mudou; medir a tese antiga contra o jogo novo não diria nada
+- 01/08 · determinismo · Math.pow banido da sim, duas vezes · o teste de fronteira pegou a curva do relógio e a curva da cota; trocadas por t*sqrt(t) e por quadrática, que são exatas
+- 01/08 · ritmo · run média de 127s contra alvo de 120, e as 5 seeds do bot morrem · primeira vez que o bot é consistentemente mortal; o core contínuo com fagocitose por velocidade cria risco de verdade

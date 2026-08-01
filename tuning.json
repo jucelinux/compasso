@@ -8,32 +8,34 @@
   },
   "time": {
     "creep": 0.05,
-    "creepPerWave": 0.026
+    "linearMix": 0.35
   },
   "player": {
-    "size": 18
+    "size": 20,
+    "maxSpeed": 235,
+    "accel": 1250,
+    "drag": 900
   },
   "dash": {
-    "durationTicks": 9,
-    "recoveryTicks": 7,
-    "recoveryPerWave": 0.4,
-    "minRecoveryTicks": 1,
-    "speed": 620,
-    "killRadius": 26,
-    "killArc": 0.15
+    "durationTicks": 8,
+    "cooldownTicks": 78,
+    "speedMultiplier": 2.6
   },
   "wave": {
-    "baseQuota": 13,
-    "quotaGrowth": 4
+    "baseQuota": 12,
+    "quotaGrowth": 5,
+    "quotaAccel": 0.8
   },
   "run": {
-    "lives": 3
+    "lives": 3,
+    "hitFreezeTicks": 12,
+    "deadLockTicks": 45
   },
   "enemy": {
     "size": 16,
     "spawnIntervalSeconds": 0.34,
     "spawnPerWave": 0.3,
-    "openingBase": 3,
+    "openingBase": 4,
     "openingPerWave": 2,
     "maxAlive": 120,
     "kinds": {
@@ -44,7 +46,8 @@
         "splits": 0,
         "hunts": "player",
         "real": "Influenza A",
-        "form": "esfera"
+        "form": "esfera",
+        "engulfSpeed": 0.28
       },
       "ecoli": {
         "speed": 54,
@@ -53,7 +56,8 @@
         "splits": 2,
         "hunts": "player",
         "real": "E. coli",
-        "form": "bacilo"
+        "form": "bacilo",
+        "engulfSpeed": 0.45
       },
       "ecoli_filha": {
         "speed": 86,
@@ -62,7 +66,8 @@
         "splits": 0,
         "hunts": "player",
         "real": "E. coli (filha)",
-        "form": "bacilo"
+        "form": "bacilo",
+        "engulfSpeed": 0.22
       },
       "estafilo": {
         "speed": 50,
@@ -71,7 +76,8 @@
         "splits": 0,
         "hunts": "player",
         "real": "S. aureus",
-        "form": "cacho"
+        "form": "cacho",
+        "engulfSpeed": 0.7
       },
       "salmonela": {
         "speed": 58,
@@ -80,7 +86,8 @@
         "splits": 0,
         "hunts": "cell",
         "real": "Salmonella",
-        "form": "flagelado"
+        "form": "flagelado",
+        "engulfSpeed": 0.4
       },
       "corona": {
         "speed": 44,
@@ -90,7 +97,7 @@
         "hunts": "player",
         "real": "SARS-CoV-2",
         "form": "coroa",
-        "onlyDirectCut": true
+        "engulfSpeed": 0.92
       }
     },
     "spawnTable": [
@@ -146,7 +153,7 @@
       }
     ],
     "splitOffset": 30,
-    "spawnGraceTicks": 4
+    "spawnGraceTicks": 8
   },
   "cells": {
     "count": 3,
@@ -154,21 +161,13 @@
     "size": 22,
     "hp": 3
   },
-  "pick": {
-    "offerCount": 3
-  },
-  "feel": {
-    "hitFreezeTicks": 12,
-    "waveFreezeTicks": 8,
-    "deadLockTicks": 45
-  },
   "harness": {
     "recordSeconds": 30
   },
   "powers": {
     "trailTicks": 20,
     "trailRadius": 13,
-    "shockEvery": 8,
+    "shockEvery": 6,
     "shockRadius": 66,
     "shockLifeTicks": 16,
     "backRadius": 15,
@@ -177,11 +176,21 @@
     "orbitSin": 0.07846,
     "orbitKillRadius": 11,
     "comboWindowTicks": 45,
-    "interferonRadius": 96,
-    "interferonSlow": 0.45,
-    "macrophageSpeed": 96,
-    "macrophageRadius": 15,
-    "cloudTicks": 40,
-    "cloudRadius": 20
+    "interferonRadius": 104,
+    "interferonSlow": 0.4,
+    "macrophageSpeed": 110,
+    "macrophageRadius": 16,
+    "cloudTicks": 44,
+    "cloudRadius": 22,
+    "surgeSpeed": 1.45,
+    "shieldHits": 1
+  },
+  "drops": {
+    "chance": 0.1,
+    "lifeTicks": 420,
+    "magnetRadius": 46,
+    "magnetSpeed": 130,
+    "durationTicks": 480,
+    "maxOnField": 6
   }
 }

@@ -1,23 +1,20 @@
 import { Application, Container, Graphics, Sprite, Text, TextStyle } from "pixi.js"
+import { activeStats, POWERS } from "../sim/powers.ts"
+import type { SimState, Tuning } from "../sim/types.ts"
 import {
   bloodLayer,
   organCellTexture,
   pathogenTexture,
-  plasmaTexture,
   playerTexture,
   type LayerKind,
 } from "./textures.ts"
-import { MODIFIERS, MOD_SHIELD, applyModifiers } from "../sim/modifiers.ts"
-import type { SimState, Tuning } from "../sim/types.ts"
 
 /**
- * Render. A restrição "só primitivas" foi REABERTA pelo humano em 31/07: corpos
- * agora são texturas — geradas em código, em `textures.ts`, porque o modelo não
- * desenha. Efeito (rastro, pulso, leque) segue primitiva, que é onde primitiva
- * é melhor: nítida, barata e legível em movimento.
+ * Render. A restrição "só primitivas" foi reaberta pelo humano em 31/07: corpos
+ * são texturas geradas em código, em `textures.ts`. Efeito segue primitiva, que
+ * é onde primitiva ganha: nítida e barata em movimento.
  *
- * A sim anda em passos fixos de 1/60 de tempo de mundo; aqui só interpolamos.
- * Nada aqui decide nada — efeito que muda regra mora na sim.
+ * Nada aqui decide nada. Regra mora na sim.
  */
 export interface Renderer {
   draw(prev: SimState, cur: SimState, alpha: number): void
@@ -27,11 +24,13 @@ export interface Renderer {
 const COLOR_BG = 0x14070b
 const COLOR_PLASMA = 0x2a0d14
 const COLOR_CELL = 0xf4f7ff
-const COLOR_CELL_DASH = 0x7fe9ff
+const COLOR_FAST = 0x7fe9ff
 const COLOR_NUCLEUS = 0x9fb4d8
 const COLOR_HURT = 0xff3b5c
-const COLOR_VIRUS = 0xff6a3d
-/** Cor por patógeno. A forma vem da morfologia real, em `textures.ts`. */
+const COLOR_CELL_ORG = 0x6ec2ff
+const COLOR_DIM = 0x7a4450
+const COLOR_SHIELD = 0x8affc8
+
 const KIND_COLOR: Readonly<Record<string, number>> = {
   influenza: 0xff6a3d,
   ecoli: 0xffd23d,
@@ -40,9 +39,8 @@ const KIND_COLOR: Readonly<Record<string, number>> = {
   salmonela: 0x3dff9e,
   corona: 0xff3b8c,
 }
-const COLOR_CELL_ORG = 0x6ec2ff
-const COLOR_DIM = 0x7a4450
-const COLOR_SHIELD = 0x8affc8
+
+const TIERS = [0xffffff, 0xffe58a, 0xffb03d, 0xff6a3d, 0xff3b8c]
 
 function lerp(a: number, b: number, t: number): number {
   return a + (b - a) * t
@@ -54,9 +52,17 @@ interface Particle {
   vx: number
   vy: number
   life: number
-  max: number
   color: number
   size: number
+}
+
+interface Pop {
+  x: number
+  y: number
+  life: number
+  text: string
+  size: number
+  color: number
 }
 
 export async function createRenderer(mount: HTMLElement, tuning: Tuning): Promise<Renderer> {
@@ -73,30 +79,17 @@ export async function createRenderer(mount: HTMLElement, tuning: Tuning): Promis
   mount.appendChild(app.canvas)
 
   const world = new Container()
-  const floor = new Graphics()
-  const fx = new Graphics()
-  const enemyLayer = new Container()
-  const player = new Graphics()
-  world.addChild(floor, enemyLayer, player, fx)
-
   const hud = new Container()
   const overlay = new Container()
   app.stage.addChild(world, hud, overlay)
 
-  // --- plasma texturizado: veios e hemácias fora de foco
-  const plasma = new Sprite(plasmaTexture(tuning.arena.width, tuning.arena.height, COLOR_PLASMA, COLOR_BG))
-  floor.visible = false
-
-  /**
-   * Parallax que anda na velocidade do MUNDO, não do relógio de parede.
-   * O humano disse que o fundo estático "não comunicava com o resto": agora ele
-   * é a leitura mais direta da dilatação — parado, o sangue quase não escorre.
-   */
   const LAYERS: ReadonlyArray<{ kind: LayerKind; speed: number; alpha: number; bob: number }> = [
     { kind: "hemacias", speed: 18, alpha: 0.85, bob: 3 },
     { kind: "fibrina", speed: 52, alpha: 0.7, bob: 7 },
     { kind: "detritos", speed: 124, alpha: 0.9, bob: 13 },
   ]
+  const base = new Graphics()
+  base.rect(0, 0, tuning.arena.width, tuning.arena.height).fill(COLOR_PLASMA)
   const drift: Array<{ sprite: Sprite; speed: number; bob: number; slot: number }> = []
   LAYERS.forEach((layer, li) => {
     const tex = bloodLayer(tuning.arena.width, tuning.arena.height, layer.kind, li * 91 + 7)
@@ -108,9 +101,45 @@ export async function createRenderer(mount: HTMLElement, tuning: Tuning): Promis
   })
   let driftX = 0
 
+  const organLayer = new Container()
+  const cellLayer = new Graphics()
+  const powers = new Graphics()
+  const enemyLayer = new Container()
+  const player = new Graphics()
   const playerSprite = new Sprite(playerTexture(tuning.player.size, COLOR_CELL, COLOR_NUCLEUS))
   playerSprite.anchor.set(0.5)
-  world.addChild(playerSprite)
+  const fx = new Graphics()
+  const popLayer = new Container()
+
+  world.addChild(base)
+  for (const d of drift) world.addChild(d.sprite)
+  world.addChild(organLayer, cellLayer, powers, enemyLayer, player, playerSprite, fx, popLayer)
+
+  const mono = (size: number, fill: number): TextStyle =>
+    new TextStyle({ fontFamily: "monospace", fontSize: size, fill })
+
+  const waveText = new Text({ text: "", style: mono(13, COLOR_CELL) })
+  waveText.position.set(10, 8)
+  const hudBars = new Graphics()
+  const buildText = new Text({ text: "", style: mono(10, COLOR_DIM) })
+  buildText.position.set(10, 42)
+  hud.addChild(hudBars, waveText, buildText)
+
+  const overlayBg = new Graphics()
+  const deadText = new Text({
+    text: "",
+    style: new TextStyle({
+      fontFamily: "monospace",
+      fontSize: 14,
+      fill: COLOR_CELL,
+      align: "center",
+      lineHeight: 24,
+    }),
+  })
+  overlay.addChild(overlayBg, deadText)
+
+  const organTex = organCellTexture(tuning.cells.size, COLOR_CELL_ORG)
+  const organPool: Sprite[] = []
 
   const virusTex = new Map<string, ReturnType<typeof pathogenTexture>>()
   const texFor = (kind: string) => {
@@ -127,54 +156,9 @@ export async function createRenderer(mount: HTMLElement, tuning: Tuning): Promis
     }
     return t
   }
-  const organTex = organCellTexture(tuning.cells.size, COLOR_CELL_ORG)
-  const powers = new Graphics()
-
-  const mono = (size: number, fill: number): TextStyle =>
-    new TextStyle({ fontFamily: "monospace", fontSize: size, fill })
-
-  const waveText = new Text({ text: "", style: mono(13, COLOR_CELL) })
-  waveText.position.set(10, 8)
-  const hudBars = new Graphics()
-  const buildText = new Text({ text: "", style: mono(10, COLOR_DIM) })
-  buildText.position.set(10, 40)
-  hud.addChild(hudBars, waveText, buildText)
-
-  // --- telas
-  const overlayBg = new Graphics()
-  const overlayTitle = new Text({ text: "", style: mono(15, COLOR_CELL) })
-  overlay.addChild(overlayBg, overlayTitle)
-
-  const cards = MODIFIERS.map(() => {
-    const box = new Graphics()
-    const name = new Text({ text: "", style: mono(12, COLOR_CELL) })
-    const blurb = new Text({ text: "", style: mono(10, COLOR_DIM) })
-    const group = new Container()
-    group.addChild(box, name, blurb)
-    group.visible = false
-    overlay.addChild(group)
-    return { group, box, name, blurb }
-  })
-
-  const deadText = new Text({
-    text: "",
-    style: new TextStyle({
-      fontFamily: "monospace",
-      fontSize: 14,
-      fill: COLOR_CELL,
-      align: "center",
-      lineHeight: 24,
-    }),
-  })
-  overlay.addChild(deadText)
 
   const enemyPool: Sprite[] = []
   const enemyKindAt: string[] = []
-  /**
-   * Cada tipo tem cor, número de pontas e tamanho próprios. Ler a ameaça pela
-   * silhueta é o que faz a variedade valer — se todos parecessem iguais, ter
-   * quatro comportamentos seria só dificuldade escondida.
-   */
   const enemyFor = (i: number, kind: string): Sprite => {
     let g = enemyPool[i]
     if (g === undefined) {
@@ -183,26 +167,12 @@ export async function createRenderer(mount: HTMLElement, tuning: Tuning): Promis
       enemyPool[i] = g
       enemyLayer.addChild(g)
     }
-    // Só troca a textura quando o slot muda de tipo: com 48 vírus em campo,
-    // refazer isso todo frame custaria justo onde o jogo é sobre timing.
     if (enemyKindAt[i] === kind) return g
     enemyKindAt[i] = kind
     g.texture = texFor(kind)
     return g
   }
 
-  const cellLayer = new Graphics()
-  const popLayer = new Container()
-  const organLayer = new Container()
-  const organPool: Sprite[] = []
-  // Ordem explícita: montar por addChild na ordem de criação deixava o
-  // organismo por cima do jogador.
-  world.removeChildren()
-  world.addChild(plasma)
-  for (const d of drift) world.addChild(d.sprite)
-  world.addChild(organLayer, cellLayer, powers, enemyLayer, player, playerSprite, fx, popLayer)
-
-  // --- partículas: puramente decorativas, fora da sim
   let particles: Particle[] = []
   const burst = (x: number, y: number, color: number, n: number, speed: number): void => {
     for (let i = 0; i < n; i++) {
@@ -213,144 +183,104 @@ export async function createRenderer(mount: HTMLElement, tuning: Tuning): Promis
         vx: Math.cos(a) * speed * (0.6 + (i % 3) * 0.2),
         vy: Math.sin(a) * speed * (0.6 + (i % 3) * 0.2),
         life: 1,
-        max: 1,
         color,
         size: 2 + (i % 3),
       })
     }
   }
 
-  interface Pop {
-    x: number
-    y: number
-    life: number
-    text: string
-    size: number
-    color: number
-  }
   let pops: Pop[] = []
   const popPool: Text[] = []
-
-  /** Direção de marcha suavizada, por patógeno. Só o render precisa disto. */
   const heading = new Map<number, number>()
-
   let seenIds = new Set<number>()
-  let prevCombo = 0
-  let prevWave = 1
   let prevLives = -1
   let prevCellsLost = 0
+  let prevCombo = 0
+  let prevWave = 1
   let flash = 0
   let shake = 0
+  const tailX: number[] = []
+  const tailY: number[] = []
 
   const drawPlayer = (cur: SimState, x: number, y: number): void => {
-    const dashing = cur.player.dashTicks > 0
-    const size = tuning.player.size
-    const stats = applyModifiers(tuning, cur.owned)
     player.clear()
+    const sp = Math.min(1.4, cur.player.speed)
+    const vlen = Math.sqrt(cur.player.vx * cur.player.vx + cur.player.vy * cur.player.vy) || 1
 
-    // Leque de corte: o jogador VÊ o que o dash alcança, e vê ESTEIRA e CORTE
-    // LARGO mudarem o desenho. Era a recompensa invisível.
-    if (dashing) {
-      const half = Math.acos(Math.max(-1, Math.min(1, stats.killArc)))
-      const base = Math.atan2(cur.player.dashDy, cur.player.dashDx)
-      const pts = [x, y]
-      for (let i = 0; i <= 12; i++) {
-        const a = base - half + (2 * half * i) / 12
-        pts.push(x + Math.cos(a) * stats.killRadius, y + Math.sin(a) * stats.killRadius)
-      }
-      player.poly(pts).fill({ color: COLOR_CELL_DASH, alpha: 0.16 })
-      player
-        .moveTo(x - cur.player.dashDx * 30, y - cur.player.dashDy * 30)
-        .lineTo(x, y)
-        .stroke({ width: 4, color: COLOR_CELL_DASH, alpha: 0.4 })
+    /*
+     * Borrão de velocidade. É a leitura mais direta do novo relógio: correr é
+     * literalmente ocupar mais tela. Substituiu o rastro discreto do dash, que
+     * só existia durante 9 ticks e sumia.
+     */
+    tailX.unshift(x)
+    tailY.unshift(y)
+    if (tailX.length > 14) {
+      tailX.length = 14
+      tailY.length = 14
+    }
+    const tailLen = Math.round(sp * 12)
+    for (let i = 1; i < Math.min(tailLen, tailX.length); i++) {
+      const a = (1 - i / tailLen) * 0.32 * sp
+      player.circle(tailX[i]!, tailY[i]!, (tuning.player.size / 2) * (1 - i / tailLen)).fill({
+        color: COLOR_FAST,
+        alpha: a,
+      })
     }
 
-    // Recuperação: um anel que esvazia. A folga encolhendo fica visível.
-    if (!dashing && cur.player.recoverTicks > 0) {
+    // Anel do limiar: quanto mais forte, mais coisa a sua velocidade engole.
+    if (sp > 0.05) {
       player
-        .circle(x, y, size / 2 + 5)
-        .stroke({ width: 2, color: COLOR_DIM, alpha: 0.7 })
+        .circle(x, y, tuning.player.size / 2 + 6 + sp * 5)
+        .stroke({ width: 1 + sp * 2, color: COLOR_FAST, alpha: 0.15 + sp * 0.45 })
     }
-
     if (cur.shields > 0) {
-      player.circle(x, y, size / 2 + 4).stroke({ width: 2, color: COLOR_SHIELD, alpha: 0.9 })
+      player
+        .circle(x, y, tuning.player.size / 2 + 5)
+        .stroke({ width: 2, color: COLOR_SHIELD, alpha: 0.9 })
     }
 
     playerSprite.position.set(x, y)
-    playerSprite.tint =
-      cur.player.invulnerable && cur.tick % 8 < 4 ? COLOR_HURT : dashing ? COLOR_CELL_DASH : 0xffffff
+    playerSprite.tint = cur.player.invulnerable && cur.tick % 8 < 4 ? COLOR_HURT : 0xffffff
 
-    /*
-     * A célula respira. Fora do dash ela pulsa devagar; sob pressão ela pulsa
-     * rápido; dashando ela se alonga na direção do movimento e a membrana estica
-     * atrás. É o "ganhando forma e vida" pedido em 31/07 — e é informação, não
-     * enfeite: dá pra ler o estado do jogador pela silhueta.
-     */
-    const stress = Math.min(1, cur.enemies.length / 30)
-    const breath = Math.sin(cur.tick * (0.05 + stress * 0.14)) * (0.035 + stress * 0.05)
-    const growth = 1 + Math.min(0.35, cur.owned.reduce((a, b) => a + b, 0) * 0.035)
-    const stretch = dashing ? 1.24 : 1 + breath
-    playerSprite.scale.set(stretch * growth, (dashing ? 0.84 : 1 - breath) * growth)
-    playerSprite.rotation = dashing ? Math.atan2(cur.player.dashDy, cur.player.dashDx) : 0
-
-    // Pseudópodes: membrana esticando atrás no momento do impulso.
-    if (dashing) {
-      const back = cur.player.dashTicks / Math.max(1, stats.dashDurationTicks)
-      for (const off of [-0.5, 0, 0.5]) {
-        const px2 = x - cur.player.dashDx * (18 + back * 16) + cur.player.dashDy * off * 12
-        const py2 = y - cur.player.dashDy * (18 + back * 16) - cur.player.dashDx * off * 12
-        player
-          .moveTo(x, y)
-          .lineTo(px2, py2)
-          .stroke({ width: 3 - Math.abs(off) * 2, color: COLOR_CELL_DASH, alpha: 0.35 * back })
-      }
-    }
+    // Deformação pela VELOCIDADE, não por estado discreto: estica na marcha e
+    // achata no eixo perpendicular, como corpo mole de verdade.
+    const stress = Math.min(1, cur.enemies.length / 40)
+    const breath = Math.sin(cur.tick * (0.05 + stress * 0.14)) * (0.03 + stress * 0.045)
+    playerSprite.scale.set(1 + sp * 0.3 + breath, 1 - sp * 0.18 - breath)
+    playerSprite.rotation =
+      sp > 0.05 ? Math.atan2(cur.player.vy / vlen, cur.player.vx / vlen) : 0
   }
 
-  /**
-   * Rastro, pulso e anticorpo. Primitiva de propósito: são efeito, e efeito
-   * precisa ser nítido em movimento — é onde primitiva ganha de textura.
-   */
-  const drawPowers = (cur: SimState, t: number): void => {
+  const drawPowers = (cur: SimState): void => {
     powers.clear()
-    const stats = applyModifiers(tuning, cur.owned)
+    const st = activeStats(tuning, cur.active)
 
-    if (cur.trails.length > 0) {
-      for (const tr of cur.trails) {
-        const a = tr.life / Math.max(1, stats.trailTicks)
-        powers.circle(tr.x, tr.y, stats.trailRadius * (0.55 + 0.45 * a)).fill({
-          color: COLOR_CELL_DASH,
-          alpha: 0.06 + 0.22 * a,
-        })
-      }
+    if (st.interferonRadius > 0) {
+      powers
+        .circle(cur.player.x, cur.player.y, st.interferonRadius)
+        .fill({ color: 0x8fd8ff, alpha: 0.045 })
+        .stroke({ width: 1, color: 0x8fd8ff, alpha: 0.18 })
     }
-
+    for (const tr of cur.trails) {
+      const a = tr.life / Math.max(1, st.trailTicks)
+      powers.circle(tr.x, tr.y, st.trailRadius * (0.55 + 0.45 * a)).fill({
+        color: 0x7fe9ff,
+        alpha: 0.05 + 0.2 * a,
+      })
+    }
+    for (const cl of cur.clouds) {
+      const a = cl.life / Math.max(1, st.cloudTicks)
+      powers.circle(cl.x, cl.y, tuning.powers.cloudRadius * (0.6 + 0.4 * a)).fill({
+        color: 0xffe58a,
+        alpha: 0.05 + 0.16 * a,
+      })
+    }
     for (const sh of cur.shocks) {
       const a = sh.life / tuning.powers.shockLifeTicks
       powers
         .circle(sh.x, sh.y, sh.radius * (1.05 - a * 0.55))
         .stroke({ width: 2 + 5 * a, color: COLOR_SHIELD, alpha: a * 0.85 })
     }
-
-    const stats2 = stats
-    if (stats2.interferonRadius > 0) {
-      powers.circle(cur.player.x, cur.player.y, stats2.interferonRadius).fill({
-        color: 0x8fd8ff,
-        alpha: 0.045,
-      })
-      powers
-        .circle(cur.player.x, cur.player.y, stats2.interferonRadius)
-        .stroke({ width: 1, color: 0x8fd8ff, alpha: 0.18 })
-    }
-
-    for (const cl of cur.clouds) {
-      const a = cl.life / Math.max(1, stats2.cloudTicks)
-      powers.circle(cl.x, cl.y, tuning.powers.cloudRadius * (0.6 + 0.4 * a)).fill({
-        color: 0xffe58a,
-        alpha: 0.05 + 0.16 * a,
-      })
-    }
-
     for (const m of cur.macrophages) {
       powers
         .circle(m.x, m.y, tuning.powers.macrophageRadius)
@@ -361,19 +291,25 @@ export async function createRenderer(mount: HTMLElement, tuning: Tuning): Promis
         alpha: 0.8,
       })
     }
-
     for (const o of cur.orbiters) {
-      const ox = lerp(o.ox, o.ox, t)
-      const gx = cur.player.x + ox * tuning.powers.orbitRadius
-      const gy = cur.player.y + o.oy * tuning.powers.orbitRadius
       powers
-        .circle(gx, gy, tuning.powers.orbitKillRadius)
+        .circle(
+          cur.player.x + o.ox * tuning.powers.orbitRadius,
+          cur.player.y + o.oy * tuning.powers.orbitRadius,
+          tuning.powers.orbitKillRadius,
+        )
         .fill({ color: COLOR_SHIELD, alpha: 0.75 })
         .stroke({ width: 1.5, color: 0xffffff, alpha: 0.6 })
+    }
+    for (const d of cur.drops) {
+      const pw = POWERS[d.power]!
+      const pulse = 1 + Math.sin(cur.tick * 0.18 + d.id) * 0.16
+      const fading = d.life < 90 && cur.tick % 8 < 4 ? 0.35 : 1
       powers
-        .moveTo(cur.player.x, cur.player.y)
-        .lineTo(gx, gy)
-        .stroke({ width: 1, color: COLOR_SHIELD, alpha: 0.16 })
+        .circle(d.x, d.y, 7 * pulse)
+        .fill({ color: pw.color, alpha: 0.9 * fading })
+        .stroke({ width: 2, color: 0xffffff, alpha: 0.55 * fading })
+      powers.circle(d.x, d.y, 12 * pulse).stroke({ width: 1, color: pw.color, alpha: 0.3 * fading })
     }
   }
 
@@ -392,121 +328,82 @@ export async function createRenderer(mount: HTMLElement, tuning: Tuning): Promis
         .circle(tuning.arena.width - 14 - (cur.lives + i) * 14, 14, 6)
         .stroke({ width: 2, color: COLOR_SHIELD })
     }
-    hudBars
-      .rect(10, 28, ((tuning.arena.width - 20) * cur.waveKills) / cur.quota, 3)
-      .fill(COLOR_VIRUS)
-
-    // Organismo restante, ao lado das vidas: as duas formas de perder, lado a lado.
     for (let i = 0; i < cur.cells.length; i++) {
       hudBars
         .circle(14 + i * 13, 14, 4)
         .fill({ color: COLOR_CELL_ORG, alpha: cur.cells[i]!.hp / tuning.cells.hp })
         .stroke({ width: 1, color: COLOR_CELL_ORG })
     }
+    hudBars.rect(10, 28, ((tuning.arena.width - 20) * cur.waveKills) / cur.quota, 3).fill(0xff6a3d)
 
-    if (cur.phase === "run") {
-      hudBars
-        .rect(10, tuning.arena.height - 8, (tuning.arena.width - 20) * Math.min(1, cur.worldScale), 3)
-        .fill(COLOR_CELL_DASH)
-    }
+    // O relógio: a barra É a sua velocidade. Substituiu o creep binário.
+    hudBars
+      .rect(10, tuning.arena.height - 8, tuning.arena.width - 20, 3)
+      .fill({ color: 0xffffff, alpha: 0.08 })
+    hudBars
+      .rect(10, tuning.arena.height - 8, (tuning.arena.width - 20) * Math.min(1, cur.worldScale), 3)
+      .fill(COLOR_FAST)
 
-    // Cargas de dash: SEGUNDO FÔLEGO precisa ser contável de relance.
-    if (cur.dashCharges > 1 || applyModifiers(tuning, cur.owned).dashCharges > 1) {
-      const total = applyModifiers(tuning, cur.owned).dashCharges
-      for (let i = 0; i < total; i++) {
-        hudBars
-          .rect(tuning.arena.width / 2 - total * 6 + i * 12, tuning.arena.height - 20, 8, 3)
-          .fill({ color: COLOR_CELL_DASH, alpha: i < cur.dashCharges ? 1 : 0.25 })
-      }
-    }
+    const cdFrac =
+      cur.player.dashCooldown > 0 ? 1 - cur.player.dashCooldown / tuning.dash.cooldownTicks : 1
+    hudBars.rect(tuning.arena.width / 2 - 24, tuning.arena.height - 16, 48 * cdFrac, 3).fill({
+      color: COLOR_FAST,
+      alpha: cdFrac >= 1 ? 1 : 0.5,
+    })
 
-    // Combo vivo no HUD: dá alvo pro jogador perseguir entre uma onda e outra.
     if (cur.combo > 1) {
       const tier = Math.min(4, Math.floor((cur.combo - 1) / 3))
       hudBars
-        .rect(tuning.arena.width / 2 - 30, 42, (60 * cur.comboTicks) / tuning.powers.comboWindowTicks, 3)
-        .fill([0xffffff, 0xffe58a, 0xffb03d, 0xff6a3d, 0xff3b8c][tier]!)
+        .rect(
+          tuning.arena.width / 2 - 30,
+          42,
+          (60 * cur.comboTicks) / tuning.powers.comboWindowTicks,
+          3,
+        )
+        .fill(TIERS[tier]!)
     }
 
-    // A build inteira, sempre visível: escolher passa a ter memória.
-    const owned = cur.owned
-      .map((n, i) => (n > 0 ? `${MODIFIERS[i]!.name}${n > 1 ? `×${n}` : ""}` : null))
+    buildText.text = cur.active
+      .map((ticks, i) => (ticks > 0 ? `${POWERS[i]!.name} ${Math.ceil(ticks / 60)}s` : null))
       .filter(Boolean)
-    buildText.text = owned.length > 0 ? owned.join("  ·  ") : ""
+      .join("  ·  ")
   }
 
   const drawOverlay = (cur: SimState): void => {
-    const on = cur.phase !== "run"
+    const on = cur.phase === "dead"
     overlay.visible = on
-    for (const c of cards) c.group.visible = false
-    deadText.visible = false
     if (!on) return
-
     overlayBg
       .clear()
       .rect(0, 0, tuning.arena.width, tuning.arena.height)
       .fill({ color: COLOR_BG, alpha: 0.9 })
-
-    if (cur.phase === "dead") {
-      overlayTitle.text = ""
-      deadText.visible = true
-      deadText.text =
-        (cur.lostByCells ? `O ORGANISMO CAIU\n\n` : `A INFECÇÃO VENCEU\n\n`) +
-        `onda ${cur.wave} · ${cur.kills} vírus\n` +
-        (cur.bestWave > cur.wave ? `melhor: onda ${cur.bestWave}\n` : "") +
-        `\nR ou ENTER pra outra`
-      deadText.position.set(
-        (tuning.arena.width - deadText.width) / 2,
-        (tuning.arena.height - deadText.height) / 2,
-      )
-      return
-    }
-
-    overlayTitle.text = `ONDA ${cur.wave} CONTIDA   ←/→ escolhe · espaço confirma`
-    overlayTitle.position.set(
-      (tuning.arena.width - overlayTitle.width) / 2,
-      tuning.arena.height / 2 - 96,
+    deadText.text =
+      (cur.lostByCells ? "O ORGANISMO CAIU\n\n" : "A INFECÇÃO VENCEU\n\n") +
+      `onda ${cur.wave} · ${cur.kills} patógenos\n` +
+      (cur.comboBest > 1 ? `melhor sequência: ${cur.comboBest}×\n` : "") +
+      "\nR ou ENTER pra outra"
+    deadText.position.set(
+      (tuning.arena.width - deadText.width) / 2,
+      (tuning.arena.height - deadText.height) / 2,
     )
-
-    const cardW = 172
-    const cardH = 100
-    const gap = 14
-    const total = cur.offer.length * cardW + (cur.offer.length - 1) * gap
-    let x = (tuning.arena.width - total) / 2
-    const y = tuning.arena.height / 2 - cardH / 2
-
-    for (const [i, card] of cards.entries()) {
-      const id = cur.offer[i]
-      if (id === undefined) continue
-      const mod = MODIFIERS[id]!
-      const selected = i === cur.cursor
-      const owned = cur.owned[mod.id] ?? 0
-      card.group.visible = true
-      card.box
-        .clear()
-        .rect(0, 0, cardW, cardH)
-        .fill({ color: COLOR_PLASMA, alpha: 1 })
-        .stroke({ width: selected ? 2 : 1, color: selected ? COLOR_CELL_DASH : COLOR_DIM })
-      if (mod.id === MOD_SHIELD) card.box.circle(cardW - 24, 24, 7).stroke({ width: 2, color: COLOR_SHIELD })
-      card.name.text = owned > 0 ? `${mod.name} ×${owned + 1}` : mod.name
-      card.blurb.text = mod.blurb
-      card.name.position.set(14, 26)
-      card.blurb.position.set(14, 52)
-      card.group.position.set(x, y)
-      x += cardW + gap
-    }
   }
 
   return {
     draw(prev, cur, alpha) {
-      // --- eventos, deduzidos por diff de id. A sim não guarda efeito.
+      const frozen = cur.frozen > 0
+      const t = frozen ? 0 : alpha
+
       const live = new Set(cur.enemies.map((e) => e.id))
       for (const e of prev.enemies) {
         if (!live.has(e.id) && seenIds.has(e.id)) {
           burst(e.x, e.y, KIND_COLOR[e.kind] ?? 0xff6a3d, 7, 2.6)
         }
       }
-      // Célula perdida: explosão grande, porque é a outra forma de perder.
+      seenIds = live
+      if (heading.size > 400) {
+        for (const key of heading.keys()) if (!live.has(key)) heading.delete(key)
+      }
+
       if (cur.cellsLost > prevCellsLost) {
         const gone = prev.cells.find((c) => !cur.cells.some((k) => k.id === c.id))
         if (gone) burst(gone.x, gone.y, COLOR_CELL_ORG, 22, 3.4)
@@ -514,10 +411,6 @@ export async function createRenderer(mount: HTMLElement, tuning: Tuning): Promis
         shake = 9
       }
       prevCellsLost = cur.cellsLost
-      seenIds = live
-      if (heading.size > 400) {
-        for (const key of heading.keys()) if (!live.has(key)) heading.delete(key)
-      }
 
       if (prevLives >= 0 && cur.lives < prevLives) {
         flash = 1
@@ -526,27 +419,55 @@ export async function createRenderer(mount: HTMLElement, tuning: Tuning): Promis
       }
       prevLives = cur.lives
 
-      // Parallax: a distância percorrida é tempo de MUNDO. Parado, o sangue
-      // quase não escorre — é a dilatação virando leitura de fundo.
-      if (cur.phase === "run" && cur.frozen === 0) {
-        driftX -= (cur.worldScale * 1) / 60
+      if (cur.combo > prevCombo && cur.lastKillTick >= cur.tick - 2) {
+        const c = cur.combo
+        const tier = Math.min(4, Math.floor((c - 1) / 3))
+        pops.push({
+          x: cur.lastKillX,
+          y: cur.lastKillY,
+          life: 1,
+          text: c > 1 ? `${c}×` : "+1",
+          size: 11 + tier * 5,
+          color: TIERS[tier]!,
+        })
+        if (c > 1 && c % 3 === 0) {
+          burst(cur.lastKillX, cur.lastKillY, 0xffe58a, 6 + tier * 4, 2 + tier)
+          shake = Math.max(shake, 1.5 + tier * 1.2)
+        }
       }
+      prevCombo = cur.combo
+
+      if (cur.wave > prevWave) {
+        for (let i = 0; i < 3; i++) {
+          burst(
+            tuning.arena.width * (0.25 + i * 0.25),
+            tuning.arena.height / 2,
+            COLOR_SHIELD,
+            14,
+            3.2,
+          )
+        }
+        pops.push({
+          x: tuning.arena.width / 2,
+          y: tuning.arena.height / 2 - 60,
+          life: 1,
+          text: `ONDA ${prevWave} CONTIDA`,
+          size: 20,
+          color: COLOR_SHIELD,
+        })
+      }
+      prevWave = cur.wave
+
+      // Parallax na velocidade do MUNDO: parada, a corrente quase não escorre.
+      if (cur.phase === "run" && !frozen) driftX -= cur.worldScale / 60
       for (const d of drift) {
         const span = tuning.arena.width
         let x = ((driftX * d.speed) % span) + d.slot * span
         while (x > 0) x -= span
         while (x < -span) x += span
-        // Balanço vertical por camada: a mais próxima oscila mais, que é o que
-        // dá sensação de corrente em vez de esteira.
         d.sprite.position.set(x, Math.sin(driftX * 0.4 + d.speed) * d.bob)
       }
 
-      const frozen = cur.frozen > 0
-      // Congelado, o mundo não interpola — o quadro trava junto com a sim.
-      const t = frozen ? 0 : alpha
-      drawPlayer(cur, lerp(prev.player.x, cur.player.x, t), lerp(prev.player.y, cur.player.y, t))
-
-      // --- organismo: o que você está defendendo
       cellLayer.clear()
       for (let i = 0; i < cur.cells.length; i++) {
         const c = cur.cells[i]!
@@ -561,9 +482,7 @@ export async function createRenderer(mount: HTMLElement, tuning: Tuning): Promis
         sprite.visible = true
         sprite.position.set(c.x, c.y)
         sprite.alpha = 0.45 + 0.55 * frac
-        // Pulsa: uma célula viva não fica parada.
-        const pulse = 1 + Math.sin(cur.tick * 0.04 + i) * 0.04
-        sprite.scale.set(pulse)
+        sprite.scale.set(1 + Math.sin(cur.tick * 0.04 + i) * 0.04)
         for (let k = 0; k < c.hp; k++) {
           cellLayer
             .circle(c.x - (c.hp - 1) * 4 + k * 8, c.y + tuning.cells.size / 2 + 10, 2)
@@ -582,13 +501,8 @@ export async function createRenderer(mount: HTMLElement, tuning: Tuning): Promis
         const age = Math.min(1, (cur.tick - e.bornTick) / 12)
         g.scale.set(0.25 + 0.75 * age)
 
-        /*
-         * Orientação pela DIREÇÃO DE MARCHA, não rotação no próprio eixo.
-         * Um flagelado girando parado é exatamente o que o humano apontou em
-         * 01/08: os flagelos ficam atrás da cabeça, então a cabeça tem que
-         * apontar pra onde ele vai. Só o cacho de cocos (S. aureus) roda solto,
-         * porque cacho não tem frente.
-         */
+        // Orientação pela direção de marcha. Cacho e esfera rodam solto porque
+        // não têm frente; bacilo e flagelado apontam pra onde vão.
         const form = tuning.enemy.kinds[e.kind]?.form ?? "esfera"
         if (form === "cacho" || form === "esfera" || form === "coroa") {
           g.rotation = e.id * 0.7 + cur.tick * 0.008
@@ -597,22 +511,20 @@ export async function createRenderer(mount: HTMLElement, tuning: Tuning): Promis
           const vy = e.y - p.y
           if (vx * vx + vy * vy > 0.0004) {
             const want = Math.atan2(vy, vx)
-            // Vira suave: um bacilo não pivota instantaneamente.
             let delta = want - (heading.get(e.id) ?? want)
             while (delta > Math.PI) delta -= Math.PI * 2
             while (delta < -Math.PI) delta += Math.PI * 2
             heading.set(e.id, (heading.get(e.id) ?? want) + delta * 0.25)
           }
           const h = heading.get(e.id)
-          if (h !== undefined) {
-            // Ondulação do corpo enquanto nada, proporcional ao quanto se move.
-            g.rotation = h + Math.sin(cur.tick * 0.25 + e.id) * 0.12
-          }
+          if (h !== undefined) g.rotation = h + Math.sin(cur.tick * 0.25 + e.id) * 0.12
         }
       }
       for (let i = cur.enemies.length; i < enemyPool.length; i++) enemyPool[i]!.visible = false
 
-      // --- partículas e telas de impacto
+      drawPlayer(cur, lerp(prev.player.x, cur.player.x, t), lerp(prev.player.y, cur.player.y, t))
+      drawPowers(cur)
+
       fx.clear()
       const next: Particle[] = []
       for (const q of particles) {
@@ -643,54 +555,8 @@ export async function createRenderer(mount: HTMLElement, tuning: Tuning): Promis
       )
       if (shake > 0) shake -= 0.6
 
-      /*
-       * Escalada de recompensa — o eixo do bar do Candy Crush.
-       * Encadear abates faz o número subir, crescer, mudar de cor e tremer a
-       * tela. A recompensa precisa ESCALAR, não só existir: 2 abates seguidos
-       * têm que valer visivelmente menos que 9.
-       */
-      if (cur.combo > prevCombo && cur.lastKillTick === cur.tick - 1) {
-        const c = cur.combo
-        const tier = Math.min(4, Math.floor((c - 1) / 3))
-        pops.push({
-          x: cur.lastKillX,
-          y: cur.lastKillY,
-          life: 1,
-          text: c > 1 ? `${c}×` : "+1",
-          size: 11 + tier * 5,
-          color: [0xffffff, 0xffe58a, 0xffb03d, 0xff6a3d, 0xff3b8c][tier]!,
-        })
-        if (c > 1 && c % 3 === 0) {
-          burst(cur.lastKillX, cur.lastKillY, 0xffe58a, 6 + tier * 4, 2 + tier)
-          shake = Math.max(shake, 1.5 + tier * 1.2)
-        }
-      }
-      prevCombo = cur.combo
-
-      if (cur.wave > prevWave) {
-        for (let i = 0; i < 3; i++) {
-          burst(
-            tuning.arena.width * (0.25 + i * 0.25),
-            tuning.arena.height / 2,
-            COLOR_SHIELD,
-            14,
-            3.2,
-          )
-        }
-        pops.push({
-          x: tuning.arena.width / 2,
-          y: tuning.arena.height / 2 - 60,
-          life: 1,
-          text: `ONDA ${prevWave} CONTIDA`,
-          size: 20,
-          color: COLOR_SHIELD,
-        })
-      }
-      prevWave = cur.wave
-
       const nextPops: Pop[] = []
-      for (let i = 0; i < pops.length; i++) {
-        const q = pops[i]!
+      for (const q of pops) {
         if (!frozen) q.life -= 0.028
         if (q.life <= 0) continue
         let label = popPool[nextPops.length]
@@ -712,7 +578,6 @@ export async function createRenderer(mount: HTMLElement, tuning: Tuning): Promis
       for (let i = nextPops.length; i < popPool.length; i++) popPool[i]!.visible = false
       pops = nextPops
 
-      drawPowers(cur, t)
       drawHud(cur)
       drawOverlay(cur)
       app.render()

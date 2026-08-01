@@ -1,18 +1,15 @@
 import { describe, expect, it } from "vitest"
 import { loadTuning } from "../src/harness/loadTuning.ts"
 import { createSim } from "../src/sim/sim.ts"
-import {
-  applyModifiers,
-  MODIFIERS,
-  MOD_EXTRA_LIFE,
-  MOD_REPAIR,
-  waveStats,
-} from "../src/sim/modifiers.ts"
+import { activeStats, POWERS, quotaFor, spawnIntervalFor } from "../src/sim/powers.ts"
 import type { InputFrame, Sim, SimState } from "../src/sim/types.ts"
 
 /**
- * As regras decididas em 31/07, asseridas mecanicamente. Cada uma destas é uma
- * pergunta que o Jucelinux não precisa mais responder.
+ * As regras do core reescrito em 01/08, asseridas mecanicamente.
+ *
+ * O core anterior (dash discreto + creep binário) caiu no gate depois de três
+ * leituras negativas. O que se mede aqui é o novo: a velocidade É o relógio, e
+ * o contato engole ou machuca conforme ela.
  */
 
 const tuning = loadTuning()
@@ -28,18 +25,17 @@ const IN = (o: Partial<InputFrame> = {}): InputFrame => ({
 })
 const NONE = IN()
 const RIGHT = IN({ right: true })
-const SPACE = IN({ action: true })
 const RESTART = IN({ restart: true })
 
 const advance = (sim: Sim, ticks: number, input: InputFrame = NONE): void => {
   for (let i = 0; i < ticks; i++) sim.step(input)
 }
 
-/** Ids sintéticos altos: não colidem com os que a sim gera. */
+const mut = (sim: Sim): SimState => sim.state() as SimState
+
 let nextId = 100000
 const id = (): number => nextId++
-/** Vírus comum sintético: o tipo padrão, 1 de vida. */
-const virus = (x: number, y: number, tick = -1000, kind = "influenza") => ({
+const virus = (x: number, y: number, kind = "influenza", tick = -1000) => ({
   id: id(),
   kind,
   x,
@@ -48,707 +44,304 @@ const virus = (x: number, y: number, tick = -1000, kind = "influenza") => ({
   bornTick: tick,
 })
 
-/** `state()` devolve o objeto vivo — é a costura que deixa o teste montar cenas. */
-const mut = (sim: Sim): SimState => sim.state() as SimState
-
-/** Em cima do jogador: serve pra APANHAR, nunca pra cortar. */
-const putEnemyOnPlayer = (sim: Sim, count = 1): void => {
-  const s = mut(sim)
-  s.enemies = Array.from({ length: count }, () => virus(s.player.x, s.player.y))
-}
-
-/**
- * À frente de um dash para a direita. Precisa estar adiante o bastante para
- * continuar na frente depois do primeiro tick de deslocamento — com o corte
- * direcional, quem está colado no jogador acaba ATRÁS e vira um toque.
- */
-const putEnemyAhead = (sim: Sim, count = 1): void => {
-  const s = mut(sim)
-  s.enemies = Array.from({ length: count }, () => virus(s.player.x + 20, s.player.y))
-}
-
-/**
- * Espera o dash e a recuperação terminarem, sem tocar em nada.
- * Sai se a run acabar: fora da fase `run` os contadores não andam, e sem esta
- * guarda o teste trava para sempre em vez de falhar.
- */
-const untilReady = (sim: Sim): void => {
-  let guard = 0
-  while (
-    sim.state().phase === "run" &&
-    (sim.state().player.dashTicks > 0 || sim.state().player.recoverTicks > 0)
-  ) {
-    sim.step(NONE)
-    if (++guard > 600) throw new Error("untilReady não convergiu")
-  }
-}
-
-/** Um dash completo mais a recuperação: volta ao estado de poder dashar. */
-const fullDash = (sim: Sim): void => {
+/** Leva a célula ao talo, com o campo limpo, e recentraliza sem frear. */
+const toFullSpeed = (sim: Sim): void => {
   mut(sim).enemies = []
-  sim.step(RIGHT)
-  untilReady(sim)
-}
-
-/**
- * Enche a cota de uma vez: um dash corta tudo que estiver no mesmo ponto.
- * Solta a tecla no fim — quem limpou a onda dashando ainda está segurando a
- * direção, e o cursor da escolha só anda em borda de subida.
- */
-const clearWave = (sim: Sim): void => {
-  untilReady(sim)
-  if (sim.state().phase !== "run") return
-  const s = mut(sim)
-  putEnemyAhead(sim, s.quota - s.waveKills)
-  sim.step(RIGHT)
-  sim.step(NONE)
-}
-
-/**
- * Leva a run até a morte, respeitando os i-frames entre os toques.
- * Atravessa a tela de escolha: com ANTICORPO ou RASTRO em jogo, os toques
- * matam vírus de tabela e a cota pode fechar no meio do processo.
- */
-const die = (sim: Sim): void => {
   let guard = 0
-  while (sim.state().phase !== "dead") {
-    if (sim.state().phase === "pick") {
-      sim.step(SPACE)
-      sim.step(NONE)
-      continue
-    }
-    putEnemyOnPlayer(sim)
-    sim.step(NONE)
-    if (sim.state().phase === "run") fullDash(sim)
-    if (++guard > 200) throw new Error("die() não convergiu")
+  while (sim.state().player.speed < 0.99) {
+    sim.step(RIGHT)
+    mut(sim).player.x = tuning.arena.width / 2
+    if (++guard > 400) throw new Error("não chegou à velocidade máxima")
   }
+  mut(sim).player.y = tuning.arena.height / 2
 }
 
-describe("dilatação — o tempo só anda quando você anda", () => {
-  it("parado, o mundo escorre a creep; dashando, anda cheio", () => {
+describe("o relógio é a velocidade", () => {
+  it("parada, o mundo escorre no mínimo; a toda, corre inteiro", () => {
     const sim = createSim(1, tuning)
-    advance(sim, 5)
-    expect(sim.state().worldScale).toBe(tuning.time.creep)
+    advance(sim, 60)
+    expect(sim.state().worldScale).toBeCloseTo(tuning.time.creep, 5)
 
-    sim.step(RIGHT)
-    expect(sim.state().worldScale).toBe(1)
+    toFullSpeed(sim)
+    expect(sim.state().worldScale).toBeCloseTo(1, 2)
   })
 
-  it("nunca chega a zero — a decisão foi pressão constante, não puzzle", () => {
+  it("a escala é contínua — nada de degrau", () => {
     const sim = createSim(2, tuning)
+    mut(sim).enemies = []
+    const scales: number[] = []
+    for (let i = 0; i < 30; i++) {
+      sim.step(RIGHT)
+      mut(sim).player.x = tuning.arena.width / 2
+      scales.push(sim.state().worldScale)
+    }
+    // Cresce sem degrau enquanto acelera e satura no talo. O "soluço" que o
+    // dash discreto produzia é exatamente o que este core existe para eliminar.
+    for (let i = 1; i < 10; i++) expect(scales[i]!).toBeGreaterThan(scales[i - 1]!)
+    for (let i = 1; i < scales.length; i++) {
+      expect(scales[i]!).toBeGreaterThanOrEqual(scales[i - 1]! - 1e-9)
+    }
+    const saltos = scales.slice(1).map((v, i) => v - scales[i]!)
+    expect(Math.max(...saltos)).toBeLessThan(0.12)
+  })
+
+  it("nunca chega a zero — pressão constante, decisão de 31/07", () => {
+    const sim = createSim(3, tuning)
     const scales: number[] = []
     for (let i = 0; i < 600; i++) {
-      sim.step(i % 40 < 10 ? RIGHT : NONE)
+      sim.step(i % 90 < 30 ? RIGHT : NONE)
       scales.push(sim.state().worldScale)
     }
     expect(Math.min(...scales)).toBeGreaterThan(0)
+    expect(Math.min(...scales)).toBeCloseTo(tuning.time.creep, 5)
   })
 
-  it("nem com o modificador de creep empilhado até o teto", () => {
-    const maxed = MODIFIERS.map((m) => (m.id === 3 ? 99 : 0))
-    const run = applyModifiers(tuning, maxed)
-    expect(waveStats(tuning, run, 1).creep).toBeGreaterThan(0)
-  })
+  it("patógeno anda em tempo de mundo; a célula, em tempo real", () => {
+    const parada = createSim(4, tuning)
+    mut(parada).enemies = [virus(600, 180)]
+    advance(parada, 120)
+    const andouParada = 600 - mut(parada).enemies[0]!.x
 
-  it("inimigos praticamente congelam com o jogador parado", () => {
-    const sim = createSim(3, tuning)
-    const s = mut(sim)
-    s.enemies = [virus(40, 40)]
-    const before = { x: s.enemies[0]!.x, y: s.enemies[0]!.y }
-    advance(sim, 60) // um segundo real parado
-    const moved = Math.abs(s.enemies[0]!.x - before.x) + Math.abs(s.enemies[0]!.y - before.y)
-    expect(moved).toBeLessThan(tuning.enemy.kinds["influenza"]!.speed * 0.1)
+    const correndo = createSim(4, tuning)
+    toFullSpeed(correndo)
+    mut(correndo).enemies = [virus(600, 180)]
+    for (let i = 0; i < 120; i++) {
+      correndo.step(RIGHT)
+      mut(correndo).player.x = tuning.arena.width / 2
+    }
+    const andouCorrendo = 600 - mut(correndo).enemies[0]!.x
+
+    expect(andouCorrendo).toBeGreaterThan(andouParada * 4)
   })
 })
 
-describe("dash — um verbo, oito direções", () => {
-  it("as oito direções são unitárias; nada fora da grade", () => {
-    const combos: Array<Partial<InputFrame>> = [
-      { up: true },
-      { down: true },
-      { left: true },
-      { right: true },
-      { up: true, left: true },
-      { up: true, right: true },
-      { down: true, left: true },
-      { down: true, right: true },
-    ]
-    for (const combo of combos) {
-      const sim = createSim(4, tuning)
-      sim.step(IN(combo))
-      const { dashDx, dashDy } = sim.state().player
-      expect(Math.sqrt(dashDx * dashDx + dashDy * dashDy)).toBeCloseTo(1, 10)
-    }
+describe("fagocitose por velocidade", () => {
+  it("rápida engole; parada, apanha", () => {
+    const parada = createSim(10, tuning)
+    mut(parada).enemies = [virus(mut(parada).player.x, mut(parada).player.y)]
+    parada.step(NONE)
+    expect(parada.state().kills).toBe(0)
+    expect(parada.state().lives).toBe(tuning.run.lives - 1)
+
+    const rapida = createSim(10, tuning)
+    toFullSpeed(rapida)
+    mut(rapida).enemies = [virus(mut(rapida).player.x, mut(rapida).player.y)]
+    rapida.step(RIGHT)
+    expect(rapida.state().kills).toBe(1)
+    expect(rapida.state().lives).toBe(tuning.run.lives)
   })
 
-  it("não dá pra dashar durante a recuperação — é ela que devolve o creep", () => {
-    const sim = createSim(5, tuning)
-    advance(sim, tuning.dash.durationTicks, RIGHT)
-    expect(sim.state().player.dashTicks).toBe(0)
-    expect(sim.state().player.recoverTicks).toBeGreaterThan(0)
-
-    sim.step(RIGHT)
-    expect(sim.state().player.dashTicks).toBe(0) // segurou, mas não saiu
-    expect(sim.state().worldScale).toBe(tuning.time.creep)
-  })
-
-  it("mover é atacar: dash corta, parado não", () => {
-    const parado = createSim(6, tuning)
-    putEnemyOnPlayer(parado)
-    parado.step(NONE)
-    expect(parado.state().kills).toBe(0)
-
-    const dashando = createSim(6, tuning)
-    putEnemyAhead(dashando)
-    dashando.step(RIGHT)
-    expect(dashando.state().kills).toBe(1)
-  })
-
-  it("corta pra onde vai; quem está atrás sobrevive e cobra", () => {
-    const sim = createSim(30, tuning)
-    const s = mut(sim)
-    const d = tuning.dash.killRadius * 0.6
-    // Um à frente do dash (direita), um exatamente atrás.
-    s.enemies = [
-      virus(s.player.x + d, s.player.y, 0),
-      virus(s.player.x - d, s.player.y, 0),
-    ]
-    sim.step(RIGHT)
-    expect(sim.state().kills).toBe(1)
-    expect(sim.state().enemies).toHaveLength(1)
-    expect(sim.state().enemies[0]!.x).toBeLessThan(sim.state().player.x)
-  })
-
-  it("apanhar no meio do dash: os i-frames valem até o fim do PRÓXIMO", () => {
-    const sim = createSim(31, tuning)
-    putEnemyOnPlayer(sim)
-    // Dasha pra longe do inimigo: ele fica atrás, não morre, e encosta.
-    mut(sim).enemies = [virus(sim.state().player.x - 4, sim.state().player.y)]
-    sim.step(RIGHT)
-    expect(sim.state().player.invulnerable).toBe(true)
-    expect(sim.state().player.invulnSkipCurrent).toBe(true)
-
-    // O dash em curso termina — e NÃO derruba os i-frames.
-    while (sim.state().player.dashTicks > 0) sim.step(RIGHT)
-    expect(sim.state().player.invulnerable).toBe(true)
-
-    // O próximo é que derruba.
-    untilReady(sim)
-    mut(sim).enemies = []
-    while (sim.state().player.dashTicks !== 0 || sim.state().player.recoverTicks === 0) {
-      sim.step(RIGHT)
-    }
-    expect(sim.state().player.invulnerable).toBe(false)
-  })
-
-  it("o corte respeita o killRadius", () => {
-    const sim = createSim(7, tuning)
-    const s = mut(sim)
-    s.enemies = [virus(s.player.x, s.player.y - tuning.dash.killRadius * 3, 0)]
-    sim.step(RIGHT)
-    expect(sim.state().kills).toBe(0)
-    expect(sim.state().enemies).toHaveLength(1)
-  })
-})
-
-describe("vidas e i-frames", () => {
-  it("três toques encerram a run", () => {
-    const sim = createSim(8, tuning)
-    expect(sim.state().lives).toBe(tuning.run.lives)
-    die(sim)
-    expect(sim.state().phase).toBe("dead")
-    expect(sim.state().lives).toBeLessThanOrEqual(0)
-  })
-
-  it("invulnerável do impacto até o FIM do próximo dash, não por timer", () => {
-    const sim = createSim(9, tuning)
-    putEnemyOnPlayer(sim)
-    sim.step(NONE)
-    expect(sim.state().player.invulnerable).toBe(true)
-
-    // Muito tempo parado não cura: a regra não tem número.
-    advance(sim, 600)
-    expect(sim.state().player.invulnerable).toBe(true)
-
-    mut(sim).enemies = []
-    advance(sim, tuning.dash.durationTicks - 1, RIGHT)
-    expect(sim.state().player.invulnerable).toBe(true) // ainda no ar
-
-    sim.step(RIGHT)
-    expect(sim.state().player.dashTicks).toBe(0)
-    expect(sim.state().player.invulnerable).toBe(false) // caiu no pouso
-  })
-
-  it("invulnerável não perde vida", () => {
-    const sim = createSim(10, tuning)
-    putEnemyOnPlayer(sim)
-    sim.step(NONE)
-    const lives = sim.state().lives
-
-    for (let i = 0; i < 30; i++) {
-      putEnemyOnPlayer(sim)
-      sim.step(NONE)
-    }
-    expect(sim.state().lives).toBe(lives)
-  })
-})
-
-describe("ondas — cota de kills, nunca temporizador", () => {
-  it("parado, a onda não anda: não dá pra esperar a fase passar", () => {
-    const sim = createSim(20, tuning)
-    const before = sim.state().wave
-    advance(sim, 3600) // um minuto real inteiro sem tocar em nada
-    expect(sim.state().wave).toBe(before)
-    expect(sim.state().waveKills).toBe(0)
-  })
-
-  it("bater a cota abre a escolha", () => {
-    const sim = createSim(21, tuning)
-    expect(sim.state().quota).toBe(tuning.wave.baseQuota)
-    clearWave(sim)
-    expect(sim.state().phase).toBe("pick")
-    expect(sim.state().offer).toHaveLength(tuning.pick.offerCount)
-    expect(new Set(sim.state().offer).size).toBe(tuning.pick.offerCount)
-  })
-
-  it("confirmar avança a onda e reabre o tabuleiro", () => {
-    const sim = createSim(22, tuning)
-    clearWave(sim)
-    sim.step(SPACE)
-    expect(sim.state().phase).toBe("run")
-    expect(sim.state().wave).toBe(2)
-    expect(sim.state().waveKills).toBe(0)
-    expect(sim.state().quota).toBe(tuning.wave.baseQuota + tuning.wave.quotaGrowth)
-  })
-
-  it("a onda abre com inimigos em campo — tabuleiro vazio vira espera", () => {
-    const sim = createSim(29, tuning)
-    expect(sim.state().enemies.length).toBe(tuning.enemy.openingBase)
-
-    clearWave(sim)
-    sim.step(SPACE)
-    expect(sim.state().enemies.length).toBe(
-      tuning.enemy.openingBase + tuning.enemy.openingPerWave,
+  it("cada patógeno exige a sua velocidade — senão é reskin", () => {
+    const speeds = Object.values(tuning.enemy.kinds).map((v) => v.engulfSpeed)
+    expect(new Set(speeds).size).toBeGreaterThan(3)
+    expect(tuning.enemy.kinds["corona"]!.engulfSpeed).toBeGreaterThan(
+      tuning.enemy.kinds["influenza"]!.engulfSpeed,
     )
   })
 
-  it("a folga encolhe onda a onda", () => {
-    const run = applyModifiers(tuning, [])
-    const w1 = waveStats(tuning, run, 1)
-    const w6 = waveStats(tuning, run, 6)
-    expect(w6.creep).toBeGreaterThan(w1.creep)
-    expect(w6.recoveryTicks).toBeLessThan(w1.recoveryTicks)
-    expect(w6.spawnIntervalSeconds).toBeLessThan(w1.spawnIntervalSeconds)
-    expect(w6.quota).toBeGreaterThan(w1.quota)
-  })
-
-  it("sem teto: o creep continua subindo onde a versão anterior saturava", () => {
-    const run = applyModifiers(tuning, [])
-    const creeps = [10, 30, 60, 120, 400].map((w) => waveStats(tuning, run, w).creep)
-    for (let i = 1; i < creeps.length; i++) {
-      expect(creeps[i]!).toBeGreaterThan(creeps[i - 1]!)
-    }
-    // Lá na frente, ficar parado deixa de ser descanso.
-    expect(waveStats(tuning, run, 25).creep).toBeGreaterThan(0.5)
-  })
-
-  it("spawn aperta pra sempre sem nunca chegar a zero", () => {
-    const run = applyModifiers(tuning, [])
-    const a = waveStats(tuning, run, 100).spawnIntervalSeconds
-    const b = waveStats(tuning, run, 1000).spawnIntervalSeconds
-    expect(b).toBeLessThan(a)
-    expect(b).toBeGreaterThan(0)
-  })
-
-  it("a recuperação tem piso de 1 tick — zero emendaria os dashes e mataria a dilatação", () => {
-    const run = applyModifiers(tuning, [])
-    for (const w of [50, 500, 5000]) {
-      expect(waveStats(tuning, run, w).recoveryTicks).toBe(tuning.dash.minRecoveryTicks)
-      expect(waveStats(tuning, run, w).recoveryTicks).toBeGreaterThan(0)
-    }
-  })
-})
-
-describe("camada roguelite — arco dentro da run", () => {
-  it("←/→ move o cursor, espaço confirma", () => {
-    const sim = createSim(23, tuning)
-    clearWave(sim)
-    const chosen = sim.state().offer[1]!
-
-    sim.step(RIGHT)
-    expect(sim.state().cursor).toBe(1)
-    sim.step(SPACE)
-    expect(sim.state().owned[chosen]).toBe(1)
-  })
-
-  it("segurar a tecla não escolhe sozinho — só borda de subida", () => {
-    const sim = createSim(24, tuning)
-    clearWave(sim)
-    const start = sim.state().cursor
-    advance(sim, 20, RIGHT)
-    expect(sim.state().phase).toBe("pick")
-    expect(sim.state().cursor).toBe((start + 1) % tuning.pick.offerCount)
-  })
-
-  it("FÔLEGO entra na hora, não só no próximo cálculo", () => {
-    const sim = createSim(25, tuning)
-    clearWave(sim)
-    const lives = sim.state().lives
-    mut(sim).offer = [MOD_EXTRA_LIFE]
-    mut(sim).cursor = 0
-    sim.step(SPACE)
-    expect(sim.state().lives).toBe(lives + 1)
-  })
-
-  it("morrer perde os modificadores e volta pra onda 1", () => {
-    const sim = createSim(26, tuning)
-    clearWave(sim)
-    sim.step(SPACE)
-    clearWave(sim)
-    sim.step(SPACE)
-    expect(sim.state().wave).toBe(3)
-    expect(sim.state().owned.reduce((a, b) => a + b, 0)).toBe(2)
-
-    die(sim)
-    advance(sim, tuning.feel.deadLockTicks + 1)
-    sim.step(RESTART) // reinício voluntário, tecla própria
-    expect(sim.state().wave).toBe(1)
-    expect(sim.state().owned.every((n) => n === 0)).toBe(true)
-    expect(sim.state().lives).toBe(tuning.run.lives)
-    expect(sim.state().kills).toBe(0)
-  })
-
-  it("todo modificador ou muda uma curva, ou tem efeito direto declarado", () => {
-    // REPARO age no organismo no instante da escolha, não numa estatística.
-    // Qualquer outro que não mude número é modificador que não faz nada.
-    const efeitoDireto = new Set([MOD_REPAIR])
-    const base = applyModifiers(tuning, [])
-    for (const mod of MODIFIERS) {
-      if (efeitoDireto.has(mod.id)) continue
-      const owned = MODIFIERS.map((m) => (m.id === mod.id ? 1 : 0))
-      expect(applyModifiers(tuning, owned), mod.name).not.toEqual(base)
-    }
-  })
-
-  it("REPARO cura o organismo na hora da escolha", () => {
-    const sim = createSim(40, tuning)
-    mut(sim).wave = tuning.cells.fromWave - 1
-    clearWave(sim)
-    sim.step(SPACE)
-    expect(sim.state().cells.length).toBe(tuning.cells.count)
-
-    mut(sim).cells[0]!.hp = 1
-    clearWave(sim)
-    mut(sim).offer = [MOD_REPAIR]
-    mut(sim).cursor = 0
-    sim.step(SPACE)
-    expect(sim.state().cells.every((c) => c.hp === tuning.cells.hp)).toBe(true)
-  })
-})
-
-describe("o gate continua medível", () => {
-  it("morrer NÃO recomeça sozinho — a segunda partida tem que ser um ato", () => {
-    const sim = createSim(27, tuning)
-    die(sim)
-    expect(sim.state().phase).toBe("dead")
-
-    // Espaço é a tecla que ele apertou a cada 20s durante a run inteira:
-    // aqui ela não pode valer, senão o gate mede reflexo em vez de vontade.
-    advance(sim, 1800, SPACE)
-    expect(sim.state().phase).toBe("dead")
-    expect(sim.state().runIndex).toBe(0)
-
-    sim.step(RESTART)
-    expect(sim.state().phase).toBe("run")
-    expect(sim.state().runIndex).toBe(1) // é isto que o gate conta
-  })
-
-  it("o melhor resultado sobrevive à morte — é o que puxa pra próxima", () => {
-    const sim = createSim(28, tuning)
-    clearWave(sim)
-    sim.step(SPACE)
-    const reached = sim.state().wave
-    die(sim)
-    advance(sim, tuning.feel.deadLockTicks + 1)
-    sim.step(RESTART)
-    expect(sim.state().bestWave).toBeGreaterThanOrEqual(reached)
-    expect(sim.state().bestKills).toBeGreaterThan(0)
-  })
-})
-
-describe("tipos de vírus — a ameaça muda, não a carta", () => {
-  const spawnAhead = (sim: Sim, kind: string): void => {
-    const s = mut(sim)
-    s.enemies = [virus(s.player.x + 20, s.player.y, s.tick - 100, kind)]
-  }
-
-  it("blindado precisa de dois cortes", () => {
-    const sim = createSim(50, tuning)
-    spawnAhead(sim, "estafilo")
-    sim.step(RIGHT)
-    expect(sim.state().kills).toBe(0)
-    expect(sim.state().enemies).toHaveLength(1)
-    expect(sim.state().enemies[0]!.hp).toBe(1)
-
-    const ferido = mut(sim).enemies[0]!
+  it("velocidade que dá pra influenza não basta pro SARS-CoV-2", () => {
+    const sim = createSim(11, tuning)
     mut(sim).enemies = []
-    untilReady(sim)
-    ferido.x = sim.state().player.x + 20
-    ferido.y = sim.state().player.y
-    mut(sim).enemies = [ferido]
-    sim.step(RIGHT)
-    expect(sim.state().kills).toBe(1)
-  })
-
-  it("divisor vira dois estilhaços, e eles nascem fora do alcance de toque", () => {
-    const sim = createSim(51, tuning)
-    spawnAhead(sim, "ecoli")
-    sim.step(RIGHT)
-
-    const s = sim.state()
-    expect(s.kills).toBe(1)
-    expect(s.enemies).toHaveLength(2)
-    expect(s.enemies.every((e) => e.kind === "ecoli_filha")).toBe(true)
-
-    // O bug que isto trava: nascer dentro da hitbox matava sem resposta possível.
-    const toque = tuning.player.size / 2 + (tuning.enemy.size * 0.6) / 2
-    for (const e of s.enemies) {
-      const d = Math.sqrt((e.x - s.player.x) ** 2 + (e.y - s.player.y) ** 2)
-      expect(d, "estilhaço nasceu em cima do jogador").toBeGreaterThan(toque)
+    const alvo = tuning.enemy.kinds["influenza"]!.engulfSpeed + 0.05
+    let guard = 0
+    while (sim.state().player.speed < alvo) {
+      sim.step(RIGHT)
+      mut(sim).player.x = tuning.arena.width / 2
+      if (++guard > 400) throw new Error("não acelerou")
     }
-  })
-
-  it("estilhaço não corta o jogador enquanto é recém-nascido", () => {
-    const sim = createSim(52, tuning)
-    const s = mut(sim)
-    s.enemies = [virus(s.player.x, s.player.y, s.tick, "ecoli_filha")]
-    sim.step(NONE)
-    expect(sim.state().lives).toBe(tuning.run.lives)
-
-    advance(sim, tuning.enemy.spawnGraceTicks + 1)
-    mut(sim).enemies = [virus(sim.state().player.x, sim.state().player.y, 0, "ecoli_filha")]
-    sim.step(NONE)
+    expect(sim.state().player.speed).toBeLessThan(tuning.enemy.kinds["corona"]!.engulfSpeed)
+    mut(sim).enemies = [virus(mut(sim).player.x, mut(sim).player.y, "corona")]
+    sim.step(RIGHT)
+    expect(sim.state().kills).toBe(0)
     expect(sim.state().lives).toBe(tuning.run.lives - 1)
   })
 
-  it("a composição da onda muda conforme a tabela", () => {
-    const kindsAtWave = (w: number): Set<string> => {
-      const sim = createSim(53, tuning)
-      const seen = new Set<string>()
-      for (let i = 0; i < 25 && sim.state().phase !== "dead"; i++) {
-        // Entra na onda w: o SPACE incrementa, então parte-se de w-1.
-        mut(sim).wave = w - 1
-        clearWave(sim)
-        sim.step(SPACE)
-        expect(sim.state().wave).toBe(w)
-        for (const e of sim.state().enemies) seen.add(e.kind)
-      }
-      return seen
+  it("apanhar te FREIA: o erro custa o relógio junto com a vida", () => {
+    const sim = createSim(12, tuning)
+    mut(sim).enemies = []
+    // Rápida o bastante para influenza, lenta demais para o corona.
+    let guard = 0
+    while (sim.state().player.speed < 0.5) {
+      sim.step(RIGHT)
+      mut(sim).player.x = tuning.arena.width / 2
+      if (++guard > 400) throw new Error("não acelerou")
     }
-    expect(kindsAtWave(1)).toEqual(new Set(["influenza"]))
-    expect(kindsAtWave(4).size).toBeGreaterThan(2)
+    const antes = sim.state().player.speed
+    mut(sim).enemies = [virus(mut(sim).player.x, mut(sim).player.y, "corona")]
+    sim.step(RIGHT)
+    expect(sim.state().lives).toBe(tuning.run.lives - 1)
+    expect(sim.state().player.speed).toBeLessThan(antes * 0.5)
   })
 })
 
-describe("o organismo — segunda forma de perder, sem segundo verbo", () => {
+describe("impulso é habilidade, não o verbo", () => {
+  it("dispara na borda de subida e entra em recarga", () => {
+    const sim = createSim(20, tuning)
+    mut(sim).enemies = []
+    advance(sim, 4, RIGHT)
+    const antes = sim.state().player.speed
+
+    sim.step(IN({ right: true, action: true }))
+    expect(sim.state().player.speed).toBeGreaterThan(antes * 2)
+    expect(sim.state().player.dashCooldown).toBeGreaterThan(0)
+  })
+
+  it("segurar a tecla não repete o impulso", () => {
+    const sim = createSim(22, tuning)
+    mut(sim).enemies = []
+    advance(sim, 40, IN({ right: true, action: true }))
+    expect(sim.state().player.dashCooldown).toBeGreaterThan(0)
+  })
+})
+
+describe("poderes automáticos, temporários e aleatórios", () => {
+  it("encostar na cápsula liga o poder por tempo", () => {
+    const sim = createSim(30, tuning)
+    const s = mut(sim)
+    s.drops = [{ id: id(), power: 0, x: s.player.x, y: s.player.y, life: 100 }]
+    sim.step(NONE)
+    expect(sim.state().active[0]).toBe(tuning.drops.durationTicks)
+    expect(sim.state().drops).toHaveLength(0)
+  })
+
+  it("o poder expira sozinho — nada é permanente", () => {
+    const sim = createSim(31, tuning)
+    mut(sim).active[0] = 5
+    advance(sim, 6)
+    expect(sim.state().active[0]).toBe(0)
+    expect(activeStats(tuning, sim.state().active).trailTicks).toBe(0)
+  })
+
+  it("não existe tela de escolha: a fase de pick morreu junto", () => {
+    const sim = createSim(32, tuning)
+    const s = mut(sim)
+    s.waveKills = s.quota
+    s.enemies = []
+    sim.step(NONE)
+    expect(sim.state().phase).toBe("run")
+    expect(sim.state().wave).toBe(2)
+  })
+
+  it("todo poder do sorteio faz alguma coisa", () => {
+    const vazio = activeStats(
+      tuning,
+      POWERS.map(() => 0),
+    )
+    for (const pw of POWERS) {
+      if (pw.id === 8 || pw.id === 9) continue // escudo e cura agem na hora
+      const on = activeStats(
+        tuning,
+        POWERS.map((x) => (x.id === pw.id ? 100 : 0)),
+      )
+      expect(on, pw.name).not.toEqual(vazio)
+    }
+  })
+
+  it("a cápsula some se ninguém pegar", () => {
+    const sim = createSim(33, tuning)
+    const s = mut(sim)
+    s.player.x = 600
+    s.player.y = 340
+    s.drops = [{ id: id(), power: 1, x: 20, y: 20, life: 3 }]
+    advance(sim, 5)
+    expect(sim.state().drops).toHaveLength(0)
+    expect(sim.state().active[1]).toBe(0)
+  })
+})
+
+describe("progressão de onda", () => {
+  it("a cota cresce em curva, não em soma", () => {
+    const q = [1, 2, 5, 10].map((w) => quotaFor(tuning, w))
+    // A queixa de 01/08 era que a cota parecia a mesma em todo nível.
+    expect(q[3]! - q[2]!).toBeGreaterThan((q[1]! - q[0]!) * 2)
+  })
+
+  it("o spawn aperta pra sempre sem chegar a zero", () => {
+    expect(spawnIntervalFor(tuning, 100)).toBeLessThan(spawnIntervalFor(tuning, 1))
+    expect(spawnIntervalFor(tuning, 5000)).toBeGreaterThan(0)
+  })
+
+  it("a onda abre com patógenos em campo", () => {
+    const sim = createSim(40, tuning)
+    expect(sim.state().enemies.length).toBe(tuning.enemy.openingBase)
+  })
+})
+
+describe("o organismo e o fim da run", () => {
   const reachCells = (sim: Sim): void => {
     let guard = 0
-    while (
-      sim.state().phase === "run" &&
-      sim.state().cells.length === 0 &&
-      sim.state().wave < tuning.cells.fromWave + 2
-    ) {
-      clearWave(sim)
-      sim.step(SPACE)
+    while (sim.state().cells.length === 0) {
+      const s = mut(sim)
+      s.waveKills = s.quota
+      s.enemies = []
+      sim.step(NONE)
       if (++guard > 20) throw new Error("não chegou nas células")
     }
+    mut(sim).player.x = tuning.arena.width / 2
+    mut(sim).player.y = tuning.arena.height / 2
   }
 
-  it("as células só aparecem a partir da onda marcada", () => {
-    const sim = createSim(60, tuning)
-    expect(sim.state().cells).toHaveLength(0)
+  it("as células aparecem na onda marcada e só o invasor as come", () => {
+    const sim = createSim(50, tuning)
     reachCells(sim)
     expect(sim.state().wave).toBeGreaterThanOrEqual(tuning.cells.fromWave)
-    expect(sim.state().cells).toHaveLength(tuning.cells.count)
-  })
 
-  it("invasor ignora o jogador e vai atrás da célula", () => {
-    const sim = createSim(61, tuning)
-    reachCells(sim)
-    const s = mut(sim)
-    const cell = s.cells[0]!
-    // Nasce longe da célula e do lado oposto ao jogador.
-    s.enemies = [virus(cell.x + 120, cell.y, 0, "salmonela")]
-    const before = Math.abs(s.enemies[0]!.x - cell.x)
-    advance(sim, 600, RIGHT) // jogador dashando pro outro lado
-    const after = Math.abs(
-      (sim.state().enemies.find((e) => e.kind === "salmonela")?.x ?? cell.x) - cell.x,
-    )
-    expect(after, "invasor deveria ter se aproximado da célula").toBeLessThan(before)
-  })
-
-  it("encostar na célula tira vida dela e mata o vírus", () => {
-    const sim = createSim(62, tuning)
-    reachCells(sim)
-    const s = mut(sim)
-    const cell = s.cells[0]!
+    const cell = mut(sim).cells[0]!
     const hp = cell.hp
-    s.enemies = [virus(cell.x, cell.y, 0, "salmonela")]
+    mut(sim).enemies = [virus(cell.x, cell.y, "influenza")]
+    sim.step(NONE)
+    expect(sim.state().cells[0]!.hp, "influenza não come tecido").toBe(hp)
+
+    mut(sim).enemies = [virus(cell.x, cell.y, "salmonela")]
     sim.step(NONE)
     expect(sim.state().cells[0]!.hp).toBe(hp - 1)
-    expect(sim.state().enemies.some((e) => e.kind === "salmonela")).toBe(false)
   })
 
-  it("perder o organismo inteiro encerra a run mesmo com vidas sobrando", () => {
-    const sim = createSim(63, tuning)
+  it("perder o organismo encerra a run mesmo com vidas sobrando", () => {
+    const sim = createSim(51, tuning)
     reachCells(sim)
-    expect(sim.state().lives).toBeGreaterThan(0)
 
+    let guard = 0
     while (sim.state().cells.length > 0 && sim.state().phase === "run") {
-      const s = mut(sim)
-      const cell = s.cells[0]!
-      s.enemies = [virus(cell.x, cell.y, 0, "salmonela")]
+      const cell = mut(sim).cells[0]!
+      mut(sim).enemies = [virus(cell.x, cell.y, "salmonela")]
       sim.step(NONE)
+      if (++guard > 60) break
     }
     expect(sim.state().phase).toBe("dead")
     expect(sim.state().lostByCells).toBe(true)
     expect(sim.state().lives).toBeGreaterThan(0)
   })
-
-  it("o organismo volta inteiro na run seguinte", () => {
-    const sim = createSim(64, tuning)
-    reachCells(sim)
-    while (sim.state().phase === "run") {
-      const s = mut(sim)
-      const cell = s.cells[0]
-      if (cell === undefined) break
-      s.enemies = [virus(cell.x, cell.y, 0, "salmonela")]
-      sim.step(NONE)
-    }
-    advance(sim, tuning.feel.deadLockTicks + 1)
-    sim.step(RESTART)
-    expect(sim.state().wave).toBe(1)
-    expect(sim.state().cellsLost).toBe(0)
-    expect(sim.state().lostByCells).toBe(false)
-  })
 })
 
-describe("modificadores são comportamento, não porcentagem", () => {
-  /** Dá um modificador direto, sem depender do sorteio da oferta. */
-  const give = (sim: Sim, id: number, n = 1): void => {
-    const s = mut(sim)
-    s.owned[id] = n
-    // Uma onda nova é o que recalcula stats e monta órbita/cargas.
-    s.wave--
-    clearWave(sim)
-    sim.step(SPACE)
+describe("o gate continua medível", () => {
+  const die = (sim: Sim): void => {
+    let guard = 0
+    while (sim.state().phase === "run") {
+      const s = mut(sim)
+      s.player.vx = 0
+      s.player.vy = 0
+      s.player.invulnerable = false
+      s.enemies = [virus(s.player.x, s.player.y, "corona")]
+      sim.step(NONE)
+      advance(sim, tuning.run.hitFreezeTicks + 1)
+      if (++guard > 40) throw new Error("não morreu")
+    }
   }
 
-  it("RASTRO deixa pontos que cortam mesmo sem o dash encostar", () => {
-    const sim = createSim(70, tuning)
-    give(sim, 0)
-    advance(sim, 3, RIGHT)
-    expect(sim.state().trails.length).toBeGreaterThan(0)
+  it("morrer NÃO recomeça sozinho, e o impulso não vale como reinício", () => {
+    const sim = createSim(60, tuning)
+    die(sim)
+    expect(sim.state().phase).toBe("dead")
 
-    const s = mut(sim)
-    const t = s.trails[0]!
-    s.enemies = [virus(t.x, t.y)]
-    const before = s.kills
-    sim.step(NONE) // parado: só o rastro pode matar
-    expect(sim.state().kills).toBe(before + 1)
-  })
+    advance(sim, 900, IN({ action: true }))
+    expect(sim.state().phase).toBe("dead")
+    expect(sim.state().runIndex).toBe(0)
 
-  it("PULSO solta um anel a cada N mortes", () => {
-    const sim = createSim(71, tuning)
-    give(sim, 1)
-    const every = tuning.powers.shockEvery
-    expect(sim.state().shocks).toHaveLength(0)
-
-    for (let i = 0; i < every; i++) {
-      untilReady(sim)
-      putEnemyAhead(sim)
-      sim.step(RIGHT)
-    }
-    expect(sim.state().shocks.length).toBeGreaterThan(0)
-    expect(sim.state().killsSincePulse).toBe(0)
-  })
-
-  it("RETAGUARDA corta o que está atrás — o que sem ele te cobrava", () => {
-    // Delta, não absoluto: `give` limpa uma onda inteira para recalcular stats.
-    const atras = (owned: number) => {
-      const sim = createSim(72, tuning)
-      if (owned > 0) give(sim, 3, owned)
-      untilReady(sim)
-      const s = mut(sim)
-      s.enemies = [virus(s.player.x - 4, s.player.y)]
-      const kills0 = s.kills
-      const lives0 = s.lives
-      sim.step(RIGHT)
-      return { kills: sim.state().kills - kills0, lives: sim.state().lives, lives0 }
-    }
-    // Sem o modificador o de trás não morre — ele COBRA, que era a queixa.
-    expect(atras(0).kills).toBe(0)
-    expect(atras(0).lives).toBeLessThan(atras(0).lives0)
-    // Com ele, morre antes de encostar.
-    expect(atras(1).kills).toBe(1)
-    expect(atras(1).lives).toBe(atras(1).lives0)
-  })
-
-  it("ANTICORPO orbita e mata sozinho, com o jogador parado", () => {
-    const sim = createSim(73, tuning)
-    give(sim, 5)
-    expect(sim.state().orbiters).toHaveLength(1)
-
-    const s = mut(sim)
-    const o = s.orbiters[0]!
-    s.enemies = [
-      virus(s.player.x + o.ox * tuning.powers.orbitRadius, s.player.y + o.oy * tuning.powers.orbitRadius),
-    ]
-    const before = s.kills
-    sim.step(NONE)
-    expect(sim.state().kills).toBe(before + 1)
-  })
-
-  it("a órbita não se desmonta ao longo de uma run inteira", () => {
-    const sim = createSim(74, tuning)
-    give(sim, 5)
-    advance(sim, 20000)
-    const o = sim.state().orbiters[0]!
-    expect(Math.sqrt(o.ox * o.ox + o.oy * o.oy)).toBeCloseTo(1, 6)
-  })
-
-  it("SEGUNDO FÔLEGO encadeia dois dashes antes de repousar", () => {
-    const semCarga = createSim(75, tuning)
-    advance(semCarga, tuning.dash.durationTicks, RIGHT)
-    expect(semCarga.state().player.recoverTicks).toBeGreaterThan(0)
-
-    const comCarga = createSim(75, tuning)
-    give(comCarga, 6)
-    advance(comCarga, tuning.dash.durationTicks, RIGHT)
-    expect(comCarga.state().player.recoverTicks).toBe(0) // ainda pode ir
-    expect(comCarga.state().dashCharges).toBe(1)
-  })
-
-  it("nenhum modificador é imperceptível: todos põem algo na tela ou num contador", () => {
-    // O critério do bar: se escolher não muda nada visível, a carta não vale.
-    const base = applyModifiers(tuning, MODIFIERS.map(() => 0))
-    for (const mod of MODIFIERS) {
-      if (mod.id === MOD_REPAIR) continue // age no organismo, testado à parte
-      const r = applyModifiers(tuning, MODIFIERS.map((m) => (m.id === mod.id ? 1 : 0)))
-      const visivel =
-        r.trailTicks !== base.trailTicks ||
-        r.shockEvery !== base.shockEvery ||
-        r.backRadius !== base.backRadius ||
-        r.orbiters !== base.orbiters ||
-        r.dashCharges !== base.dashCharges ||
-        r.interferonRadius !== base.interferonRadius ||
-        r.macrophages !== base.macrophages ||
-        r.cloudTicks !== base.cloudTicks ||
-        r.lives !== base.lives ||
-        r.shields !== base.shields ||
-        Math.abs(r.killRadius - base.killRadius) > 8 ||
-        Math.abs(r.killArc - base.killArc) > 0.3
-      expect(visivel, `${mod.name} não muda nada perceptível`).toBe(true)
-    }
+    sim.step(RESTART)
+    expect(sim.state().phase).toBe("run")
+    expect(sim.state().runIndex).toBe(1)
+    expect(sim.state().wave).toBe(1)
+    expect(sim.state().active.every((n) => n === 0)).toBe(true)
   })
 })

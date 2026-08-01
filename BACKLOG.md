@@ -7,6 +7,14 @@ log de decisão morre.
 
 ## Aberto agora
 
+- **Salto gráfico por shader.** Canvas 2D procedural bateu no teto e o humano notou
+  ("a qualidade estagnou"). O degrau real é WebGL: subsurface scattering na membrana,
+  refração do fundo através do corpo, fluido de verdade no plasma, bloom. Não entrou nesta
+  rodada porque shader quebrado é tela preta, e tela preta queima a leitura dele.
+  Fotorrealismo mesmo exige alguém que desenhe.
+- **Nenhuma fixture do core novo.** Os quatro replays são de cores mortos: aquele input
+  não sabe pilotar uma célula contínua. Precisa de uma gravação do build atual.
+
 - **A questão do movimento.** H quer movimento orgânico e dash/câmera-lenta como habilidades.
   Adiado por ele mesmo em 31/07. Quando voltar: fagocitose por contato já está decidida, e
   o `CLAUDE.md` §1 precisa ser reescrito porque "o tempo só anda quando você anda" cai.

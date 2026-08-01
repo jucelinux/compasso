@@ -39,7 +39,7 @@ function dist2(ax: number, ay: number, bx: number, by: number): number {
 }
 
 /**
- * Política: defende primeiro. Um invasor prestes a comer uma célula vale mais
+ * Política: defende primeiro, e corre. Um invasor prestes a comer uma célula vale mais
  * que o vírus mais próximo — que é o que um humano faria, e sem isso a medição
  * só mede a burrice do bot.
  */
@@ -86,18 +86,13 @@ export function playRun(seed: number, tuning: Tuning, maxTicks: number): RunRepo
   const sim = createSim(seed, tuning)
   const waves: WaveRow[] = []
   let waveStart = 0
-  let prevPhase: string = "run"
-  let confirmToggle = false
+  let lastWave = 1
 
   for (let tick = 0; tick < maxTicks; tick++) {
     const s = sim.state()
     let input = IN()
 
-    if (s.phase === "pick") {
-      // Alterna: a confirmação exige borda de subida.
-      input = IN({ action: !confirmToggle })
-      confirmToggle = !confirmToggle
-    } else if (s.phase === "dead") {
+    if (s.phase === "dead") {
       const done = sim.state()
       return {
         seed,
@@ -107,7 +102,7 @@ export function playRun(seed: number, tuning: Tuning, maxTicks: number): RunRepo
         lostByCells: done.lostByCells,
         kills: done.kills,
       }
-    } else if (s.player.dashTicks === 0 && s.player.recoverTicks === 0) {
+    } else {
       const target = chooseTarget(s)
       if (target !== null) {
         const ax = target.x - s.player.x
@@ -128,11 +123,11 @@ export function playRun(seed: number, tuning: Tuning, maxTicks: number): RunRepo
 
     sim.step(input)
     const now = sim.state()
-    if (prevPhase === "run" && now.phase === "pick") {
-      waves.push({ wave: now.wave, seconds: (tick - waveStart) / 60, quota: now.quota })
+    if (now.wave > lastWave) {
+      waves.push({ wave: lastWave, seconds: (tick - waveStart) / 60, quota: now.quota })
+      waveStart = tick
+      lastWave = now.wave
     }
-    if (prevPhase === "pick" && now.phase === "run") waveStart = tick
-    prevPhase = now.phase
   }
 
   const done = sim.state()

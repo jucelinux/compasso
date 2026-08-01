@@ -9,12 +9,11 @@ export interface InputFrame {
   readonly down: boolean
   readonly left: boolean
   readonly right: boolean
-  /** Confirma escolha de modificador. */
+  /** Impulso: habilidade com recarga, não mais o verbo central. */
   readonly action: boolean
   /**
    * Recomeça depois de morrer. Tecla PRÓPRIA de propósito: com `action` aqui, o
-   * reinício virava reflexo de quem passou a run inteira confirmando escolha —
-   * e o gate do projeto mede intenção, não reflexo.
+   * reinício virava reflexo, e o gate mede intenção.
    */
   readonly restart: boolean
 }
@@ -24,41 +23,75 @@ export interface SimSnapshot {
   readonly hash: string
 }
 
+export type Hunts = "player" | "cell"
+
+export interface KindSpec {
+  readonly speed: number
+  readonly hp: number
+  readonly sizeScale: number
+  /** Quantas células-filha nascem quando ele morre (fissão binária). */
+  readonly splits: number
+  readonly hunts: Hunts
+  /** Nome real do patógeno. Só o render usa. */
+  readonly real: string
+  /** Morfologia real, que decide o desenho. */
+  readonly form: string
+  /**
+   * Fração da velocidade máxima necessária para engolir este patógeno.
+   * Abaixo dela, encostar machuca em vez de matar. É o que amarra ataque,
+   * relógio e risco no mesmo número.
+   */
+  readonly engulfSpeed: number
+}
+
 export interface Tuning {
   readonly sim: { readonly hz: number }
   readonly arena: { readonly width: number; readonly height: number }
-  readonly time: { readonly creep: number; readonly creepPerWave: number }
-  readonly player: { readonly size: number }
+  readonly time: {
+    /** Escala do tempo com a célula parada. Nunca zero, por decisão de 31/07. */
+    readonly creep: number
+    /**
+     * Mistura entre reta e curva na conversão velocidade→tempo. `0` = só a
+     * curva `t·√t` (começo do gesto barato), `1` = linear puro.
+     *
+     * Não é expoente livre de propósito: `Math.pow` não é bit-a-bit entre
+     * engines, e o rig inteiro depende de Node e browser darem o mesmo hash.
+     * `√` é seguro; expoente arbitrário não.
+     */
+    readonly linearMix: number
+  }
+  readonly player: {
+    readonly size: number
+    readonly maxSpeed: number
+    readonly accel: number
+    readonly drag: number
+  }
   readonly dash: {
     readonly durationTicks: number
-    readonly recoveryTicks: number
-    readonly recoveryPerWave: number
-    readonly minRecoveryTicks: number
-    readonly speed: number
-    readonly killRadius: number
-    /**
-     * Cosseno mínimo entre a direção do dash e a do inimigo para o corte valer.
-     * `0.15` ≈ meia-volta pra frente. **`-1` devolve a aura omnidirecional** —
-     * é o botão de veto desta regra, e custa só este número.
-     */
-    readonly killArc: number
+    readonly cooldownTicks: number
+    readonly speedMultiplier: number
   }
-  readonly wave: { readonly baseQuota: number; readonly quotaGrowth: number }
-  readonly run: { readonly lives: number }
+  readonly wave: {
+    readonly baseQuota: number
+    readonly quotaGrowth: number
+    /** Termo quadrático: é ele que faz a onda 10 custar visivelmente mais. */
+    readonly quotaAccel: number
+  }
+  readonly run: {
+    readonly lives: number
+    readonly hitFreezeTicks: number
+    readonly deadLockTicks: number
+  }
   readonly enemy: {
     readonly size: number
     readonly spawnIntervalSeconds: number
     readonly spawnPerWave: number
-    /** Inimigos já em campo quando a onda abre — tabuleiro vazio vira espera. */
     readonly openingBase: number
     readonly openingPerWave: number
     readonly maxAlive: number
-    /** Distância perpendicular em que os estilhaços nascem. */
     readonly splitOffset: number
-    /** Ticks em que um vírus recém-nascido não machuca. */
     readonly spawnGraceTicks: number
     readonly kinds: Readonly<Record<string, KindSpec>>
-    /** Composição por onda. A run muda porque a AMEAÇA muda, não a carta. */
     readonly spawnTable: ReadonlyArray<{
       readonly fromWave: number
       readonly weights: Readonly<Record<string, number>>
@@ -70,73 +103,41 @@ export interface Tuning {
     readonly size: number
     readonly hp: number
   }
-  /**
-   * Números dos modificadores-comportamento. `orbitCos`/`orbitSin` são a matriz
-   * de rotação por tick pré-calculada: a sim não pode chamar `sin`/`cos`, que
-   * não são bit-a-bit entre engines.
-   */
+  readonly drops: {
+    readonly chance: number
+    readonly lifeTicks: number
+    readonly magnetRadius: number
+    readonly magnetSpeed: number
+    readonly durationTicks: number
+    readonly maxOnField: number
+  }
   readonly powers: {
     readonly comboWindowTicks: number
+    readonly trailTicks: number
+    readonly trailRadius: number
+    readonly shockEvery: number
+    readonly shockRadius: number
+    readonly shockLifeTicks: number
+    readonly orbitRadius: number
+    readonly orbitCos: number
+    readonly orbitSin: number
+    readonly orbitKillRadius: number
     readonly interferonRadius: number
     readonly interferonSlow: number
     readonly macrophageSpeed: number
     readonly macrophageRadius: number
     readonly cloudTicks: number
     readonly cloudRadius: number
-    readonly trailTicks: number
-    readonly trailRadius: number
-    readonly shockEvery: number
-    readonly shockRadius: number
-    readonly shockLifeTicks: number
-    readonly backRadius: number
-    readonly orbitRadius: number
-    readonly orbitCos: number
-    readonly orbitSin: number
-    readonly orbitKillRadius: number
-  }
-  readonly pick: { readonly offerCount: number }
-  readonly feel: {
-    readonly hitFreezeTicks: number
-    readonly waveFreezeTicks: number
-    /** Ticks de tela de morte que ignoram input. Reflexo não conta como intenção. */
-    readonly deadLockTicks: number
+    readonly surgeSpeed: number
+    readonly shieldHits: number
   }
   readonly harness: { readonly recordSeconds: number }
 }
 
-/**
- * `run` = jogando. `pick` = limpou a onda, escolhendo. `dead` = acabou, esperando
- * uma tecla.
- *
- * `dead` NÃO recomeça sozinho de propósito: o gate do projeto é taxa de segunda
- * partida voluntária, e reinício automático torna essa métrica não-medível.
- */
-export type Phase = "run" | "pick" | "dead"
-
-/** O que um vírus persegue. `cell` ignora o jogador e vai atrás do organismo. */
-export type Hunts = "player" | "cell"
-
-export interface KindSpec {
-  readonly speed: number
-  readonly hp: number
-  readonly sizeScale: number
-  /** Quantas células-filha nascem quando ele morre (fissão binária). */
-  readonly splits: number
-  readonly hunts: Hunts
-  /** Nome real do patógeno. Só o render usa; a sim não sabe o que é biologia. */
-  readonly real: string
-  /** Morfologia real, que decide o desenho: esfera, bacilo, cacho, coroa... */
-  readonly form: string
-  /** Imune a rastro, pulso, nuvem e macrófago: só o corte direto derruba. */
-  readonly onlyDirectCut?: boolean
-}
+/** Só duas fases: a tela de escolha morreu junto com o powerup escolhido. */
+export type Phase = "run" | "dead"
 
 export interface Enemy {
-  /**
-   * Identidade estável. O render pareia quadro a quadro por isto — `bornTick`
-   * não serve, porque a abertura da onda nasce vários no mesmo tick e a
-   * interpolação acabava misturando inimigos diferentes.
-   */
   id: number
   kind: string
   x: number
@@ -145,7 +146,22 @@ export interface Enemy {
   bornTick: number
 }
 
-/** Ponto de rastro largado pelo dash. Corta enquanto vive. */
+export interface Cell {
+  id: number
+  x: number
+  y: number
+  hp: number
+}
+
+/** Cápsula largada por um patógeno. Encostar liga o poder. */
+export interface Drop {
+  id: number
+  power: number
+  x: number
+  y: number
+  life: number
+}
+
 export interface Trail {
   id: number
   x: number
@@ -153,7 +169,6 @@ export interface Trail {
   life: number
 }
 
-/** Onda de choque do PULSO. Já matou quando nasceu; o que resta é o anel. */
 export interface Shock {
   id: number
   x: number
@@ -162,20 +177,17 @@ export interface Shock {
   life: number
 }
 
-/** Anticorpo em órbita. Guardado como vetor unitário, girado por matriz fixa. */
 export interface Orbiter {
   ox: number
   oy: number
 }
 
-/** Macrófago aliado: vagueia atrás do patógeno mais próximo e engole. */
 export interface Macrophage {
   id: number
   x: number
   y: number
 }
 
-/** Nuvem de histamina largada por quem morre. Corta enquanto dura. */
 export interface Cloud {
   id: number
   x: number
@@ -183,85 +195,57 @@ export interface Cloud {
   life: number
 }
 
-/** Célula do organismo. Não se move, não ataca, e perdê-las encerra a run. */
-export interface Cell {
-  id: number
-  x: number
-  y: number
-  hp: number
-}
-
 export interface Player {
   x: number
   y: number
-  /** Ticks restantes do dash atual. `0` = parado, e o mundo anda a creep. */
+  /** Velocidade contínua. É a arma, o relógio e o risco no mesmo vetor. */
+  vx: number
+  vy: number
+  /** `|v| / maxSpeed`, entre 0 e 1 (passa de 1 durante o impulso). */
+  speed: number
   dashTicks: number
-  /** Ticks até poder dashar de novo. É a folga que encolhe a cada onda. */
-  recoverTicks: number
-  dashDx: number
-  dashDy: number
-  /** Desde o impacto até o FIM do próximo dash — regra sem número, por decisão. */
+  dashCooldown: number
   invulnerable: boolean
-  /**
-   * Levou o toque no meio de um dash: o fim DESTE dash não conta, o do próximo
-   * é que conta. Sem isso, apanhar dashando daria i-frames de dois ticks.
-   */
   invulnSkipCurrent: boolean
 }
 
 export interface SimState {
   tick: number
   phase: Phase
-  /** Quantas runs foram INICIADAS além da primeira. É o numerador do gate. */
   runIndex: number
-  /** Onda atual, base 1. A folga encolhe em função dela e nunca satura. */
   wave: number
-  /** Kills nesta onda, contra a cota. */
   waveKills: number
   quota: number
   lives: number
+  shields: number
   kills: number
   bestKills: number
   bestWave: number
   player: Player
   enemies: Enemy[]
+  cells: Cell[]
+  cellsLost: number
+  lostByCells: boolean
+  drops: Drop[]
+  /** Ticks restantes de cada poder. Índice = id do poder. */
+  active: number[]
   trails: Trail[]
   shocks: Shock[]
   orbiters: Orbiter[]
-  /** Dashes ainda encadeáveis antes da recuperação obrigatória. */
-  dashCharges: number
-  /** Mortes acumuladas desde o último pulso. */
+  macrophages: Macrophage[]
+  clouds: Cloud[]
   killsSincePulse: number
-  cells: Cell[]
-  /** Células perdidas nesta run. Só pra tela de morte dizer como você perdeu. */
-  cellsLost: number
-  /** `true` quando a run acabou por perder o organismo, não as vidas. */
-  lostByCells: boolean
   spawnTimer: number
-  /** Ticks de congelamento no impacto. Nada se move; a escala do tempo não muda. */
   frozen: number
-  /** Toques que a MEMBRANA absorve nesta onda. */
-  shields: number
-  /** Ticks restantes de trava da tela de morte. */
   deadLock: number
-  /** Abates encadeados dentro da janela. É o motor da escalada de recompensa. */
   combo: number
   comboTicks: number
   comboBest: number
-  /** Ponto do último abate, para o render soltar o número na tela. */
   lastKillX: number
   lastKillY: number
   lastKillTick: number
-  macrophages: Macrophage[]
-  clouds: Cloud[]
-  /** Escala do tempo de mundo aplicada neste tick: 1 dashando, creep parado. */
+  /** Escala do tempo de mundo neste tick. Derivada direto da sua velocidade. */
   worldScale: number
-  /** Quantos de cada modificador o jogador acumulou NESTA run. Índice = id. */
-  owned: number[]
-  /** Ids oferecidos na tela de escolha. */
-  offer: number[]
-  cursor: number
-  /** Bits do input do tick anterior — de onde saem todas as bordas de subida. */
   prevBits: number
   rngState: number
 }
@@ -270,8 +254,6 @@ export interface Sim {
   /** Avança exatamente 1/60 de tempo de mundo. */
   step(input: InputFrame): void
   snapshot(): SimSnapshot
-  /** Estado completo, para debug. */
   serialize(): unknown
-  /** Leitura ao vivo para o render interpolar. Não é parte do hash. */
   state(): Readonly<SimState>
 }
