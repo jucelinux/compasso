@@ -43,5 +43,10 @@
   },
   "harness": {
     "recordSeconds": 30
+  },
+  "feel": {
+    "hitFreezeTicks": 12,
+    "waveFreezeTicks": 8,
+    "deadLockTicks": 45
   }
 }

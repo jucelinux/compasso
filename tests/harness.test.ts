@@ -12,15 +12,15 @@ import type { InputFrame } from "../src/sim/types.ts"
 const tuning = loadTuning()
 
 describe("codec de input", () => {
-  it("faz round-trip nas 32 combinações", () => {
-    for (let bits = 0; bits < 32; bits++) {
+  it("faz round-trip nas 64 combinações", () => {
+    for (let bits = 0; bits < 64; bits++) {
       expect(packInput(unpackInput(bits))).toBe(bits)
       expect(packInput(decodeInput(encodeInput(unpackInput(bits))))).toBe(bits)
     }
   })
 
   it("rejeita input fora de faixa", () => {
-    expect(() => decodeInput("32")).toThrow()
+    expect(() => decodeInput("64")).toThrow()
     expect(() => decodeInput("abc")).toThrow()
     expect(() => decodeInput("-1")).toThrow()
   })
@@ -28,7 +28,7 @@ describe("codec de input", () => {
 
 describe("recorder → runner", () => {
   const frames = (n: number, offset = 0): InputFrame[] =>
-    Array.from({ length: n }, (_, i) => unpackInput((i + offset) % 32))
+    Array.from({ length: n }, (_, i) => unpackInput((i + offset) % 64))
 
   it("o dump do F9 passa pelo mesmo parser que o runner headless", () => {
     const recorder = createRecorder(777, tuning)

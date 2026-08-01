@@ -10,6 +10,8 @@ const KEY_MAP: Readonly<Record<string, keyof InputFrame>> = {
   KeyA: "left",
   KeyD: "right",
   Space: "action",
+  Enter: "restart",
+  KeyR: "restart",
 }
 
 export interface Keyboard {
@@ -19,7 +21,14 @@ export interface Keyboard {
 }
 
 export function createKeyboard(target: Window = window): Keyboard {
-  const held = { up: false, down: false, left: false, right: false, action: false }
+  const held = {
+    up: false,
+    down: false,
+    left: false,
+    right: false,
+    action: false,
+    restart: false,
+  }
 
   const set = (code: string, value: boolean) => (event: KeyboardEvent) => {
     const key = KEY_MAP[code]
@@ -32,7 +41,8 @@ export function createKeyboard(target: Window = window): Keyboard {
   const onUp = (event: KeyboardEvent) => set(event.code, false)(event)
   // Perder o foco com uma tecla presa deixaria o input grudado.
   const onBlur = () => {
-    held.up = held.down = held.left = held.right = held.action = false
+    held.up = held.down = held.left = held.right = false
+    held.action = held.restart = false
   }
 
   target.addEventListener("keydown", onDown)

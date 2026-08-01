@@ -12,6 +12,7 @@ export const BIT_DOWN = 2
 export const BIT_LEFT = 4
 export const BIT_RIGHT = 8
 export const BIT_ACTION = 16
+export const BIT_RESTART = 32
 
 export const EMPTY_INPUT: InputFrame = Object.freeze({
   up: false,
@@ -19,6 +20,7 @@ export const EMPTY_INPUT: InputFrame = Object.freeze({
   left: false,
   right: false,
   action: false,
+  restart: false,
 })
 
 export function packInput(f: InputFrame): number {
@@ -27,7 +29,8 @@ export function packInput(f: InputFrame): number {
     (f.down ? BIT_DOWN : 0) |
     (f.left ? BIT_LEFT : 0) |
     (f.right ? BIT_RIGHT : 0) |
-    (f.action ? BIT_ACTION : 0)
+    (f.action ? BIT_ACTION : 0) |
+    (f.restart ? BIT_RESTART : 0)
   )
 }
 
@@ -38,6 +41,7 @@ export function unpackInput(bits: number): InputFrame {
     left: (bits & BIT_LEFT) !== 0,
     right: (bits & BIT_RIGHT) !== 0,
     action: (bits & BIT_ACTION) !== 0,
+    restart: (bits & BIT_RESTART) !== 0,
   }
 }
 
@@ -47,7 +51,8 @@ export function encodeInput(f: InputFrame): string {
 
 export function decodeInput(text: string): InputFrame {
   const bits = Number.parseInt(text, 10)
-  if (!Number.isInteger(bits) || bits < 0 || bits > 31) {
+  // 0..63: seis bits. Replays antigos usam só 0..31 e continuam válidos.
+  if (!Number.isInteger(bits) || bits < 0 || bits > 63) {
     throw new Error(`input inválido no replay: ${JSON.stringify(text)}`)
   }
   return unpackInput(bits)

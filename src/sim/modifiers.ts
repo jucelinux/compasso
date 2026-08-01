@@ -21,10 +21,13 @@ export const MODIFIERS: readonly Modifier[] = [
   { id: 4, name: "ESTEIRA", blurb: "corte mais largo" },
   { id: 5, name: "SILÊNCIO", blurb: "eles demoram mais a vir" },
   { id: 6, name: "REFLEXO", blurb: "levanta mais rápido" },
+  { id: 7, name: "CORTE LARGO", blurb: "abre o leque do golpe" },
+  { id: 8, name: "MEMBRANA", blurb: "absorve um toque por onda" },
 ]
 
 /** O modificador de vida é o único que mexe num contador, não numa curva. */
 export const MOD_EXTRA_LIFE = 2
+export const MOD_SHIELD = 8
 
 /** Números que os modificadores fixam para a run inteira. */
 export interface RunStats {
@@ -35,6 +38,9 @@ export interface RunStats {
   creepBase: number
   recoveryBase: number
   spawnBase: number
+  /** Cosseno mínimo do arco de corte. Menor = leque mais largo. */
+  killArc: number
+  shields: number
 }
 
 /** Números que a onda aperta. Nenhum destes tem teto — foi o pedido. */
@@ -56,6 +62,9 @@ export function applyModifiers(tuning: Tuning, owned: readonly number[]): RunSta
     creepBase: tuning.time.creep * (1 - 0.3 * n(3)),
     recoveryBase: tuning.dash.recoveryTicks - n(6),
     spawnBase: tuning.enemy.spawnIntervalSeconds * (1 + 0.25 * n(5)),
+    // Nunca abaixo de -1: aí o leque viraria a aura que a decisão de 31/07 tirou.
+    killArc: Math.max(-0.9, tuning.dash.killArc - 0.35 * n(7)),
+    shields: n(MOD_SHIELD),
   }
 }
 

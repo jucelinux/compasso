@@ -9,7 +9,7 @@ import type { Tuning } from "../src/sim/types.ts"
  */
 
 const SMOKE = resolve(projectRoot, "replays", "smoke.json")
-const BASELINE_HASH = "6844a433"
+const BASELINE_HASH = "d482aa08"
 
 /**
  * Run real do humano, 7,6 min de input de verdade.
@@ -21,7 +21,16 @@ const BASELINE_HASH = "6844a433"
  * por uma gravação do build com ondas.
  */
 const RUN_01 = resolve(projectRoot, "replays", "run-01.json")
-const RUN_01_HASH = "18d05eac"
+const RUN_01_HASH = "979944f3"
+
+/**
+ * Segunda run real: 5 min, 10 ondas, uma morte. Gravada antes da tecla de
+ * reinício separada — o espaço que ela usa para recomeçar não recomeça mais.
+ * Vale como determinismo sobre input humano longo. NENHUMA fixture cobre hoje
+ * morte → reinício sob as regras atuais; só uma gravação nova resolve.
+ */
+const RUN_02 = resolve(projectRoot, "replays", "run-02.json")
+const RUN_02_HASH = "6da6d297"
 
 const smoke = () => loadReplay(SMOKE)
 const tuning = () => loadTuning()
@@ -49,6 +58,12 @@ describe("determinismo", () => {
     const result = runReplay(loadReplay(RUN_01), tuning())
     expect(result.finalHash).toBe(RUN_01_HASH)
     expect(result.ticks).toBeGreaterThan(20000)
+  })
+
+  it("segunda run humana: bate com o baseline", () => {
+    const result = runReplay(loadReplay(RUN_02), tuning())
+    expect(result.finalHash).toBe(RUN_02_HASH)
+    expect(result.ticks).toBeGreaterThan(17000)
   })
 
   it("hash evolui — não é constante", () => {

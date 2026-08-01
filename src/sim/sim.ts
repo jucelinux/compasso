@@ -33,6 +33,7 @@ const BIT_DOWN = 2
 const BIT_LEFT = 4
 const BIT_RIGHT = 8
 const BIT_ACTION = 16
+const BIT_RESTART = 32
 
 function bitsOf(input: InputFrame): number {
   return (
@@ -40,7 +41,8 @@ function bitsOf(input: InputFrame): number {
     (input.down ? BIT_DOWN : 0) |
     (input.left ? BIT_LEFT : 0) |
     (input.right ? BIT_RIGHT : 0) |
-    (input.action ? BIT_ACTION : 0)
+    (input.action ? BIT_ACTION : 0) |
+    (input.restart ? BIT_RESTART : 0)
   )
 }
 
@@ -66,6 +68,7 @@ export function createSim(seed: number, tuning: Tuning): Sim {
   const { width, height } = tuning.arena
   const packer = new Packer(2048)
 
+  let nextEnemyId = 0
   let run: RunStats = applyModifiers(tuning, [])
   let wave: WaveStats = waveStats(tuning, run, 1)
 
@@ -92,6 +95,9 @@ export function createSim(seed: number, tuning: Tuning): Sim {
     },
     enemies: [],
     spawnTimer: wave.spawnIntervalSeconds,
+    frozen: 0,
+    shields: 0,
+    deadLock: 0,
     worldScale: wave.creep,
     owned: MODIFIERS.map(() => 0),
     offer: [],
@@ -120,6 +126,8 @@ export function createSim(seed: number, tuning: Tuning): Sim {
     s.player.recoverTicks = 0
     s.spawnTimer = wave.spawnIntervalSeconds
     s.worldScale = wave.creep
+    s.frozen = 0
+    s.shields = run.shields
     if (s.wave > s.bestWave) s.bestWave = s.wave
 
     const opening = Math.min(
@@ -154,6 +162,7 @@ export function createSim(seed: number, tuning: Tuning): Sim {
     const x = edge === 0 ? half : edge === 1 ? width - half : along * width
     const y = edge === 2 ? half : edge === 3 ? height - half : along * height
     s.enemies.push({
+      id: nextEnemyId++,
       x: clamp(x, half, width - half),
       y: clamp(y, half, height - half),
       bornTick: s.tick,
@@ -173,6 +182,14 @@ export function createSim(seed: number, tuning: Tuning): Sim {
 
   const stepRun = (bits: number): void => {
     const p = s.player
+
+    // Congelamento de impacto: o mundo inteiro para por alguns ticks para que a
+    // perda seja PERCEBIDA. Fica fora de `worldScale` de propósito — aquilo é a
+    // taxa do creep, que por decisão de 31/07 nunca é zero.
+    if (s.frozen > 0) {
+      s.frozen--
+      return
+    }
 
     // --- dash: o único verbo. Só começa quando o anterior terminou de se pagar.
     if (p.dashTicks === 0 && p.recoverTicks === 0) {
@@ -243,7 +260,7 @@ export function createSim(seed: number, tuning: Tuning): Sim {
         // dentro do arco, senão ele fica imortal no pior lugar possível.
         const facing =
           dist < 0.0001 ? 1 : (ex / dist) * p.dashDx + (ey / dist) * p.dashDy
-        if (facing >= tuning.dash.killArc) {
+        if (facing >= run.killArc) {
           s.kills++
           s.waveKills++
           continue
@@ -261,20 +278,29 @@ export function createSim(seed: number, tuning: Tuning): Sim {
     s.enemies = survivors
 
     if (hit) {
-      s.lives--
       p.invulnerable = true
       // Apanhou com o dash ainda em curso: o fim dele não vale, vale o próximo.
       if (p.dashTicks > 0) p.invulnSkipCurrent = true
-      if (s.lives <= 0) {
-        if (s.kills > s.bestKills) s.bestKills = s.kills
-        s.phase = "dead"
-        return
+      s.frozen = tuning.feel.hitFreezeTicks
+
+      if (s.shields > 0) {
+        s.shields--
+      } else {
+        s.lives--
+        if (s.lives <= 0) {
+          if (s.kills > s.bestKills) s.bestKills = s.kills
+          s.phase = "dead"
+          s.deadLock = tuning.feel.deadLockTicks
+          s.frozen = 0
+          return
+        }
       }
     }
 
     // Cota batida encerra a onda — mesmo no tick em que o jogador levou um toque.
     if (s.waveKills >= s.quota) {
       s.phase = "pick"
+      s.frozen = tuning.feel.waveFreezeTicks
       offerModifiers()
     }
   }
@@ -302,9 +328,17 @@ export function createSim(seed: number, tuning: Tuning): Sim {
     }
   }
 
-  /** Não recomeça sozinho: a segunda partida precisa ser um ato deliberado. */
+  /**
+   * Não recomeça sozinho, ignora input por um instante, e exige uma tecla que
+   * NÃO é a da escolha de modificador. As três coisas existem pela mesma razão:
+   * o gate mede segunda partida voluntária, e reflexo não é vontade.
+   */
   const stepDead = (bits: number): void => {
-    if ((bits & ~s.prevBits) & BIT_ACTION) {
+    if (s.deadLock > 0) {
+      s.deadLock--
+      return
+    }
+    if ((bits & ~s.prevBits) & BIT_RESTART) {
       s.runIndex++
       startRun()
     }
@@ -343,11 +377,14 @@ export function createSim(seed: number, tuning: Tuning): Sim {
       .bool(s.player.invulnSkipCurrent)
       .f64(s.spawnTimer)
       .f64(s.worldScale)
+      .u32(s.frozen)
+      .u32(s.shields)
+      .u32(s.deadLock)
       .u32(s.enemies.length)
       .u32(s.cursor)
       .u8(s.prevBits)
       .u32(s.rngState)
-    for (const e of s.enemies) packer.f64(e.x).f64(e.y).u32(e.bornTick)
+    for (const e of s.enemies) packer.u32(e.id).f64(e.x).f64(e.y).u32(e.bornTick)
     for (const n of s.owned) packer.u32(n)
     for (const id of s.offer) packer.u32(id)
 

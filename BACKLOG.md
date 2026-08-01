@@ -10,8 +10,11 @@ log de decisão morre.
 - **Gate não medido.** O gate de 31/07 passou com modificador PERMANENTE entre runs —
   ele voltou porque estava mais forte. Esse mecanismo não existe mais. Até uma nova
   medição, o projeto não tem métrica de direção válida.
-- **`replays/run-01.json` não cobre mais morte nem reinício.** Gravada antes das ondas.
-  Precisa de uma gravação nova do build atual.
+- **Nenhuma fixture cobre morte → reinício.** `run-01` é anterior às ondas, `run-02` é
+  anterior à tecla de reinício separada. Precisa de uma gravação do build atual.
+- **O hitstop deixou o jogo um pouco mais fácil.** Bot ia até a onda 12–20, agora bate o
+  teto de 6 min na onda 19–21. Efeito colateral de feel, não de tuning — não mexi na
+  dificuldade nesta rodada de propósito, para a próxima leitura ser atribuível.
 - **Bot de ritmo.** Achou a onda 1 de 78s e a inversão da curva de tensão (dash =
   imunidade). Vive em tmp de job e morre com ele. Se a próxima rodada de tuning precisar,
   vai ser reescrito do zero — vale commitar em `src/harness/` quando isso acontecer a

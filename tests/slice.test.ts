@@ -17,15 +17,21 @@ const IN = (o: Partial<InputFrame> = {}): InputFrame => ({
   left: false,
   right: false,
   action: false,
+  restart: false,
   ...o,
 })
 const NONE = IN()
 const RIGHT = IN({ right: true })
 const SPACE = IN({ action: true })
+const RESTART = IN({ restart: true })
 
 const advance = (sim: Sim, ticks: number, input: InputFrame = NONE): void => {
   for (let i = 0; i < ticks; i++) sim.step(input)
 }
+
+/** Ids sintéticos altos: não colidem com os que a sim gera. */
+let nextId = 100000
+const id = (): number => nextId++
 
 /** `state()` devolve o objeto vivo — é a costura que deixa o teste montar cenas. */
 const mut = (sim: Sim): SimState => sim.state() as SimState
@@ -34,6 +40,7 @@ const mut = (sim: Sim): SimState => sim.state() as SimState
 const putEnemyOnPlayer = (sim: Sim, count = 1): void => {
   const s = mut(sim)
   s.enemies = Array.from({ length: count }, () => ({
+    id: id(),
     x: s.player.x,
     y: s.player.y,
     bornTick: s.tick,
@@ -48,6 +55,7 @@ const putEnemyOnPlayer = (sim: Sim, count = 1): void => {
 const putEnemyAhead = (sim: Sim, count = 1): void => {
   const s = mut(sim)
   s.enemies = Array.from({ length: count }, () => ({
+    id: id(),
     x: s.player.x + 20,
     y: s.player.y,
     bornTick: s.tick,
@@ -117,7 +125,7 @@ describe("dilatação — o tempo só anda quando você anda", () => {
   it("inimigos praticamente congelam com o jogador parado", () => {
     const sim = createSim(3, tuning)
     const s = mut(sim)
-    s.enemies = [{ x: 40, y: 40, bornTick: s.tick }]
+    s.enemies = [{ id: id(), x: 40, y: 40, bornTick: s.tick }]
     const before = { x: s.enemies[0]!.x, y: s.enemies[0]!.y }
     advance(sim, 60) // um segundo real parado
     const moved = Math.abs(s.enemies[0]!.x - before.x) + Math.abs(s.enemies[0]!.y - before.y)
@@ -174,8 +182,8 @@ describe("dash — um verbo, oito direções", () => {
     const d = tuning.dash.killRadius * 0.6
     // Um à frente do dash (direita), um exatamente atrás.
     s.enemies = [
-      { x: s.player.x + d, y: s.player.y, bornTick: 0 },
-      { x: s.player.x - d, y: s.player.y, bornTick: 0 },
+      { id: id(), x: s.player.x + d, y: s.player.y, bornTick: 0 },
+      { id: id(), x: s.player.x - d, y: s.player.y, bornTick: 0 },
     ]
     sim.step(RIGHT)
     expect(sim.state().kills).toBe(1)
@@ -187,7 +195,7 @@ describe("dash — um verbo, oito direções", () => {
     const sim = createSim(31, tuning)
     putEnemyOnPlayer(sim)
     // Dasha pra longe do inimigo: ele fica atrás, não morre, e encosta.
-    mut(sim).enemies = [{ x: sim.state().player.x - 4, y: sim.state().player.y, bornTick: 0 }]
+    mut(sim).enemies = [{ id: id(), x: sim.state().player.x - 4, y: sim.state().player.y, bornTick: 0 }]
     sim.step(RIGHT)
     expect(sim.state().player.invulnerable).toBe(true)
     expect(sim.state().player.invulnSkipCurrent).toBe(true)
@@ -208,7 +216,7 @@ describe("dash — um verbo, oito direções", () => {
   it("o corte respeita o killRadius", () => {
     const sim = createSim(7, tuning)
     const s = mut(sim)
-    s.enemies = [{ x: s.player.x, y: s.player.y - tuning.dash.killRadius * 3, bornTick: 0 }]
+    s.enemies = [{ id: id(), x: s.player.x, y: s.player.y - tuning.dash.killRadius * 3, bornTick: 0 }]
     sim.step(RIGHT)
     expect(sim.state().kills).toBe(0)
     expect(sim.state().enemies).toHaveLength(1)
@@ -374,7 +382,8 @@ describe("camada roguelite — arco dentro da run", () => {
     expect(sim.state().owned.reduce((a, b) => a + b, 0)).toBe(2)
 
     die(sim)
-    sim.step(SPACE) // reinício voluntário
+    advance(sim, tuning.feel.deadLockTicks + 1)
+    sim.step(RESTART) // reinício voluntário, tecla própria
     expect(sim.state().wave).toBe(1)
     expect(sim.state().owned.every((n) => n === 0)).toBe(true)
     expect(sim.state().lives).toBe(tuning.run.lives)
@@ -396,11 +405,13 @@ describe("o gate continua medível", () => {
     die(sim)
     expect(sim.state().phase).toBe("dead")
 
-    advance(sim, 1800) // trinta segundos reais de espera
+    // Espaço é a tecla que ele apertou a cada 20s durante a run inteira:
+    // aqui ela não pode valer, senão o gate mede reflexo em vez de vontade.
+    advance(sim, 1800, SPACE)
     expect(sim.state().phase).toBe("dead")
     expect(sim.state().runIndex).toBe(0)
 
-    sim.step(SPACE)
+    sim.step(RESTART)
     expect(sim.state().phase).toBe("run")
     expect(sim.state().runIndex).toBe(1) // é isto que o gate conta
   })
@@ -411,7 +422,8 @@ describe("o gate continua medível", () => {
     sim.step(SPACE)
     const reached = sim.state().wave
     die(sim)
-    sim.step(SPACE)
+    advance(sim, tuning.feel.deadLockTicks + 1)
+    sim.step(RESTART)
     expect(sim.state().bestWave).toBeGreaterThanOrEqual(reached)
     expect(sim.state().bestKills).toBeGreaterThan(0)
   })

@@ -36,3 +36,12 @@ Sem prosa. Se precisar de parágrafo, é decisão de arquitetura e vai pro `CLAU
 - 31/07 · i-frames · toque durante o dash vale até o fim do PRÓXIMO · consequência do corte direcional; sem isso, apanhar dashando daria dois ticks de invulnerabilidade
 - 31/07 · onda · abre com inimigos em campo · medido: tabuleiro vazio fazia a onda 1 durar 78s esperando spawn
 - 31/07 · ritmo · cota 16 +6 por onda · medido com bot em 4 configurações; 16/6 dá onda de 11→29s e morte entre a onda 12 e 20, contra escolha a cada 7s nas cotas baixas
+- 31/07 · gate · NÃO (1 de 3) · run-02: 5 min, 10 ondas limpas, 10 escolhas, morreu na onda 11 e não quis recomeçar; ritmo bateu com o bot, o problema não é o ritmo
+- 31/07 · tédio · diagnóstico do H: recompensa não é perceptível · 10 modificadores tomados em 5 min e ele diz "poucas powerups"; o que falta não é quantidade, é a escolha não mudar nada visível
+- 31/07 · defeito · o toque não é perceptível · "na primeira vida que perdi, nem percebi que perdi"; perder vida sem feedback é bug de comunicação, não falta de polimento
+- 31/07 · defeito · glitch visual entre dashes · suspeita: render pareia inimigos por índice e usa bornTick como chave, mas a abertura da onda nasce 3 no mesmo tick — chave não é única
+- 31/07 · bar · folga encolhendo não tem bar · H não tem referência externa; por TASTE-LOOP §11 este eixo é humano-only até aparecer uma, e não entra em rodada de loop
+- 31/07 · camada visual · H pediu, e por isso não é o viés · TASTE.md §2 alerta contra EU propor feel antes do sistema medido; aqui é o inverso — a recompensa é invisível, então torná-la perceptível É medir o sistema
+- 31/07 · gate · o input do gate é reflexo, não intenção · replay mostra espaço apertado 2,9s após a morte, mas H diz que não quis; mesma tecla que ele apertou a cada 20s por 5 min — tecla separada + trava
+- 31/07 · pool · 7 modificadores para 10 escolhas · ofertas até equilibradas (3–5 cada); "poucas powerups" é variedade, medida à parte de visibilidade
+- 31/07 · tema · aplicado agora, H sobrepôs "arte adiada" · "gostaria de ver a forma do jogo para decidir se está valendo a pena" é chamada de direção dele; primitivas continuam valendo

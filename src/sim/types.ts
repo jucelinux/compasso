@@ -9,7 +9,14 @@ export interface InputFrame {
   readonly down: boolean
   readonly left: boolean
   readonly right: boolean
+  /** Confirma escolha de modificador. */
   readonly action: boolean
+  /**
+   * Recomeça depois de morrer. Tecla PRÓPRIA de propósito: com `action` aqui, o
+   * reinício virava reflexo de quem passou a run inteira confirmando escolha —
+   * e o gate do projeto mede intenção, não reflexo.
+   */
+  readonly restart: boolean
 }
 
 export interface SimSnapshot {
@@ -49,6 +56,12 @@ export interface Tuning {
     readonly maxAlive: number
   }
   readonly pick: { readonly offerCount: number }
+  readonly feel: {
+    readonly hitFreezeTicks: number
+    readonly waveFreezeTicks: number
+    /** Ticks de tela de morte que ignoram input. Reflexo não conta como intenção. */
+    readonly deadLockTicks: number
+  }
   readonly harness: { readonly recordSeconds: number }
 }
 
@@ -62,9 +75,14 @@ export interface Tuning {
 export type Phase = "run" | "pick" | "dead"
 
 export interface Enemy {
+  /**
+   * Identidade estável. O render pareia quadro a quadro por isto — `bornTick`
+   * não serve, porque a abertura da onda nasce vários no mesmo tick e a
+   * interpolação acabava misturando inimigos diferentes.
+   */
+  id: number
   x: number
   y: number
-  /** Tick em que nasceu — o render usa pra casar pares e escalar a entrada. */
   bornTick: number
 }
 
@@ -103,6 +121,12 @@ export interface SimState {
   player: Player
   enemies: Enemy[]
   spawnTimer: number
+  /** Ticks de congelamento no impacto. Nada se move; a escala do tempo não muda. */
+  frozen: number
+  /** Toques que a MEMBRANA absorve nesta onda. */
+  shields: number
+  /** Ticks restantes de trava da tela de morte. */
+  deadLock: number
   /** Escala do tempo de mundo aplicada neste tick: 1 dashando, creep parado. */
   worldScale: number
   /** Quantos de cada modificador o jogador acumulou NESTA run. Índice = id. */

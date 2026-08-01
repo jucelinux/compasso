@@ -1,35 +1,43 @@
 import { Application, Container, Graphics, Text, TextStyle } from "pixi.js"
-import { MODIFIERS } from "../sim/modifiers.ts"
+import { MODIFIERS, MOD_SHIELD, applyModifiers } from "../sim/modifiers.ts"
 import type { SimState, Tuning } from "../sim/types.ts"
 
 /**
- * Render. Só primitivas: quadrado, losango, linha, cor sólida — decisão de
- * 31/07, restrição vira identidade.
+ * Render. Só primitivas — círculo, polígono, linha, cor sólida. A decisão de
+ * 31/07 continua valendo; o tema (célula imunológica na corrente sanguínea) é
+ * cor e forma, não asset.
  *
- * A sim anda em passos fixos de 1/60 de tempo de mundo; aqui só interpolamos
- * entre o estado anterior e o atual. Nada de lógica dependendo do relógio.
+ * A sim anda em passos fixos de 1/60 de tempo de mundo; aqui só interpolamos.
+ * Nada aqui decide nada — efeito que muda regra mora na sim.
  */
 export interface Renderer {
   draw(prev: SimState, cur: SimState, alpha: number): void
   destroy(): void
 }
 
-const COLOR_BG = 0x0b0b0f
-const COLOR_ARENA = 0x15151d
-const COLOR_PLAYER = 0xf2f2f7
-const COLOR_PLAYER_DASH = 0x6ee7ff
-const COLOR_PLAYER_HURT = 0xff4d6d
-const COLOR_ENEMY = 0xff5a3c
-const COLOR_DIM = 0x4a4a5a
+const COLOR_BG = 0x14070b
+const COLOR_PLASMA = 0x2a0d14
+const COLOR_CELL = 0xf4f7ff
+const COLOR_CELL_DASH = 0x7fe9ff
+const COLOR_NUCLEUS = 0x9fb4d8
+const COLOR_HURT = 0xff3b5c
+const COLOR_VIRUS = 0xff6a3d
+const COLOR_DIM = 0x7a4450
+const COLOR_SHIELD = 0x8affc8
 
 function lerp(a: number, b: number, t: number): number {
   return a + (b - a) * t
 }
 
-/** Losango: um quadrado girado. Continua sendo primitiva. */
-function diamond(g: Graphics, size: number, color: number): void {
-  const h = size / 2
-  g.clear().poly([0, -h, h, 0, 0, h, -h, 0]).fill(color)
+interface Particle {
+  x: number
+  y: number
+  vx: number
+  vy: number
+  life: number
+  max: number
+  color: number
+  size: number
 }
 
 export async function createRenderer(mount: HTMLElement, tuning: Tuning): Promise<Renderer> {
@@ -42,161 +50,223 @@ export async function createRenderer(mount: HTMLElement, tuning: Tuning): Promis
     autoDensity: true,
     resolution: window.devicePixelRatio || 1,
   })
-  app.ticker.stop() // o laço é nosso; o Pixi desenha quando mandamos
+  app.ticker.stop()
   mount.appendChild(app.canvas)
 
+  const world = new Container()
   const floor = new Graphics()
-  floor.rect(0, 0, tuning.arena.width, tuning.arena.height).fill(COLOR_ARENA)
-
+  const fx = new Graphics()
   const enemyLayer = new Container()
   const player = new Graphics()
-  const hud = new Container()
-  const pickLayer = new Container()
-  const deadLayer = new Container()
-  app.stage.addChild(floor, enemyLayer, player, hud, pickLayer, deadLayer)
+  world.addChild(floor, enemyLayer, player, fx)
 
-  const deadBg = new Graphics()
+  const hud = new Container()
+  const overlay = new Container()
+  app.stage.addChild(world, hud, overlay)
+
+  // --- plasma: manchas fixas, só pra o dash ter referência de deslocamento
+  floor.rect(0, 0, tuning.arena.width, tuning.arena.height).fill(COLOR_PLASMA)
+  for (let i = 0; i < 26; i++) {
+    const x = ((i * 97) % tuning.arena.width) + 11
+    const y = ((i * 61) % tuning.arena.height) + 7
+    floor.circle(x, y, 3 + (i % 4)).fill({ color: COLOR_BG, alpha: 0.55 })
+  }
+
+  const mono = (size: number, fill: number): TextStyle =>
+    new TextStyle({ fontFamily: "monospace", fontSize: size, fill })
+
+  const waveText = new Text({ text: "", style: mono(13, COLOR_CELL) })
+  waveText.position.set(10, 8)
+  const hudBars = new Graphics()
+  const buildText = new Text({ text: "", style: mono(10, COLOR_DIM) })
+  buildText.position.set(10, 40)
+  hud.addChild(hudBars, waveText, buildText)
+
+  // --- telas
+  const overlayBg = new Graphics()
+  const overlayTitle = new Text({ text: "", style: mono(15, COLOR_CELL) })
+  overlay.addChild(overlayBg, overlayTitle)
+
+  const cards = MODIFIERS.map(() => {
+    const box = new Graphics()
+    const name = new Text({ text: "", style: mono(12, COLOR_CELL) })
+    const blurb = new Text({ text: "", style: mono(10, COLOR_DIM) })
+    const group = new Container()
+    group.addChild(box, name, blurb)
+    group.visible = false
+    overlay.addChild(group)
+    return { group, box, name, blurb }
+  })
+
   const deadText = new Text({
     text: "",
     style: new TextStyle({
       fontFamily: "monospace",
       fontSize: 14,
-      fill: COLOR_PLAYER,
+      fill: COLOR_CELL,
       align: "center",
-      lineHeight: 22,
+      lineHeight: 24,
     }),
   })
-  deadLayer.addChild(deadBg, deadText)
+  overlay.addChild(deadText)
 
-  // --- HUD: vidas como quadradinhos, kills como número
-  const hudStyle = new TextStyle({ fontFamily: "monospace", fontSize: 13, fill: COLOR_DIM })
-  const killsText = new Text({ text: "", style: hudStyle })
-  killsText.position.set(10, 8)
-  const lives = new Graphics()
-  hud.addChild(lives, killsText)
-
-  // --- barra de tempo de mundo: a leitura mais direta da regra do jogo
-  const clockBar = new Graphics()
-  hud.addChild(clockBar)
-
-  // --- tela de escolha
-  const pickBg = new Graphics()
-  const pickTitle = new Text({
-    text: "",
-    style: new TextStyle({ fontFamily: "monospace", fontSize: 15, fill: COLOR_PLAYER }),
-  })
-  pickLayer.addChild(pickBg, pickTitle)
-  const cards = MODIFIERS.map(() => {
-    const box = new Graphics()
-    const name = new Text({
-      text: "",
-      style: new TextStyle({ fontFamily: "monospace", fontSize: 13, fill: COLOR_PLAYER }),
-    })
-    const blurb = new Text({
-      text: "",
-      style: new TextStyle({ fontFamily: "monospace", fontSize: 11, fill: COLOR_DIM }),
-    })
-    const group = new Container()
-    group.addChild(box, name, blurb)
-    group.visible = false
-    pickLayer.addChild(group)
-    return { group, box, name, blurb }
-  })
+  // --- vírus: polígono espinhoso, gerado uma vez por variante
+  const virusShapes: number[][] = []
+  for (let v = 0; v < 4; v++) {
+    const pts: number[] = []
+    const spikes = 7
+    for (let i = 0; i < spikes * 2; i++) {
+      // Ângulos de uma tabela fixa: o render pode usar trigonometria à vontade,
+      // mas manter isto determinístico deixa a silhueta estável entre sessões.
+      const a = (i / (spikes * 2)) * Math.PI * 2
+      const r = (i % 2 === 0 ? 1 : 0.52) * (1 + ((v * 7 + i) % 3) * 0.06)
+      pts.push(Math.cos(a) * r, Math.sin(a) * r)
+    }
+    virusShapes.push(pts)
+  }
 
   const enemyPool: Graphics[] = []
-  const enemyFor = (i: number): Graphics => {
+  const enemyFor = (i: number, variant: number): Graphics => {
     let g = enemyPool[i]
     if (g === undefined) {
       g = new Graphics()
-      diamond(g, tuning.enemy.size, COLOR_ENEMY)
       enemyPool[i] = g
       enemyLayer.addChild(g)
     }
+    const half = tuning.enemy.size / 2
+    const pts = virusShapes[variant % virusShapes.length]!.map((p) => p * half)
+    g.clear().poly(pts).fill(COLOR_VIRUS).stroke({ width: 1, color: 0xffb08a, alpha: 0.5 })
     return g
   }
 
+  // --- partículas: puramente decorativas, fora da sim
+  let particles: Particle[] = []
+  const burst = (x: number, y: number, color: number, n: number, speed: number): void => {
+    for (let i = 0; i < n; i++) {
+      const a = (i / n) * Math.PI * 2
+      particles.push({
+        x,
+        y,
+        vx: Math.cos(a) * speed * (0.6 + (i % 3) * 0.2),
+        vy: Math.sin(a) * speed * (0.6 + (i % 3) * 0.2),
+        life: 1,
+        max: 1,
+        color,
+        size: 2 + (i % 3),
+      })
+    }
+  }
+
+  let seenIds = new Set<number>()
+  let prevLives = -1
+  let flash = 0
+  let shake = 0
+
   const drawPlayer = (cur: SimState, x: number, y: number): void => {
     const dashing = cur.player.dashTicks > 0
-    const color = cur.player.invulnerable
-      ? COLOR_PLAYER_HURT
-      : dashing
-        ? COLOR_PLAYER_DASH
-        : COLOR_PLAYER
     const size = tuning.player.size
+    const stats = applyModifiers(tuning, cur.owned)
     player.clear()
-    // Rastro do dash: uma linha atrás, não um sprite.
+
+    // Leque de corte: o jogador VÊ o que o dash alcança, e vê ESTEIRA e CORTE
+    // LARGO mudarem o desenho. Era a recompensa invisível.
     if (dashing) {
+      const half = Math.acos(Math.max(-1, Math.min(1, stats.killArc)))
+      const base = Math.atan2(cur.player.dashDy, cur.player.dashDx)
+      const pts = [x, y]
+      for (let i = 0; i <= 12; i++) {
+        const a = base - half + (2 * half * i) / 12
+        pts.push(x + Math.cos(a) * stats.killRadius, y + Math.sin(a) * stats.killRadius)
+      }
+      player.poly(pts).fill({ color: COLOR_CELL_DASH, alpha: 0.16 })
       player
-        .moveTo(x - cur.player.dashDx * 26, y - cur.player.dashDy * 26)
+        .moveTo(x - cur.player.dashDx * 30, y - cur.player.dashDy * 30)
         .lineTo(x, y)
-        .stroke({ width: 3, color: COLOR_PLAYER_DASH, alpha: 0.5 })
+        .stroke({ width: 4, color: COLOR_CELL_DASH, alpha: 0.4 })
     }
-    player.rect(x - size / 2, y - size / 2, size, size).fill(color)
-    // Piscada dos i-frames: contorno, sem alterar a silhueta.
-    if (cur.player.invulnerable && cur.tick % 12 < 6) {
+
+    // Recuperação: um anel que esvazia. A folga encolhendo fica visível.
+    if (!dashing && cur.player.recoverTicks > 0) {
       player
-        .rect(x - size / 2 - 3, y - size / 2 - 3, size + 6, size + 6)
-        .stroke({ width: 1, color: COLOR_PLAYER_HURT, alpha: 0.8 })
+        .circle(x, y, size / 2 + 5)
+        .stroke({ width: 2, color: COLOR_DIM, alpha: 0.7 })
     }
+
+    if (cur.shields > 0) {
+      player.circle(x, y, size / 2 + 4).stroke({ width: 2, color: COLOR_SHIELD, alpha: 0.9 })
+    }
+
+    const body = cur.player.invulnerable && cur.tick % 8 < 4 ? COLOR_HURT : dashing ? COLOR_CELL_DASH : COLOR_CELL
+    player.circle(x, y, size / 2).fill(body)
+    player.circle(x + 1, y - 1, size / 5).fill({ color: COLOR_NUCLEUS, alpha: 0.85 })
   }
 
   const drawHud = (cur: SimState): void => {
-    lives.clear()
-    for (let i = 0; i < Math.max(0, cur.lives); i++) {
-      lives.rect(tuning.arena.width - 16 - i * 12, 10, 8, 8).fill(COLOR_PLAYER)
-    }
-    killsText.text = `onda ${cur.wave}   ${cur.waveKills}/${cur.quota}${
+    waveText.text = `ONDA ${cur.wave}   ${cur.waveKills}/${cur.quota}${
       cur.bestWave > 1 ? `   melhor ${cur.bestWave}` : ""
     }`
 
-    // Progresso da onda: uma barra que só anda quando você corta.
-    lives.rect(10, 26, ((tuning.arena.width - 20) * cur.waveKills) / cur.quota, 2).fill(COLOR_DIM)
-
-    // Largura proporcional à velocidade do mundo agora: creep é quase nada.
-    // Ela cresce a cada onda — é a leitura direta da folga encolhendo.
-    // Fora do jogo `worldScale` fica com o último valor da run; não mostrar.
-    clockBar.clear()
-    if (cur.phase === "run") {
-      const w = (tuning.arena.width - 20) * Math.min(1, cur.worldScale)
-      clockBar.rect(10, tuning.arena.height - 8, w, 3).fill(COLOR_PLAYER_DASH)
+    hudBars.clear()
+    for (let i = 0; i < Math.max(0, cur.lives); i++) {
+      hudBars.circle(tuning.arena.width - 14 - i * 14, 14, 5).fill(COLOR_CELL)
     }
+    for (let i = 0; i < cur.shields; i++) {
+      hudBars
+        .circle(tuning.arena.width - 14 - (cur.lives + i) * 14, 14, 6)
+        .stroke({ width: 2, color: COLOR_SHIELD })
+    }
+    hudBars
+      .rect(10, 28, ((tuning.arena.width - 20) * cur.waveKills) / cur.quota, 3)
+      .fill(COLOR_VIRUS)
+
+    if (cur.phase === "run") {
+      hudBars
+        .rect(10, tuning.arena.height - 8, (tuning.arena.width - 20) * Math.min(1, cur.worldScale), 3)
+        .fill(COLOR_CELL_DASH)
+    }
+
+    // A build inteira, sempre visível: escolher passa a ter memória.
+    const owned = cur.owned
+      .map((n, i) => (n > 0 ? `${MODIFIERS[i]!.name}${n > 1 ? `×${n}` : ""}` : null))
+      .filter(Boolean)
+    buildText.text = owned.length > 0 ? owned.join("  ·  ") : ""
   }
 
-  const drawDead = (cur: SimState): void => {
-    const on = cur.phase === "dead"
-    deadLayer.visible = on
+  const drawOverlay = (cur: SimState): void => {
+    const on = cur.phase !== "run"
+    overlay.visible = on
+    for (const c of cards) c.group.visible = false
+    deadText.visible = false
     if (!on) return
-    deadBg
+
+    overlayBg
       .clear()
       .rect(0, 0, tuning.arena.width, tuning.arena.height)
       .fill({ color: COLOR_BG, alpha: 0.9 })
-    deadText.text =
-      `parou na onda ${cur.wave}, com ${cur.kills}.\n` +
-      `os modificadores ficam aqui.\n\n` +
-      `espaço pra começar de novo`
-    deadText.position.set(
-      (tuning.arena.width - deadText.width) / 2,
-      (tuning.arena.height - deadText.height) / 2,
-    )
-  }
 
-  const drawPick = (cur: SimState): void => {
-    const on = cur.phase === "pick"
-    pickLayer.visible = on
-    if (!on) return
+    if (cur.phase === "dead") {
+      overlayTitle.text = ""
+      deadText.visible = true
+      deadText.text =
+        `A INFECÇÃO VENCEU\n\n` +
+        `onda ${cur.wave} · ${cur.kills} vírus\n` +
+        (cur.bestWave > cur.wave ? `melhor: onda ${cur.bestWave}\n` : "") +
+        `\nR ou ENTER pra outra`
+      deadText.position.set(
+        (tuning.arena.width - deadText.width) / 2,
+        (tuning.arena.height - deadText.height) / 2,
+      )
+      return
+    }
 
-    pickBg
-      .clear()
-      .rect(0, 0, tuning.arena.width, tuning.arena.height)
-      .fill({ color: COLOR_BG, alpha: 0.88 })
-    pickTitle.text = `onda ${cur.wave} limpa.  ←/→ escolhe, espaço confirma`
-    pickTitle.position.set(
-      (tuning.arena.width - pickTitle.width) / 2,
-      tuning.arena.height / 2 - 92,
+    overlayTitle.text = `ONDA ${cur.wave} CONTIDA   ←/→ escolhe · espaço confirma`
+    overlayTitle.position.set(
+      (tuning.arena.width - overlayTitle.width) / 2,
+      tuning.arena.height / 2 - 96,
     )
 
-    const cardW = 168
-    const cardH = 96
+    const cardW = 172
+    const cardH = 100
     const gap = 14
     const total = cur.offer.length * cardW + (cur.offer.length - 1) * gap
     let x = (tuning.arena.width - total) / 2
@@ -204,21 +274,21 @@ export async function createRenderer(mount: HTMLElement, tuning: Tuning): Promis
 
     for (const [i, card] of cards.entries()) {
       const id = cur.offer[i]
-      card.group.visible = id !== undefined
       if (id === undefined) continue
       const mod = MODIFIERS[id]!
       const selected = i === cur.cursor
+      const owned = cur.owned[mod.id] ?? 0
+      card.group.visible = true
       card.box
         .clear()
         .rect(0, 0, cardW, cardH)
-        .fill({ color: COLOR_ARENA, alpha: 1 })
-        .stroke({ width: selected ? 2 : 1, color: selected ? COLOR_PLAYER_DASH : COLOR_DIM })
-      card.name.text = mod.name
+        .fill({ color: COLOR_PLASMA, alpha: 1 })
+        .stroke({ width: selected ? 2 : 1, color: selected ? COLOR_CELL_DASH : COLOR_DIM })
+      if (mod.id === MOD_SHIELD) card.box.circle(cardW - 24, 24, 7).stroke({ width: 2, color: COLOR_SHIELD })
+      card.name.text = owned > 0 ? `${mod.name} ×${owned + 1}` : mod.name
       card.blurb.text = mod.blurb
-      const owned = cur.owned[mod.id] ?? 0
-      if (owned > 0) card.name.text = `${mod.name} ×${owned + 1}`
-      card.name.position.set(14, 22)
-      card.blurb.position.set(14, 46)
+      card.name.position.set(14, 26)
+      card.blurb.position.set(14, 52)
       card.group.position.set(x, y)
       x += cardW + gap
     }
@@ -226,31 +296,71 @@ export async function createRenderer(mount: HTMLElement, tuning: Tuning): Promis
 
   return {
     draw(prev, cur, alpha) {
-      drawPlayer(cur, lerp(prev.player.x, cur.player.x, alpha), lerp(prev.player.y, cur.player.y, alpha))
+      // --- eventos, deduzidos por diff de id. A sim não guarda efeito.
+      const live = new Set(cur.enemies.map((e) => e.id))
+      for (const e of prev.enemies) {
+        if (!live.has(e.id) && seenIds.has(e.id)) burst(e.x, e.y, COLOR_VIRUS, 7, 2.6)
+      }
+      seenIds = live
 
+      if (prevLives >= 0 && cur.lives < prevLives) {
+        flash = 1
+        shake = 7
+        burst(cur.player.x, cur.player.y, COLOR_HURT, 16, 4)
+      }
+      prevLives = cur.lives
+
+      const frozen = cur.frozen > 0
+      // Congelado, o mundo não interpola — o quadro trava junto com a sim.
+      const t = frozen ? 0 : alpha
+      drawPlayer(cur, lerp(prev.player.x, cur.player.x, t), lerp(prev.player.y, cur.player.y, t))
+
+      const prevById = new Map(prev.enemies.map((e) => [e.id, e]))
       for (let i = 0; i < cur.enemies.length; i++) {
         const e = cur.enemies[i]!
-        const g = enemyFor(i)
-        // Inimigos entram e saem da lista; casar por índice interpolaria entre
-        // dois inimigos diferentes. Só interpola quando o par bate pelo bornTick.
-        const p = prev.enemies[i]
-        const same = p !== undefined && p.bornTick === e.bornTick
+        const g = enemyFor(i, e.id)
+        const p = prevById.get(e.id)
         g.visible = true
-        g.position.set(
-          same ? lerp(p.x, e.x, alpha) : e.x,
-          same ? lerp(p.y, e.y, alpha) : e.y,
-        )
-        // Nasce pequeno: 10 ticks de escala, o suficiente pra não aparecer do nada.
-        const age = Math.min(1, (cur.tick - e.bornTick) / 10)
-        g.scale.set(0.3 + 0.7 * age)
+        g.position.set(p ? lerp(p.x, e.x, t) : e.x, p ? lerp(p.y, e.y, t) : e.y)
+        const age = Math.min(1, (cur.tick - e.bornTick) / 12)
+        g.scale.set(0.25 + 0.75 * age)
+        g.rotation = e.id * 0.7 + cur.tick * 0.012
       }
-      for (let i = cur.enemies.length; i < enemyPool.length; i++) {
-        enemyPool[i]!.visible = false
+      for (let i = cur.enemies.length; i < enemyPool.length; i++) enemyPool[i]!.visible = false
+
+      // --- partículas e telas de impacto
+      fx.clear()
+      const next: Particle[] = []
+      for (const q of particles) {
+        if (!frozen) {
+          q.x += q.vx
+          q.y += q.vy
+          q.vx *= 0.9
+          q.vy *= 0.9
+          q.life -= 0.055
+        }
+        if (q.life > 0) {
+          fx.circle(q.x, q.y, q.size * q.life).fill({ color: q.color, alpha: q.life })
+          next.push(q)
+        }
       }
+      particles = next
+
+      if (flash > 0) {
+        fx.rect(0, 0, tuning.arena.width, tuning.arena.height).fill({
+          color: COLOR_HURT,
+          alpha: flash * 0.35,
+        })
+        flash -= 0.09
+      }
+      world.position.set(
+        shake > 0 ? (((cur.tick * 37) % 7) - 3) * (shake / 7) : 0,
+        shake > 0 ? (((cur.tick * 53) % 7) - 3) * (shake / 7) : 0,
+      )
+      if (shake > 0) shake -= 0.6
 
       drawHud(cur)
-      drawPick(cur)
-      drawDead(cur)
+      drawOverlay(cur)
       app.render()
     },
     destroy() {
