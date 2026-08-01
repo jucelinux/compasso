@@ -19,7 +19,9 @@ log de decisão morre.
 - **O bot é bom demais para medir morte.** Promovido para `src/harness/bot.ts` (`npm run
   pace`) e agora defende o organismo. Mede duração de onda muito bem, mas sobrevive 6 min
   em 3 de 5 seeds porque nunca erra a mira. A duração de RUN é estimada pela razão medida
-  contra a run-03 (o humano leva ~2,7x o tempo do bot por onda), não medida direto.
+  contra a run-03 (o humano leva ~2,7x o tempo do bot por onda), não medida direto. Nas 5
+  seeds a morte cai em 64s, 66s, 262s, 324s e nunca — variância grande demais para tunar
+  duração de run contra ele. Só o replay do humano resolve.
 - **Escolha a cada ~18s.** Melhor que os 7s da cota baixa, mas 12–20 escolhas por run
   ainda pode ser interrupção demais. Medir depois que o humano jogar.
 

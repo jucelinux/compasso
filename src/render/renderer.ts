@@ -129,6 +129,7 @@ export async function createRenderer(mount: HTMLElement, tuning: Tuning): Promis
   }
 
   const enemyPool: Graphics[] = []
+  const enemyKindAt: string[] = []
   /**
    * Cada tipo tem cor, número de pontas e tamanho próprios. Ler a ameaça pela
    * silhueta é o que faz a variedade valer — se todos parecessem iguais, ter
@@ -141,6 +142,10 @@ export async function createRenderer(mount: HTMLElement, tuning: Tuning): Promis
       enemyPool[i] = g
       enemyLayer.addChild(g)
     }
+    // Só redesenha quando o slot troca de tipo: com 48 vírus em campo, refazer
+    // a geometria todo frame custaria justamente onde o jogo é sobre timing.
+    if (enemyKindAt[i] === kind) return g
+    enemyKindAt[i] = kind
     const style = KIND_STYLE[kind] ?? KIND_STYLE["comum"]!
     const spec = tuning.enemy.kinds[kind]
     const half = (tuning.enemy.size * (spec?.sizeScale ?? 1)) / 2

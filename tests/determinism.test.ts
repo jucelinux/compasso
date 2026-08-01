@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest"
 import { resolve } from "node:path"
 import { loadReplay, loadTuning, projectRoot } from "../src/harness/loadTuning.ts"
 import { runReplay } from "../src/harness/runReplay.ts"
+import { replayInputs } from "../src/harness/replay.ts"
+import { createSim } from "../src/sim/sim.ts"
 import type { Tuning } from "../src/sim/types.ts"
 
 /**
@@ -30,14 +32,14 @@ const RUN_01_HASH = "c08cf38c"
  * morte → reinício sob as regras atuais; só uma gravação nova resolve.
  */
 const RUN_02 = resolve(projectRoot, "replays", "run-02.json")
-const RUN_02_HASH = "a29a14d8"
+const RUN_02_HASH = "bddeb007"
 
 /**
  * Terceira run real, build atual: 5,7 min, 7 ondas, uma morte, 84s na tela de
  * morte sem reiniciar. É a fixture que cobre morte sob as regras vigentes.
  */
 const RUN_03 = resolve(projectRoot, "replays", "run-03.json")
-const RUN_03_HASH = "3f4f1d5b"
+const RUN_03_HASH = "4fc3d1b6"
 
 const smoke = () => loadReplay(SMOKE)
 const tuning = () => loadTuning()
@@ -74,9 +76,20 @@ describe("determinismo", () => {
   })
 
   it("terceira run humana: bate com o baseline e atravessa a morte", () => {
-    const result = runReplay(loadReplay(RUN_03), tuning())
+    const replay = loadReplay(RUN_03)
+    const result = runReplay(replay, tuning())
     expect(result.finalHash).toBe(RUN_03_HASH)
     expect(result.ticks).toBeGreaterThan(19000)
+
+    // O nome promete morte: então o teste verifica, em vez de afirmar. Foi assim
+    // que a run-01 ficou meses alegando cobrir algo que ela já não cobria.
+    const sim = createSim(replay.seed, tuning())
+    const phases = new Set<string>()
+    for (const input of replayInputs(replay)) {
+      sim.step(input)
+      phases.add(sim.state().phase)
+    }
+    expect(phases.has("dead"), "run-03 não alcança mais a morte").toBe(true)
   })
 
   it("hash evolui — não é constante", () => {

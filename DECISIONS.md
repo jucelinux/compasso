@@ -57,3 +57,5 @@ Sem prosa. Se precisar de parágrafo, é decisão de arquitetura e vai pro `CLAU
 - 31/07 · carência · 4 ticks sem machucar ao nascer · trava o mesmo bug pela raiz; a 10 ticks o bot virava imortal, a 4 continua mortal
 - 31/07 · bot · promovido para src/harness/bot.ts · segunda vez que precisei dele; agora defende o organismo, senão a medição só media a burrice dele
 - 31/07 · cota · 13 +4 por onda · ondas de 7-12s no bot ≈ 20-30s no humano; alvo de run de ~2 min pela razão medida na run-03
+- 31/07 · organismo · só o invasor come célula · sem a guarda todo vírus comum comia de passagem indo pro jogador; o organismo cairia por motivo ilegível e a silhueta verde perderia sentido
+- 31/07 · medição · duração de ONDA é medida, duração de RUN é estimada · bot mede onda muito bem (7-11s) mas morre em 64s ou nunca conforme a seed; o alvo de 2 min sai da razão 2,7x da run-03, não de medição direta

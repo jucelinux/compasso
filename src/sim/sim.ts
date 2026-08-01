@@ -374,9 +374,14 @@ export function createSim(seed: number, tuning: Tuning): Sim {
         }
       }
 
-      // --- o organismo: quem encosta numa célula tira 1 de vida dela e morre junto
+      // --- o organismo: SÓ o invasor come célula.
+      //
+      // Sem esta guarda todo vírus comum comia célula de passagem — eles nascem
+      // nas bordas e cruzam os cantos indo pro jogador. O organismo cairia por
+      // um motivo que o jogador não consegue ler na tela, e a silhueta verde de
+      // três pontas deixaria de significar alguma coisa.
       let consumed = false
-      for (const c of s.cells) {
+      for (const c of kindOf(e.kind).hunts === "cell" ? s.cells : []) {
         if (c.hp <= 0) continue
         const cx = c.x - e.x
         const cy = c.y - e.y
