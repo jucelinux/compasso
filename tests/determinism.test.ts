@@ -32,6 +32,13 @@ const RUN_01_HASH = "979944f3"
 const RUN_02 = resolve(projectRoot, "replays", "run-02.json")
 const RUN_02_HASH = "6da6d297"
 
+/**
+ * Terceira run real, build atual: 5,7 min, 7 ondas, uma morte, 84s na tela de
+ * morte sem reiniciar. É a fixture que cobre morte sob as regras vigentes.
+ */
+const RUN_03 = resolve(projectRoot, "replays", "run-03.json")
+const RUN_03_HASH = "b0f7692a"
+
 const smoke = () => loadReplay(SMOKE)
 const tuning = () => loadTuning()
 
@@ -64,6 +71,12 @@ describe("determinismo", () => {
     const result = runReplay(loadReplay(RUN_02), tuning())
     expect(result.finalHash).toBe(RUN_02_HASH)
     expect(result.ticks).toBeGreaterThan(17000)
+  })
+
+  it("terceira run humana: bate com o baseline e atravessa a morte", () => {
+    const result = runReplay(loadReplay(RUN_03), tuning())
+    expect(result.finalHash).toBe(RUN_03_HASH)
+    expect(result.ticks).toBeGreaterThan(19000)
   })
 
   it("hash evolui — não é constante", () => {

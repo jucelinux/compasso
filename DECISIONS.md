@@ -44,4 +44,6 @@ Sem prosa. Se precisar de parágrafo, é decisão de arquitetura e vai pro `CLAU
 - 31/07 · camada visual · H pediu, e por isso não é o viés · TASTE.md §2 alerta contra EU propor feel antes do sistema medido; aqui é o inverso — a recompensa é invisível, então torná-la perceptível É medir o sistema
 - 31/07 · gate · o input do gate é reflexo, não intenção · replay mostra espaço apertado 2,9s após a morte, mas H diz que não quis; mesma tecla que ele apertou a cada 20s por 5 min — tecla separada + trava
 - 31/07 · pool · 7 modificadores para 10 escolhas · ofertas até equilibradas (3–5 cada); "poucas powerups" é variedade, medida à parte de visibilidade
-- 31/07 · tema · aplicado agora, H sobrepôs "arte adiada" · "gostaria de ver a forma do jogo para decidir se está valendo a pena" é chamada de direção dele; primitivas continuam valendo
+- 31/07 · tema · aplicado agora, H sobrepôs "arte adiada" · "gostaria de ver a forma do jogo para decidir se está valendo a pena" é chamada de direção dele; primitivas continuam valendo- 31/07 · camada visual · aprovada · H: "ficou legal"; tema, hitstop, leque de corte e build visível entregues
+- 31/07 · gate · run-03: morreu na onda 8, 84s na tela de morte, ZERO reinício · com tecla própria e trava o sinal é confiável; se conta como 2 de 3 é chamada do H, ainda em aberto
+- 31/07 · processo · H quer mais progresso por rodada · rodadas maiores, menos idas e vindas; rodada de camada visual foi grande e ainda assim ele sentiu falta de avanço
