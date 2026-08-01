@@ -13,29 +13,44 @@ export function fnv1a(bytes: Uint8Array): string {
 
 /** Empacotador incremental: floats como f64 little-endian, inteiros como u32. */
 export class Packer {
-  private readonly view: DataView
-  private readonly bytes: Uint8Array
+  private view: DataView
+  private bytes: Uint8Array
   private offset = 0
 
-  constructor(byteLength: number) {
+  constructor(byteLength = 256) {
     const buffer = new ArrayBuffer(byteLength)
     this.view = new DataView(buffer)
     this.bytes = new Uint8Array(buffer)
   }
 
+  /** Cresce dobrando. O número de inimigos varia; o buffer não pode limitar o hash. */
+  private ensure(extra: number): void {
+    if (this.offset + extra <= this.bytes.length) return
+    let size = this.bytes.length
+    while (size < this.offset + extra) size *= 2
+    const buffer = new ArrayBuffer(size)
+    const bytes = new Uint8Array(buffer)
+    bytes.set(this.bytes)
+    this.view = new DataView(buffer)
+    this.bytes = bytes
+  }
+
   f64(v: number): this {
+    this.ensure(8)
     this.view.setFloat64(this.offset, v, true)
     this.offset += 8
     return this
   }
 
   u32(v: number): this {
+    this.ensure(4)
     this.view.setUint32(this.offset, v >>> 0, true)
     this.offset += 4
     return this
   }
 
   u8(v: number): this {
+    this.ensure(1)
     this.view.setUint8(this.offset, v & 0xff)
     this.offset += 1
     return this

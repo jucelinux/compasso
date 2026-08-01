@@ -11,11 +11,7 @@ export interface Rng {
   nextU32(): number
   /** `[0, 1)` — 32 bits de mantissa, derivado de `nextU32`. */
   nextFloat(): number
-  /**
-   * `[min, max)` sobre inteiros. Módulo puro: sem viés só quando o intervalo
-   * divide 2³² (2, 4, 8, 16...). Para escolher 3 de 5 modificadores depois,
-   * trocar por rejection sampling.
-   */
+  /** `[min, max)` sobre inteiros, sem viés — rejection sampling. */
   nextInt(min: number, max: number): number
   /** Estado interno, para entrar no hash da sim. */
   state(): number
@@ -34,10 +30,16 @@ export function createRng(seed: number): Rng {
 
   const nextFloat = (): number => nextU32() / 4294967296
 
-  return {
-    nextU32,
-    nextFloat,
-    nextInt: (min, max) => min + (nextU32() % (max - min)),
-    state: () => a >>> 0,
+  const nextInt = (min: number, max: number): number => {
+    const span = max - min
+    if (span <= 1) return min
+    // Descarta a cauda que não cabe num número inteiro de spans. Sem isso, um
+    // sorteio de 3 entre 5 modificadores sai enviesado — 5 não divide 2³².
+    const limit = 4294967296 - (4294967296 % span)
+    let v = nextU32()
+    while (v >= limit) v = nextU32()
+    return min + (v % span)
   }
+
+  return { nextU32, nextFloat, nextInt, state: () => a >>> 0 }
 }

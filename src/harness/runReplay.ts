@@ -1,4 +1,4 @@
-import { createSim, ENTITY_COUNT } from "../sim/sim.ts"
+import { createSim } from "../sim/sim.ts"
 import type { Tuning } from "../sim/types.ts"
 import { replayInputs, tuningHash, type Replay } from "./replay.ts"
 
@@ -31,7 +31,7 @@ export function runReplay(replay: Replay, tuning: Tuning): ReplayResult {
     const simMs = performance.now() - t0
     const snap = sim.snapshot()
     hashes.push(snap.hash)
-    metrics.push({ tick: snap.tick, simMs, entityCount: ENTITY_COUNT })
+    metrics.push({ tick: snap.tick, simMs, entityCount: sim.state().enemies.length + 1 })
   }
 
   return {

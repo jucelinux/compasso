@@ -9,12 +9,6 @@ import { createRenderer } from "./render/renderer.ts"
 const tuning = tuningJson as Tuning
 const STEP = 1 / tuning.sim.hz
 
-/**
- * Escala de tempo de mundo. Fica em 1.0 na rodada zero: multiplica quantos
- * passos de sim ocorrem por frame real, sem mexer no framerate do render.
- */
-const timeScale = 1.0
-
 const seed = Number(new URLSearchParams(location.search).get("seed") ?? 1234) | 0
 
 const mount = document.getElementById("app")!
@@ -37,8 +31,10 @@ const MAX_FRAME_SECONDS = 0.25
 function frame(now: number): void {
   const elapsed = Math.min((now - last) / 1000, MAX_FRAME_SECONDS)
   last = now
-  accumulator += elapsed * timeScale
+  accumulator += elapsed
 
+  // A sim SEMPRE anda a 60Hz. A dilatação do tempo é regra de jogo, dentro da
+  // sim — mudar a taxa do laço aqui quebraria o replay em silêncio.
   while (accumulator >= STEP) {
     prev = clone(sim.state())
     const input = keyboard.frame()
@@ -51,9 +47,8 @@ function frame(now: number): void {
 
   const s = sim.state()
   hud.textContent =
-    `seed ${seed}  tick ${s.tick}  hash ${sim.snapshot().hash}\n` +
-    `colisões ${s.collisions}  buffer ${recorder.length}t\n` +
-    `WASD/setas mover · espaço reposiciona · F9 últimos ${tuning.harness.recordSeconds}s · shift+F9 run inteira`
+    `run ${s.runIndex + 1} · seed ${seed} · tick ${s.tick} · ${sim.snapshot().hash}\n` +
+    `WASD/setas dasham · F9 grava ${tuning.harness.recordSeconds}s · shift+F9 run inteira`
 
   requestAnimationFrame(frame)
 }

@@ -6,13 +6,31 @@
     "width": 640,
     "height": 360
   },
-  "player": {
-    "size": 24,
-    "speed": 180
+  "time": {
+    "creep": 0.05
   },
-  "drifter": {
-    "size": 18,
-    "speed": 120
+  "player": {
+    "size": 18
+  },
+  "dash": {
+    "durationTicks": 9,
+    "recoveryTicks": 7,
+    "speed": 620,
+    "killRadius": 26
+  },
+  "run": {
+    "lives": 3
+  },
+  "enemy": {
+    "size": 16,
+    "speed": 74,
+    "spawnIntervalSeconds": 1.0,
+    "spawnRampPerKill": 0.012,
+    "minSpawnIntervalSeconds": 0.28,
+    "maxAlive": 48
+  },
+  "pick": {
+    "offerCount": 3
   },
   "harness": {
     "recordSeconds": 30

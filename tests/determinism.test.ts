@@ -9,7 +9,7 @@ import type { Tuning } from "../src/sim/types.ts"
  */
 
 const SMOKE = resolve(projectRoot, "replays", "smoke.json")
-const BASELINE_HASH = "e65d236b"
+const BASELINE_HASH = "8aa9d583"
 
 const smoke = () => loadReplay(SMOKE)
 const tuning = () => loadTuning()
@@ -42,12 +42,12 @@ describe("determinismo", () => {
 describe("tuning.json", () => {
   it("muda o comportamento sem editar código", () => {
     const base = runReplay(smoke(), tuning())
-    const faster: Tuning = { ...tuning(), player: { ...tuning().player, speed: 240 } }
+    const faster: Tuning = { ...tuning(), dash: { ...tuning().dash, speed: 900 } }
     expect(runReplay(smoke(), faster).finalHash).not.toBe(base.finalHash)
   })
 
   it("divergência de tuningHash é aviso, não erro", () => {
-    const other: Tuning = { ...tuning(), player: { ...tuning().player, speed: 240 } }
+    const other: Tuning = { ...tuning(), dash: { ...tuning().dash, speed: 900 } }
     const result = runReplay(smoke(), other)
     expect(result.tuningMatches).toBe(false)
     expect(result.ticks).toBe(smoke().inputs.length)

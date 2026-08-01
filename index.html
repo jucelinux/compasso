@@ -14,6 +14,8 @@
         overflow: hidden;
       }
       #app { display: grid; place-items: center; height: 100%; }
+      /* Arena é 640x360 fixos na sim; aqui só escala mantendo a proporção. */
+      #app canvas { width: min(100vw, 177.78vh); height: auto; display: block; }
       #hud {
         position: fixed;
         top: 8px;

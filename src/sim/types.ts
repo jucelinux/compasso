@@ -20,30 +20,70 @@ export interface SimSnapshot {
 export interface Tuning {
   readonly sim: { readonly hz: number }
   readonly arena: { readonly width: number; readonly height: number }
-  readonly player: { readonly size: number; readonly speed: number }
-  readonly drifter: { readonly size: number; readonly speed: number }
+  readonly time: { readonly creep: number }
+  readonly player: { readonly size: number }
+  readonly dash: {
+    readonly durationTicks: number
+    readonly recoveryTicks: number
+    readonly speed: number
+    readonly killRadius: number
+  }
+  readonly run: { readonly lives: number }
+  readonly enemy: {
+    readonly size: number
+    readonly speed: number
+    readonly spawnIntervalSeconds: number
+    readonly spawnRampPerKill: number
+    readonly minSpawnIntervalSeconds: number
+    readonly maxAlive: number
+  }
+  readonly pick: { readonly offerCount: number }
   readonly harness: { readonly recordSeconds: number }
 }
 
-export interface Body {
+/** `run` = jogando. `pick` = morreu, escolhendo o modificador da próxima run. */
+export type Phase = "run" | "pick"
+
+export interface Enemy {
   x: number
   y: number
-  vx: number
-  vy: number
-  size: number
+  /** Tick em que nasceu — só para o render escalonar a entrada. Entra no hash. */
+  bornTick: number
 }
 
-/**
- * Cena descartável de validação (HARNESS.md §5): um quadrado que se move e colide
- * com outro quadrado. Apagar quando o jogo de verdade chegar.
- */
+export interface Player {
+  x: number
+  y: number
+  /** Ticks restantes do dash atual. `0` = parado, e o mundo anda a creep. */
+  dashTicks: number
+  /** Ticks até poder dashar de novo. É a pausa que devolve o creep ao jogo. */
+  recoverTicks: number
+  dashDx: number
+  dashDy: number
+  /** Desde o impacto até o FIM do próximo dash — regra sem número, por decisão. */
+  invulnerable: boolean
+}
+
 export interface SimState {
   tick: number
-  player: Body
-  drifter: Body
-  collisions: number
-  overlapping: boolean
-  prevAction: boolean
+  phase: Phase
+  /** Quantas runs já terminaram. O gate é sobre este número passar de 1. */
+  runIndex: number
+  lives: number
+  kills: number
+  bestKills: number
+  player: Player
+  enemies: Enemy[]
+  spawnTimer: number
+  /** Escala do tempo de mundo aplicada neste tick: 1 dashando, creep parado. */
+  worldScale: number
+  /** Quantos de cada modificador o jogador acumulou. Índice = id. */
+  owned: number[]
+  /** Ids oferecidos na tela de escolha. */
+  offer: number[]
+  cursor: number
+  /** Bits do input do tick anterior — de onde saem todas as bordas de subida. */
+  prevBits: number
   rngState: number
 }
 

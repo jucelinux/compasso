@@ -1,5 +1,16 @@
-export { createSim, ENTITY_COUNT } from "./sim.ts"
+export { createSim } from "./sim.ts"
+export { applyModifiers, MODIFIERS } from "./modifiers.ts"
+export type { Modifier, RunStats } from "./modifiers.ts"
 export { createRng } from "./rng.ts"
 export type { Rng } from "./rng.ts"
 export { fnv1a, hashString, Packer } from "./hash.ts"
-export type { Body, InputFrame, Sim, SimSnapshot, SimState, Tuning } from "./types.ts"
+export type {
+  Enemy,
+  InputFrame,
+  Phase,
+  Player,
+  Sim,
+  SimSnapshot,
+  SimState,
+  Tuning,
+} from "./types.ts"
