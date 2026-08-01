@@ -76,7 +76,7 @@ function clamp(v: number, min: number, max: number): number {
 }
 
 /** Estilhaço é o filho do divisor. Nomeado aqui porque a regra o cita. */
-const KIND_SHARD = "estilhaco"
+const KIND_SHARD = "ecoli_filha"
 
 export function createSim(seed: number, tuning: Tuning): Sim {
   const rng = createRng(seed)
@@ -125,6 +125,14 @@ export function createSim(seed: number, tuning: Tuning): Sim {
     frozen: 0,
     shields: 0,
     deadLock: 0,
+    combo: 0,
+    comboTicks: 0,
+    comboBest: 0,
+    lastKillX: 0,
+    lastKillY: 0,
+    lastKillTick: -1,
+    macrophages: [],
+    clouds: [],
     worldScale: wave.creep,
     owned: MODIFIERS.map(() => 0),
     offer: [],
@@ -212,6 +220,13 @@ export function createSim(seed: number, tuning: Tuning): Sim {
     s.shields = run.shields
     s.trails = []
     s.shocks = []
+    s.clouds = []
+    s.combo = 0
+    s.comboTicks = 0
+    s.macrophages = []
+    for (let i = 0; i < run.macrophages; i++) {
+      s.macrophages.push({ id: nextId++, x: (width * (i + 1)) / (run.macrophages + 1), y: height / 2 })
+    }
     s.dashCharges = run.dashCharges
     s.killsSincePulse = 0
     // Anticorpos distribuídos na órbita: vetores unitários, girados por matriz.
@@ -255,7 +270,11 @@ export function createSim(seed: number, tuning: Tuning): Sim {
     s.trails = []
     s.shocks = []
     s.orbiters = []
+    s.clouds = []
+    s.macrophages = []
     s.killsSincePulse = 0
+    s.combo = 0
+    s.comboBest = 0
     s.player.x = width / 2
     s.player.y = height / 2
     s.player.invulnerable = false
@@ -341,6 +360,37 @@ export function createSim(seed: number, tuning: Tuning): Sim {
     s.trails = s.trails.filter((t) => t.life > 0)
     for (const sh of s.shocks) sh.life--
     s.shocks = s.shocks.filter((sh) => sh.life > 0)
+    for (const cl of s.clouds) cl.life--
+    s.clouds = s.clouds.filter((cl) => cl.life > 0)
+
+    // Combo: a janela é de tempo REAL. É a escalada de recompensa, e ela mede
+    // ritmo do jogador, não do mundo.
+    if (s.comboTicks > 0) {
+      s.comboTicks--
+      if (s.comboTicks === 0) s.combo = 0
+    }
+
+    // Macrófagos: perseguem o patógeno mais próximo DELES, não do jogador.
+    for (const m of s.macrophages) {
+      let bx = p.x
+      let by = p.y
+      let bd = Infinity
+      for (const e of s.enemies) {
+        const d = (e.x - m.x) * (e.x - m.x) + (e.y - m.y) * (e.y - m.y)
+        if (d < bd) {
+          bd = d
+          bx = e.x
+          by = e.y
+        }
+      }
+      const mx = bx - m.x
+      const my = by - m.y
+      const md = Math.sqrt(mx * mx + my * my)
+      if (md > 0.5) {
+        m.x = clamp(m.x + (mx / md) * tuning.powers.macrophageSpeed * world, 8, width - 8)
+        m.y = clamp(m.y + (my / md) * tuning.powers.macrophageSpeed * world, 8, height - 8)
+      }
+    }
 
     // --- anticorpos: giram por matriz fixa e são renormalizados todo tick, para
     // o erro de ponto flutuante não desmontar a órbita ao longo de uma run.
@@ -375,8 +425,18 @@ export function createSim(seed: number, tuning: Tuning): Sim {
       const dist = Math.sqrt(ex * ex + ey * ey)
       if (dist > 0.0001) {
         const half = sizeOf(e) / 2
-        e.x = clamp(e.x + (ex / dist) * spec.speed * world, half, width - half)
-        e.y = clamp(e.y + (ey / dist) * spec.speed * world, half, height - half)
+        // INTERFERON: emperra o que chega perto. Nem o corona escapa disto —
+        // ele é imune a dano indireto, não a ficar lento.
+        let speed = spec.speed
+        if (run.interferonRadius > 0) {
+          const px2 = p.x - e.x
+          const py2 = p.y - e.y
+          if (Math.sqrt(px2 * px2 + py2 * py2) <= run.interferonRadius) {
+            speed *= run.interferonSlow
+          }
+        }
+        e.x = clamp(e.x + (ex / dist) * speed * world, half, width - half)
+        e.y = clamp(e.y + (ey / dist) * speed * world, half, height - half)
       }
     }
 
@@ -396,6 +456,16 @@ export function createSim(seed: number, tuning: Tuning): Sim {
     const killed = (e: Enemy): void => {
       s.kills++
       s.waveKills++
+      // Escalada de recompensa: encadear abates dentro da janela sobe o combo.
+      s.combo++
+      s.comboTicks = tuning.powers.comboWindowTicks
+      if (s.combo > s.comboBest) s.comboBest = s.combo
+      s.lastKillX = e.x
+      s.lastKillY = e.y
+      s.lastKillTick = s.tick
+      if (run.cloudTicks > 0) {
+        s.clouds.push({ id: nextId++, x: e.x, y: e.y, life: run.cloudTicks })
+      }
       const spec = kindOf(e.kind)
       // Estilhaços saem PERPENDICULARES ao dash e longe o bastante para ficarem
       // fora do alcance de toque. Nascendo em cima do jogador, o divisor matava
@@ -433,9 +503,32 @@ export function createSim(seed: number, tuning: Tuning): Sim {
       // RETAGUARDA / ANTICORPO / RASTRO: três formas novas de morrer, todas
       // com desenho próprio na tela. Foi por isto que a versão de porcentagem
       // foi jogada fora.
-      let cutBy: "arc" | "back" | "orb" | "trail" | null = null
+      let cutBy: "arc" | "back" | "orb" | "trail" | "cloud" | "macro" | null = null
+      // SARS-CoV-2 só cai no corte direto: é o que impede a build passiva de
+      // aposentar o verbo. Sem isso, o abate passivo cresce sem limite.
+      const indirectOk = kindOf(e.kind).onlyDirectCut !== true
       if (dashing && run.backRadius > 0 && dist <= run.backRadius) cutBy = "back"
-      if (cutBy === null && run.orbiters > 0) {
+      if (cutBy === null && indirectOk && run.macrophages > 0) {
+        for (const m of s.macrophages) {
+          const gx = m.x - e.x
+          const gy = m.y - e.y
+          if (Math.sqrt(gx * gx + gy * gy) <= tuning.powers.macrophageRadius + half) {
+            cutBy = "macro"
+            break
+          }
+        }
+      }
+      if (cutBy === null && indirectOk && s.clouds.length > 0) {
+        for (const cl of s.clouds) {
+          const gx = cl.x - e.x
+          const gy = cl.y - e.y
+          if (Math.sqrt(gx * gx + gy * gy) <= tuning.powers.cloudRadius + half) {
+            cutBy = "cloud"
+            break
+          }
+        }
+      }
+      if (cutBy === null && indirectOk && run.orbiters > 0) {
         for (const o of s.orbiters) {
           const gx = p.x + o.ox * tuning.powers.orbitRadius - e.x
           const gy = p.y + o.oy * tuning.powers.orbitRadius - e.y
@@ -445,7 +538,7 @@ export function createSim(seed: number, tuning: Tuning): Sim {
           }
         }
       }
-      if (cutBy === null && run.trailTicks > 0) {
+      if (cutBy === null && indirectOk && run.trailTicks > 0) {
         for (const t of s.trails) {
           const gx = t.x - e.x
           const gy = t.y - e.y
@@ -517,12 +610,14 @@ export function createSim(seed: number, tuning: Tuning): Sim {
       const left: Enemy[] = []
       for (const e of survivors) {
         let popped = false
-        for (const sh of freshShocks) {
-          const gx = sh.x - e.x
-          const gy = sh.y - e.y
-          if (Math.sqrt(gx * gx + gy * gy) <= sh.radius) {
-            popped = true
-            break
+        if (kindOf(e.kind).onlyDirectCut !== true) {
+          for (const sh of freshShocks) {
+            const gx = sh.x - e.x
+            const gy = sh.y - e.y
+            if (Math.sqrt(gx * gx + gy * gy) <= sh.radius) {
+              popped = true
+              break
+            }
           }
         }
         if (popped) {
@@ -653,6 +748,11 @@ export function createSim(seed: number, tuning: Tuning): Sim {
       .u32(s.cells.length)
       .u32(s.trails.length)
       .u32(s.shocks.length)
+      .u32(s.clouds.length)
+      .u32(s.macrophages.length)
+      .u32(s.combo)
+      .u32(s.comboTicks)
+      .u32(s.comboBest)
       .u32(s.orbiters.length)
       .u32(s.dashCharges)
       .u32(s.killsSincePulse)
@@ -667,6 +767,8 @@ export function createSim(seed: number, tuning: Tuning): Sim {
     for (const t of s.trails) packer.f64(t.x).f64(t.y).u32(t.life)
     for (const sh of s.shocks) packer.f64(sh.x).f64(sh.y).f64(sh.radius).u32(sh.life)
     for (const o of s.orbiters) packer.f64(o.ox).f64(o.oy)
+    for (const cl of s.clouds) packer.f64(cl.x).f64(cl.y).u32(cl.life)
+    for (const m of s.macrophages) packer.f64(m.x).f64(m.y)
     for (const n of s.owned) packer.u32(n)
     for (const id of s.offer) packer.u32(id)
 

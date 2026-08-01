@@ -7,6 +7,10 @@ log de decisão morre.
 
 ## Aberto agora
 
+- **A questão do movimento.** H quer movimento orgânico e dash/câmera-lenta como habilidades.
+  Adiado por ele mesmo em 31/07. Quando voltar: fagocitose por contato já está decidida, e
+  o `CLAUDE.md` §1 precisa ser reescrito porque "o tempo só anda quando você anda" cai.
+
 - **Dificuldade não verificada.** O bot ficou imortal depois dos modificadores-comportamento
   (mira perfeita + abate passivo). Ele ainda mede duração de ONDA bem; morte, não mais.
 - **Vigiar o abate passivo.** Hoje 13–18%. Se passar de ~40%, o verbo único virou enfeite.

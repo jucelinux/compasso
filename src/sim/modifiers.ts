@@ -18,16 +18,19 @@ export interface Modifier {
 }
 
 export const MODIFIERS: readonly Modifier[] = [
-  { id: 0, name: "RASTRO", blurb: "o dash deixa um risco que corta" },
-  { id: 1, name: "PULSO", blurb: "a cada 8 mortes, uma onda de choque" },
-  { id: 2, name: "FÔLEGO", blurb: "+1 vida, agora" },
-  { id: 3, name: "RETAGUARDA", blurb: "o dash também corta atrás" },
-  { id: 4, name: "ESTEIRA", blurb: "corte muito mais largo" },
+  { id: 0, name: "CITOCINA", blurb: "seu rastro queima quem passa" },
+  { id: 1, name: "FEBRE", blurb: "a cada 8 abates, o corpo ferve" },
+  { id: 2, name: "MEDULA", blurb: "+1 vida, agora" },
+  { id: 3, name: "PSEUDÓPODE", blurb: "engole também pelas costas" },
+  { id: 4, name: "FAGOSSOMO", blurb: "boca muito mais larga" },
   { id: 5, name: "ANTICORPO", blurb: "um corpo orbita e corta sozinho" },
-  { id: 6, name: "SEGUNDO FÔLEGO", blurb: "dois dashes antes de repousar" },
-  { id: 7, name: "CORTE LARGO", blurb: "abre o leque do golpe" },
+  { id: 6, name: "MITOCÔNDRIA", blurb: "dois impulsos antes de repousar" },
+  { id: 7, name: "OPSONIZAÇÃO", blurb: "marca um arco maior de alvos" },
   { id: 8, name: "MEMBRANA", blurb: "absorve um toque por onda" },
-  { id: 9, name: "REPARO", blurb: "regenera o organismo" },
+  { id: 9, name: "PLAQUETA", blurb: "regenera o tecido" },
+  { id: 10, name: "INTERFERON", blurb: "o que chega perto emperra" },
+  { id: 11, name: "MACRÓFAGO", blurb: "um aliado caça sozinho" },
+  { id: 12, name: "HISTAMINA", blurb: "quem morre deixa nuvem que mata" },
 ]
 
 /** Os únicos que agem num contador em vez de numa regra contínua. */
@@ -58,6 +61,13 @@ export interface RunStats {
   orbiters: number
   /** Dashes encadeáveis antes da recuperação. `1` é o normal. */
   dashCharges: number
+  /** Raio em que patógenos ficam lentos. `0` = sem interferon. */
+  interferonRadius: number
+  interferonSlow: number
+  /** Aliados que caçam sozinhos. */
+  macrophages: number
+  /** Ticks da nuvem deixada por quem morre. `0` = sem histamina. */
+  cloudTicks: number
 }
 
 /** Números que a onda aperta. Nenhum destes tem teto — foi o pedido. */
@@ -91,6 +101,10 @@ export function applyModifiers(tuning: Tuning, owned: readonly number[]): RunSta
     backRadius: n(3) > 0 ? p.backRadius * n(3) : 0,
     orbiters: n(5),
     dashCharges: 1 + n(6),
+    interferonRadius: n(10) > 0 ? p.interferonRadius * (1 + 0.3 * (n(10) - 1)) : 0,
+    interferonSlow: Math.max(0.1, p.interferonSlow - 0.12 * (n(10) - 1)),
+    macrophages: n(11),
+    cloudTicks: n(12) > 0 ? p.cloudTicks * n(12) : 0,
   }
 }
 

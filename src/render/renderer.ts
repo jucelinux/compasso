@@ -1,5 +1,5 @@
 import { Application, Container, Graphics, Sprite, Text, TextStyle } from "pixi.js"
-import { organCellTexture, plasmaTexture, playerTexture, virusTexture } from "./textures.ts"
+import { organCellTexture, pathogenTexture, plasmaTexture, playerTexture } from "./textures.ts"
 import { MODIFIERS, MOD_SHIELD, applyModifiers } from "../sim/modifiers.ts"
 import type { SimState, Tuning } from "../sim/types.ts"
 
@@ -24,12 +24,14 @@ const COLOR_CELL_DASH = 0x7fe9ff
 const COLOR_NUCLEUS = 0x9fb4d8
 const COLOR_HURT = 0xff3b5c
 const COLOR_VIRUS = 0xff6a3d
-const KIND_STYLE: Readonly<Record<string, { color: number; spikes: number; ring: boolean }>> = {
-  comum: { color: 0xff6a3d, spikes: 7, ring: false },
-  divisor: { color: 0xffd23d, spikes: 5, ring: true },
-  estilhaco: { color: 0xffe58a, spikes: 4, ring: false },
-  blindado: { color: 0x9d6bff, spikes: 9, ring: true },
-  invasor: { color: 0x3dff9e, spikes: 3, ring: false },
+/** Cor por patógeno. A forma vem da morfologia real, em `textures.ts`. */
+const KIND_COLOR: Readonly<Record<string, number>> = {
+  influenza: 0xff6a3d,
+  ecoli: 0xffd23d,
+  ecoli_filha: 0xffe58a,
+  estafilo: 0x9d6bff,
+  salmonela: 0x3dff9e,
+  corona: 0xff3b8c,
 }
 const COLOR_CELL_ORG = 0x6ec2ff
 const COLOR_DIM = 0x7a4450
@@ -76,20 +78,46 @@ export async function createRenderer(mount: HTMLElement, tuning: Tuning): Promis
 
   // --- plasma texturizado: veios e hemácias fora de foco
   const plasma = new Sprite(plasmaTexture(tuning.arena.width, tuning.arena.height, COLOR_PLASMA, COLOR_BG))
-  world.addChildAt(plasma, 0)
   floor.visible = false
+
+  /**
+   * Parallax que anda na velocidade do MUNDO, não do relógio de parede.
+   * O humano disse que o fundo estático "não comunicava com o resto": agora ele
+   * é a leitura mais direta da dilatação — parado, o sangue quase não escorre.
+   */
+  const drift: Array<{ sprite: Sprite; speed: number }> = []
+  for (let layer = 0; layer < 3; layer++) {
+    const tex = plasmaTexture(
+      tuning.arena.width,
+      tuning.arena.height,
+      COLOR_PLASMA,
+      layer === 0 ? COLOR_BG : 0x3a1018,
+    )
+    for (let copy = 0; copy < 2; copy++) {
+      const sp = new Sprite(tex)
+      sp.alpha = layer === 0 ? 1 : 0.28 - layer * 0.07
+      sp.scale.set(1 + layer * 0.25)
+      sp.position.set(copy * tuning.arena.width, 0)
+      drift.push({ sprite: sp, speed: 26 + layer * 34 })
+    }
+  }
+  let driftX = 0
 
   const playerSprite = new Sprite(playerTexture(tuning.player.size, COLOR_CELL, COLOR_NUCLEUS))
   playerSprite.anchor.set(0.5)
   world.addChild(playerSprite)
 
-  const virusTex = new Map<string, ReturnType<typeof virusTexture>>()
+  const virusTex = new Map<string, ReturnType<typeof pathogenTexture>>()
   const texFor = (kind: string) => {
     let t = virusTex.get(kind)
     if (t === undefined) {
-      const style = KIND_STYLE[kind] ?? KIND_STYLE["comum"]!
       const spec = tuning.enemy.kinds[kind]
-      t = virusTexture(style.color, style.spikes, tuning.enemy.size * (spec?.sizeScale ?? 1), style.spikes * 7)
+      t = pathogenTexture(
+        spec?.form ?? "esfera",
+        KIND_COLOR[kind] ?? 0xff6a3d,
+        tuning.enemy.size * (spec?.sizeScale ?? 1),
+        kind.length * 13,
+      )
       virusTex.set(kind, t)
     }
     return t
@@ -159,12 +187,15 @@ export async function createRenderer(mount: HTMLElement, tuning: Tuning): Promis
   }
 
   const cellLayer = new Graphics()
+  const popLayer = new Container()
   const organLayer = new Container()
   const organPool: Sprite[] = []
   // Ordem explícita: montar por addChild na ordem de criação deixava o
   // organismo por cima do jogador.
   world.removeChildren()
-  world.addChild(plasma, organLayer, cellLayer, powers, enemyLayer, player, playerSprite, fx)
+  world.addChild(plasma)
+  for (const d of drift) world.addChild(d.sprite)
+  world.addChild(organLayer, cellLayer, powers, enemyLayer, player, playerSprite, fx, popLayer)
 
   // --- partículas: puramente decorativas, fora da sim
   let particles: Particle[] = []
@@ -184,7 +215,20 @@ export async function createRenderer(mount: HTMLElement, tuning: Tuning): Promis
     }
   }
 
+  interface Pop {
+    x: number
+    y: number
+    life: number
+    text: string
+    size: number
+    color: number
+  }
+  let pops: Pop[] = []
+  const popPool: Text[] = []
+
   let seenIds = new Set<number>()
+  let prevCombo = 0
+  let prevWave = 1
   let prevLives = -1
   let prevCellsLost = 0
   let flash = 0
@@ -227,10 +271,32 @@ export async function createRenderer(mount: HTMLElement, tuning: Tuning): Promis
     playerSprite.position.set(x, y)
     playerSprite.tint =
       cur.player.invulnerable && cur.tick % 8 < 4 ? COLOR_HURT : dashing ? COLOR_CELL_DASH : 0xffffff
-    // Estica na direção do dash: movimento secundário barato e muito legível.
-    const stretch = dashing ? 1.18 : 1
-    playerSprite.scale.set(stretch, dashing ? 0.88 : 1)
+
+    /*
+     * A célula respira. Fora do dash ela pulsa devagar; sob pressão ela pulsa
+     * rápido; dashando ela se alonga na direção do movimento e a membrana estica
+     * atrás. É o "ganhando forma e vida" pedido em 31/07 — e é informação, não
+     * enfeite: dá pra ler o estado do jogador pela silhueta.
+     */
+    const stress = Math.min(1, cur.enemies.length / 30)
+    const breath = Math.sin(cur.tick * (0.05 + stress * 0.14)) * (0.035 + stress * 0.05)
+    const growth = 1 + Math.min(0.35, cur.owned.reduce((a, b) => a + b, 0) * 0.035)
+    const stretch = dashing ? 1.24 : 1 + breath
+    playerSprite.scale.set(stretch * growth, (dashing ? 0.84 : 1 - breath) * growth)
     playerSprite.rotation = dashing ? Math.atan2(cur.player.dashDy, cur.player.dashDx) : 0
+
+    // Pseudópodes: membrana esticando atrás no momento do impulso.
+    if (dashing) {
+      const back = cur.player.dashTicks / Math.max(1, stats.dashDurationTicks)
+      for (const off of [-0.5, 0, 0.5]) {
+        const px2 = x - cur.player.dashDx * (18 + back * 16) + cur.player.dashDy * off * 12
+        const py2 = y - cur.player.dashDy * (18 + back * 16) - cur.player.dashDx * off * 12
+        player
+          .moveTo(x, y)
+          .lineTo(px2, py2)
+          .stroke({ width: 3 - Math.abs(off) * 2, color: COLOR_CELL_DASH, alpha: 0.35 * back })
+      }
+    }
   }
 
   /**
@@ -256,6 +322,36 @@ export async function createRenderer(mount: HTMLElement, tuning: Tuning): Promis
       powers
         .circle(sh.x, sh.y, sh.radius * (1.05 - a * 0.55))
         .stroke({ width: 2 + 5 * a, color: COLOR_SHIELD, alpha: a * 0.85 })
+    }
+
+    const stats2 = stats
+    if (stats2.interferonRadius > 0) {
+      powers.circle(cur.player.x, cur.player.y, stats2.interferonRadius).fill({
+        color: 0x8fd8ff,
+        alpha: 0.045,
+      })
+      powers
+        .circle(cur.player.x, cur.player.y, stats2.interferonRadius)
+        .stroke({ width: 1, color: 0x8fd8ff, alpha: 0.18 })
+    }
+
+    for (const cl of cur.clouds) {
+      const a = cl.life / Math.max(1, stats2.cloudTicks)
+      powers.circle(cl.x, cl.y, tuning.powers.cloudRadius * (0.6 + 0.4 * a)).fill({
+        color: 0xffe58a,
+        alpha: 0.05 + 0.16 * a,
+      })
+    }
+
+    for (const m of cur.macrophages) {
+      powers
+        .circle(m.x, m.y, tuning.powers.macrophageRadius)
+        .fill({ color: 0xbfe6ff, alpha: 0.82 })
+        .stroke({ width: 1.5, color: 0xffffff, alpha: 0.5 })
+      powers.circle(m.x + 2, m.y - 2, tuning.powers.macrophageRadius * 0.38).fill({
+        color: 0x6a86b8,
+        alpha: 0.8,
+      })
     }
 
     for (const o of cur.orbiters) {
@@ -314,6 +410,14 @@ export async function createRenderer(mount: HTMLElement, tuning: Tuning): Promis
           .rect(tuning.arena.width / 2 - total * 6 + i * 12, tuning.arena.height - 20, 8, 3)
           .fill({ color: COLOR_CELL_DASH, alpha: i < cur.dashCharges ? 1 : 0.25 })
       }
+    }
+
+    // Combo vivo no HUD: dá alvo pro jogador perseguir entre uma onda e outra.
+    if (cur.combo > 1) {
+      const tier = Math.min(4, Math.floor((cur.combo - 1) / 3))
+      hudBars
+        .rect(tuning.arena.width / 2 - 30, 42, (60 * cur.comboTicks) / tuning.powers.comboWindowTicks, 3)
+        .fill([0xffffff, 0xffe58a, 0xffb03d, 0xff6a3d, 0xff3b8c][tier]!)
     }
 
     // A build inteira, sempre visível: escolher passa a ter memória.
@@ -391,7 +495,7 @@ export async function createRenderer(mount: HTMLElement, tuning: Tuning): Promis
       const live = new Set(cur.enemies.map((e) => e.id))
       for (const e of prev.enemies) {
         if (!live.has(e.id) && seenIds.has(e.id)) {
-          burst(e.x, e.y, (KIND_STYLE[e.kind] ?? KIND_STYLE["comum"]!).color, 7, 2.6)
+          burst(e.x, e.y, KIND_COLOR[e.kind] ?? 0xff6a3d, 7, 2.6)
         }
       }
       // Célula perdida: explosão grande, porque é a outra forma de perder.
@@ -410,6 +514,19 @@ export async function createRenderer(mount: HTMLElement, tuning: Tuning): Promis
         burst(cur.player.x, cur.player.y, COLOR_HURT, 16, 4)
       }
       prevLives = cur.lives
+
+      // Parallax: a distância percorrida é tempo de MUNDO. Parado, o sangue
+      // quase não escorre — é a dilatação virando leitura de fundo.
+      if (cur.phase === "run" && cur.frozen === 0) {
+        driftX -= (cur.worldScale * 1) / 60
+      }
+      for (let i = 0; i < drift.length; i++) {
+        const d = drift[i]!
+        const span = tuning.arena.width * d.sprite.scale.x
+        let x = ((driftX * d.speed) % span) + (i % 2) * span
+        if (x > 0) x -= span * 2
+        d.sprite.position.set(x, -(d.sprite.scale.y - 1) * tuning.arena.height * 0.5)
+      }
 
       const frozen = cur.frozen > 0
       // Congelado, o mundo não interpola — o quadro trava junto com a sim.
@@ -485,6 +602,75 @@ export async function createRenderer(mount: HTMLElement, tuning: Tuning): Promis
         shake > 0 ? (((cur.tick * 53) % 7) - 3) * (shake / 7) : 0,
       )
       if (shake > 0) shake -= 0.6
+
+      /*
+       * Escalada de recompensa — o eixo do bar do Candy Crush.
+       * Encadear abates faz o número subir, crescer, mudar de cor e tremer a
+       * tela. A recompensa precisa ESCALAR, não só existir: 2 abates seguidos
+       * têm que valer visivelmente menos que 9.
+       */
+      if (cur.combo > prevCombo && cur.lastKillTick === cur.tick - 1) {
+        const c = cur.combo
+        const tier = Math.min(4, Math.floor((c - 1) / 3))
+        pops.push({
+          x: cur.lastKillX,
+          y: cur.lastKillY,
+          life: 1,
+          text: c > 1 ? `${c}×` : "+1",
+          size: 11 + tier * 5,
+          color: [0xffffff, 0xffe58a, 0xffb03d, 0xff6a3d, 0xff3b8c][tier]!,
+        })
+        if (c > 1 && c % 3 === 0) {
+          burst(cur.lastKillX, cur.lastKillY, 0xffe58a, 6 + tier * 4, 2 + tier)
+          shake = Math.max(shake, 1.5 + tier * 1.2)
+        }
+      }
+      prevCombo = cur.combo
+
+      if (cur.wave > prevWave) {
+        for (let i = 0; i < 3; i++) {
+          burst(
+            tuning.arena.width * (0.25 + i * 0.25),
+            tuning.arena.height / 2,
+            COLOR_SHIELD,
+            14,
+            3.2,
+          )
+        }
+        pops.push({
+          x: tuning.arena.width / 2,
+          y: tuning.arena.height / 2 - 60,
+          life: 1,
+          text: `ONDA ${prevWave} CONTIDA`,
+          size: 20,
+          color: COLOR_SHIELD,
+        })
+      }
+      prevWave = cur.wave
+
+      const nextPops: Pop[] = []
+      for (let i = 0; i < pops.length; i++) {
+        const q = pops[i]!
+        if (!frozen) q.life -= 0.028
+        if (q.life <= 0) continue
+        let label = popPool[nextPops.length]
+        if (label === undefined) {
+          label = new Text({ text: "", style: mono(12, 0xffffff) })
+          label.anchor.set(0.5)
+          popPool[nextPops.length] = label
+          popLayer.addChild(label)
+        }
+        label.visible = true
+        label.text = q.text
+        label.style.fontSize = q.size
+        label.style.fill = q.color
+        label.alpha = Math.min(1, q.life * 1.6)
+        label.scale.set(1 + (1 - q.life) * 0.5)
+        label.position.set(q.x, q.y - (1 - q.life) * 26)
+        nextPops.push(q)
+      }
+      for (let i = nextPops.length; i < popPool.length; i++) popPool[i]!.visible = false
+      pops = nextPops
 
       drawPowers(cur, t)
       drawHud(cur)

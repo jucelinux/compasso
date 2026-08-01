@@ -69,3 +69,18 @@ Sem prosa. Se precisar de parágrafo, é decisão de arquitetura e vai pro `CLAU
 - 31/07 · pressão · teto de inimigos 48 -> 120 · nerfar poder era a resposta errada; o Vampire Survivors deixa você forte E enche a tela, que é o bar declarado
 - 31/07 · identidade · abate passivo em 13-18% · medido: os poderes amplificam o dash, não o substituem; se passar de ~40% o verbo único vira enfeite e a decisão de 31/07 cai
 - 31/07 · medição · o bot não morre mais · com poder passivo e mira perfeita ele passa de 6 min sempre; dificuldade desta rodada é NÃO VERIFICADA, só o replay do humano resolve
+- 31/07 · modificadores-comportamento · APROVADOS · H: "consegui ver os modificadores e senti uma diferença clara entre eles"; o eixo que falhava duas rodadas seguidas fechou
+- 31/07 · arte procedural · aprovada · H: "a qualidade gráfica trouxe vida"; textura em código resolveu sem pipeline de asset
+- 31/07 · processo · incremento gráfico por rodada · H: "consigo perceber a dinâmica evoluindo, isso me ajuda a direcionar"; o gráfico virou instrumento de direção dele, não enfeite
+- 31/07 · bar novo · Candy Crush, para recompensa · H: "falta algo viciante que o candy crush oferece"; eixo = escalada de recompensa, distinto do eixo de feel
+- 31/07 · tema · vírus e bactérias reais · H; morfologia real é geométrica e cai bem na textura procedural
+- 31/07 · REABERTURA · dash e câmera lenta podem deixar de ser o core · H: "queria movimentar a célula de forma mais orgânica"; atinge o verbo único E a dilatação, que são a identidade declarada no CLAUDE.md §1
+- 31/07 · movimento · ADIADO por escolha do H · dash+creep seguem como core nesta rodada; a reabertura volta com uma leitura de gate a mais na mão
+- 31/07 · movimento (pré-decidido) · quando reabrir, fagocitose por contato · encostar em patógeno conhecido engole, em desconhecido causa dano; powerup = aprender um patógeno. NÃO implementar antes do movimento orgânico entrar
+- 31/07 · deriva nomeada · o jogo virou Vampire Survivors sem eu dizer · ondas com cota, build dentro da run, 120 inimigos, poder passivo; o dash-como-core é a última peça do desenho original e é ela que range
+- 31/07 · patógenos · Influenza, E. coli, S. aureus, Salmonella, SARS-CoV-2 · morfologia real desenha o comportamento: bacilo faz fissão binária, cacho tem parede grossa, flagelado invade tecido
+- 31/07 · corona · imune a dano indireto, só cai no corte direto · é o que impede a build passiva de aposentar o verbo; sem ele o abate passivo cresceria sem limite
+- 31/07 · powerups · 10 -> 13, todos com nome do sistema imune · CITOCINA, FEBRE, MEDULA, PSEUDÓPODE, FAGOSSOMO, ANTICORPO, MITOCÔNDRIA, OPSONIZAÇÃO, MEMBRANA, PLAQUETA, INTERFERON, MACRÓFAGO, HISTAMINA
+- 31/07 · recompensa · combo com escalada de cor, tamanho e tremor · bar do Candy Crush; 2 abates seguidos precisam valer visivelmente menos que 9
+- 31/07 · fundo · parallax que anda no tempo de MUNDO · H disse que fundo estático "não comunicava"; agora ele é a leitura mais direta da dilatação
+- 31/07 · identidade · abate passivo em 15-20% com 13 powerups · ainda longe do limite de 40% que aposentaria o verbo único

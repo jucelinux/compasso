@@ -11,7 +11,7 @@ import type { Tuning } from "../src/sim/types.ts"
  */
 
 const SMOKE = resolve(projectRoot, "replays", "smoke.json")
-const BASELINE_HASH = "bd5316d2"
+const BASELINE_HASH = "b92dd21c"
 
 /**
  * Run real do humano, 7,6 min de input de verdade.
@@ -21,7 +21,7 @@ const BASELINE_HASH = "bd5316d2"
  * sobre input humano real; não morre.
  */
 const RUN_01 = resolve(projectRoot, "replays", "run-01.json")
-const RUN_01_HASH = "5504a842"
+const RUN_01_HASH = "8c1b9f72"
 
 /**
  * Segunda run real: 5 min, 10 ondas, uma morte. Gravada antes da tecla de
@@ -30,18 +30,18 @@ const RUN_01_HASH = "5504a842"
  * morte → reinício sob as regras atuais; só uma gravação nova resolve.
  */
 const RUN_02 = resolve(projectRoot, "replays", "run-02.json")
-const RUN_02_HASH = "416c5f8d"
+const RUN_02_HASH = "d7a32e77"
 
 /**
  * Terceira run real: 5,7 min de input humano, gravada quando os modificadores
  * ainda eram porcentagem.
  *
- * ATENÇÃO: com os modificadores-comportamento este input NÃO morre mais — o
- * jogador ficou forte demais para aquele padrão de jogo fracassar. Vale como
- * determinismo sobre input humano longo. Quem cobre morte hoje é a run-02.
+ * Com os patógenos reais este input voltou a morrer, na onda 6. Junto com a
+ * run-02, é a cobertura de morte que existe hoje. Nenhuma fixture cobre
+ * morte → reinício: todas são anteriores à tecla própria de recomeço.
  */
 const RUN_03 = resolve(projectRoot, "replays", "run-03.json")
-const RUN_03_HASH = "9bf21588"
+const RUN_03_HASH = "5efee052"
 
 const smoke = () => loadReplay(SMOKE)
 const tuning = () => loadTuning()
@@ -84,7 +84,7 @@ describe("determinismo", () => {
     expect(result.ticks).toBeGreaterThan(19000)
   })
 
-  it("quem cobre a morte é a run-02, e só ela — travado contra registro podre", () => {
+  it("run-02 e run-03 atravessam a morte — travado contra registro podre", () => {
     // Este teste existe porque os comentários deste arquivo já mentiram duas
     // vezes: a run-01 alegava cobrir morte depois das ondas, e a run-03 depois
     // dos modificadores-comportamento. Agora quem afirma é o teste.
@@ -98,7 +98,9 @@ describe("determinismo", () => {
       return false
     }
     expect(reaches(RUN_02), "run-02 deveria atravessar a morte").toBe(true)
-    expect(reaches(RUN_03), "run-03 não morre mais: o jogador ficou forte demais").toBe(false)
+    // Voltou a morrer com os patógenos reais: o corona e a S. aureus repuseram
+    // a dificuldade que os modificadores-comportamento tinham comido.
+    expect(reaches(RUN_03), "run-03 deveria atravessar a morte").toBe(true)
     expect(reaches(SMOKE)).toBe(false)
     expect(reaches(RUN_01)).toBe(false)
   })

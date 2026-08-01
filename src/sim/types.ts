@@ -76,6 +76,13 @@ export interface Tuning {
    * não são bit-a-bit entre engines.
    */
   readonly powers: {
+    readonly comboWindowTicks: number
+    readonly interferonRadius: number
+    readonly interferonSlow: number
+    readonly macrophageSpeed: number
+    readonly macrophageRadius: number
+    readonly cloudTicks: number
+    readonly cloudRadius: number
     readonly trailTicks: number
     readonly trailRadius: number
     readonly shockEvery: number
@@ -113,9 +120,15 @@ export interface KindSpec {
   readonly speed: number
   readonly hp: number
   readonly sizeScale: number
-  /** Quantos estilhaços nascem quando ele morre. */
+  /** Quantas células-filha nascem quando ele morre (fissão binária). */
   readonly splits: number
   readonly hunts: Hunts
+  /** Nome real do patógeno. Só o render usa; a sim não sabe o que é biologia. */
+  readonly real: string
+  /** Morfologia real, que decide o desenho: esfera, bacilo, cacho, coroa... */
+  readonly form: string
+  /** Imune a rastro, pulso, nuvem e macrófago: só o corte direto derruba. */
+  readonly onlyDirectCut?: boolean
 }
 
 export interface Enemy {
@@ -153,6 +166,21 @@ export interface Shock {
 export interface Orbiter {
   ox: number
   oy: number
+}
+
+/** Macrófago aliado: vagueia atrás do patógeno mais próximo e engole. */
+export interface Macrophage {
+  id: number
+  x: number
+  y: number
+}
+
+/** Nuvem de histamina largada por quem morre. Corta enquanto dura. */
+export interface Cloud {
+  id: number
+  x: number
+  y: number
+  life: number
 }
 
 /** Célula do organismo. Não se move, não ataca, e perdê-las encerra a run. */
@@ -216,6 +244,16 @@ export interface SimState {
   shields: number
   /** Ticks restantes de trava da tela de morte. */
   deadLock: number
+  /** Abates encadeados dentro da janela. É o motor da escalada de recompensa. */
+  combo: number
+  comboTicks: number
+  comboBest: number
+  /** Ponto do último abate, para o render soltar o número na tela. */
+  lastKillX: number
+  lastKillY: number
+  lastKillTick: number
+  macrophages: Macrophage[]
+  clouds: Cloud[]
   /** Escala do tempo de mundo aplicada neste tick: 1 dashando, creep parado. */
   worldScale: number
   /** Quantos de cada modificador o jogador acumulou NESTA run. Índice = id. */

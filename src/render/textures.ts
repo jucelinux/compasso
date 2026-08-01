@@ -60,6 +60,187 @@ function grain(c: CanvasRenderingContext2D, size: number, seed: number, strength
  * Vírus: capsídeo com espinhos, núcleo interno e casca iluminada de cima.
  * O número de pontas continua sendo a leitura de ameaça — a textura só dá corpo.
  */
+export function pathogenTexture(
+  form: string,
+  color: number,
+  px: number,
+  seed: number,
+): Texture {
+  switch (form) {
+    case "bacilo":
+      return bacillusTexture(color, px, seed)
+    case "cacho":
+      return clusterTexture(color, px, seed)
+    case "flagelado":
+      return flagellateTexture(color, px, seed)
+    case "coroa":
+      return coronaTexture(color, px, seed)
+    default:
+      return virusTexture(color, 8, px, seed)
+  }
+}
+
+/** Bacilo (E. coli): bastão de pontas arredondadas, com septo de divisão. */
+function bacillusTexture(color: number, px: number, seed: number): Texture {
+  const size = Math.max(40, Math.ceil(px * 2.2))
+  const c = ctx(size)
+  const cx = size / 2
+  const cy = size / 2
+  const w = size * 0.5
+  const h = size * 0.26
+  const [r, g, b] = shade(color, 1)
+
+  const grad = c.createLinearGradient(0, cy - h, 0, cy + h)
+  grad.addColorStop(0, rgba(Math.min(255, r + 70), Math.min(255, g + 70), Math.min(255, b + 70), 1))
+  grad.addColorStop(0.5, rgba(r, g, b, 1))
+  grad.addColorStop(1, rgba(...shade(color, 0.45), 1))
+
+  c.beginPath()
+  const rr = h
+  c.moveTo(cx - w / 2 + rr, cy - h)
+  c.lineTo(cx + w / 2 - rr, cy - h)
+  c.arc(cx + w / 2 - rr, cy, rr, -Math.PI / 2, Math.PI / 2)
+  c.lineTo(cx - w / 2 + rr, cy + h)
+  c.arc(cx - w / 2 + rr, cy, rr, Math.PI / 2, -Math.PI / 2)
+  c.closePath()
+  c.fillStyle = grad
+  c.fill()
+  c.lineWidth = Math.max(1, size * 0.018)
+  c.strokeStyle = rgba(255, 255, 255, 0.3)
+  c.stroke()
+
+  // septo: a linha onde ela vai se partir em duas
+  c.beginPath()
+  c.moveTo(cx, cy - h * 0.85)
+  c.lineTo(cx, cy + h * 0.85)
+  c.lineWidth = Math.max(1, size * 0.02)
+  c.strokeStyle = rgba(...shade(color, 0.4), 0.9)
+  c.stroke()
+
+  grain(c, size, seed, 0.1)
+  return Texture.from(c.canvas)
+}
+
+/** Cacho de cocos (S. aureus): bolhas agrupadas, parede grossa. */
+function clusterTexture(color: number, px: number, seed: number): Texture {
+  const size = Math.max(44, Math.ceil(px * 2.2))
+  const c = ctx(size)
+  const cx = size / 2
+  const cy = size / 2
+  const rad = size * 0.14
+  const [r, g, b] = shade(color, 1)
+
+  const spots: ReadonlyArray<readonly [number, number]> = [
+    [-1, -0.9],
+    [1, -0.8],
+    [-1.1, 0.9],
+    [0.9, 1],
+    [0, 0],
+    [-0.2, -1.7],
+  ]
+  for (const [ox, oy] of spots) {
+    const x = cx + ox * rad * 1.15
+    const y = cy + oy * rad * 1.15
+    const grad = c.createRadialGradient(x - rad * 0.35, y - rad * 0.35, rad * 0.1, x, y, rad)
+    grad.addColorStop(0, rgba(Math.min(255, r + 80), Math.min(255, g + 80), Math.min(255, b + 80), 1))
+    grad.addColorStop(1, rgba(...shade(color, 0.5), 1))
+    c.beginPath()
+    c.arc(x, y, rad, 0, Math.PI * 2)
+    c.fillStyle = grad
+    c.fill()
+    c.lineWidth = Math.max(1.5, size * 0.03) // parede espessa: é o "blindado"
+    c.strokeStyle = rgba(255, 255, 255, 0.42)
+    c.stroke()
+  }
+  grain(c, size, seed, 0.1)
+  return Texture.from(c.canvas)
+}
+
+/** Flagelado (Salmonella): bastão com flagelos ondulados atrás. */
+function flagellateTexture(color: number, px: number, seed: number): Texture {
+  const size = Math.max(48, Math.ceil(px * 3))
+  const c = ctx(size)
+  const cx = size * 0.62
+  const cy = size / 2
+  const w = size * 0.36
+  const h = size * 0.15
+  const [r, g, b] = shade(color, 1)
+
+  // flagelos
+  c.strokeStyle = rgba(r, g, b, 0.75)
+  for (let f = 0; f < 3; f++) {
+    c.beginPath()
+    c.lineWidth = Math.max(1, size * 0.014)
+    let x = cx - w / 2
+    let y = cy + (f - 1) * h * 0.7
+    c.moveTo(x, y)
+    for (let i = 0; i < 8; i++) {
+      x -= size * 0.045
+      y += Math.sin(i * 1.3 + f) * size * 0.035
+      c.lineTo(x, y)
+    }
+    c.stroke()
+  }
+
+  const grad = c.createLinearGradient(0, cy - h, 0, cy + h)
+  grad.addColorStop(0, rgba(Math.min(255, r + 70), Math.min(255, g + 70), Math.min(255, b + 70), 1))
+  grad.addColorStop(1, rgba(...shade(color, 0.45), 1))
+  c.beginPath()
+  c.ellipse(cx, cy, w / 2, h, 0, 0, Math.PI * 2)
+  c.fillStyle = grad
+  c.fill()
+  c.lineWidth = Math.max(1, size * 0.016)
+  c.strokeStyle = rgba(255, 255, 255, 0.3)
+  c.stroke()
+
+  grain(c, size, seed, 0.1)
+  return Texture.from(c.canvas)
+}
+
+/** Coroa (SARS-CoV-2): esfera com espículas em taco, a coroa que dá o nome. */
+function coronaTexture(color: number, px: number, seed: number): Texture {
+  const size = Math.max(52, Math.ceil(px * 2.4))
+  const c = ctx(size)
+  const cx = size / 2
+  const cy = size / 2
+  const rad = size * 0.29
+  const [r, g, b] = shade(color, 1)
+
+  // espículas em taco
+  const spikes = 14
+  for (let i = 0; i < spikes; i++) {
+    const a = (i / spikes) * Math.PI * 2
+    const x1 = cx + Math.cos(a) * rad
+    const y1 = cy + Math.sin(a) * rad
+    const x2 = cx + Math.cos(a) * rad * 1.5
+    const y2 = cy + Math.sin(a) * rad * 1.5
+    c.beginPath()
+    c.moveTo(x1, y1)
+    c.lineTo(x2, y2)
+    c.lineWidth = Math.max(1.2, size * 0.022)
+    c.strokeStyle = rgba(r, g, b, 0.95)
+    c.stroke()
+    c.beginPath()
+    c.arc(x2, y2, size * 0.035, 0, Math.PI * 2)
+    c.fillStyle = rgba(Math.min(255, r + 60), Math.min(255, g + 40), Math.min(255, b + 40), 1)
+    c.fill()
+  }
+
+  const grad = c.createRadialGradient(cx - rad * 0.3, cy - rad * 0.35, rad * 0.1, cx, cy, rad)
+  grad.addColorStop(0, rgba(Math.min(255, r + 70), Math.min(255, g + 70), Math.min(255, b + 70), 1))
+  grad.addColorStop(1, rgba(...shade(color, 0.42), 1))
+  c.beginPath()
+  c.arc(cx, cy, rad, 0, Math.PI * 2)
+  c.fillStyle = grad
+  c.fill()
+  c.lineWidth = Math.max(1.5, size * 0.028)
+  c.strokeStyle = rgba(255, 255, 255, 0.4)
+  c.stroke()
+
+  grain(c, size, seed, 0.12)
+  return Texture.from(c.canvas)
+}
+
 export function virusTexture(color: number, spikes: number, px: number, seed: number): Texture {
   const size = Math.max(32, Math.ceil(px * 2))
   const c = ctx(size)

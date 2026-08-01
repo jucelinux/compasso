@@ -39,7 +39,7 @@ const advance = (sim: Sim, ticks: number, input: InputFrame = NONE): void => {
 let nextId = 100000
 const id = (): number => nextId++
 /** Vírus comum sintético: o tipo padrão, 1 de vida. */
-const virus = (x: number, y: number, tick = -1000, kind = "comum") => ({
+const virus = (x: number, y: number, tick = -1000, kind = "influenza") => ({
   id: id(),
   kind,
   x,
@@ -157,7 +157,7 @@ describe("dilatação — o tempo só anda quando você anda", () => {
     const before = { x: s.enemies[0]!.x, y: s.enemies[0]!.y }
     advance(sim, 60) // um segundo real parado
     const moved = Math.abs(s.enemies[0]!.x - before.x) + Math.abs(s.enemies[0]!.y - before.y)
-    expect(moved).toBeLessThan(tuning.enemy.kinds["comum"]!.speed * 0.1)
+    expect(moved).toBeLessThan(tuning.enemy.kinds["influenza"]!.speed * 0.1)
   })
 })
 
@@ -484,7 +484,7 @@ describe("tipos de vírus — a ameaça muda, não a carta", () => {
 
   it("blindado precisa de dois cortes", () => {
     const sim = createSim(50, tuning)
-    spawnAhead(sim, "blindado")
+    spawnAhead(sim, "estafilo")
     sim.step(RIGHT)
     expect(sim.state().kills).toBe(0)
     expect(sim.state().enemies).toHaveLength(1)
@@ -502,13 +502,13 @@ describe("tipos de vírus — a ameaça muda, não a carta", () => {
 
   it("divisor vira dois estilhaços, e eles nascem fora do alcance de toque", () => {
     const sim = createSim(51, tuning)
-    spawnAhead(sim, "divisor")
+    spawnAhead(sim, "ecoli")
     sim.step(RIGHT)
 
     const s = sim.state()
     expect(s.kills).toBe(1)
     expect(s.enemies).toHaveLength(2)
-    expect(s.enemies.every((e) => e.kind === "estilhaco")).toBe(true)
+    expect(s.enemies.every((e) => e.kind === "ecoli_filha")).toBe(true)
 
     // O bug que isto trava: nascer dentro da hitbox matava sem resposta possível.
     const toque = tuning.player.size / 2 + (tuning.enemy.size * 0.6) / 2
@@ -521,12 +521,12 @@ describe("tipos de vírus — a ameaça muda, não a carta", () => {
   it("estilhaço não corta o jogador enquanto é recém-nascido", () => {
     const sim = createSim(52, tuning)
     const s = mut(sim)
-    s.enemies = [virus(s.player.x, s.player.y, s.tick, "estilhaco")]
+    s.enemies = [virus(s.player.x, s.player.y, s.tick, "ecoli_filha")]
     sim.step(NONE)
     expect(sim.state().lives).toBe(tuning.run.lives)
 
     advance(sim, tuning.enemy.spawnGraceTicks + 1)
-    mut(sim).enemies = [virus(sim.state().player.x, sim.state().player.y, 0, "estilhaco")]
+    mut(sim).enemies = [virus(sim.state().player.x, sim.state().player.y, 0, "ecoli_filha")]
     sim.step(NONE)
     expect(sim.state().lives).toBe(tuning.run.lives - 1)
   })
@@ -545,7 +545,7 @@ describe("tipos de vírus — a ameaça muda, não a carta", () => {
       }
       return seen
     }
-    expect(kindsAtWave(1)).toEqual(new Set(["comum"]))
+    expect(kindsAtWave(1)).toEqual(new Set(["influenza"]))
     expect(kindsAtWave(4).size).toBeGreaterThan(2)
   })
 })
@@ -578,11 +578,11 @@ describe("o organismo — segunda forma de perder, sem segundo verbo", () => {
     const s = mut(sim)
     const cell = s.cells[0]!
     // Nasce longe da célula e do lado oposto ao jogador.
-    s.enemies = [virus(cell.x + 120, cell.y, 0, "invasor")]
+    s.enemies = [virus(cell.x + 120, cell.y, 0, "salmonela")]
     const before = Math.abs(s.enemies[0]!.x - cell.x)
     advance(sim, 600, RIGHT) // jogador dashando pro outro lado
     const after = Math.abs(
-      (sim.state().enemies.find((e) => e.kind === "invasor")?.x ?? cell.x) - cell.x,
+      (sim.state().enemies.find((e) => e.kind === "salmonela")?.x ?? cell.x) - cell.x,
     )
     expect(after, "invasor deveria ter se aproximado da célula").toBeLessThan(before)
   })
@@ -593,10 +593,10 @@ describe("o organismo — segunda forma de perder, sem segundo verbo", () => {
     const s = mut(sim)
     const cell = s.cells[0]!
     const hp = cell.hp
-    s.enemies = [virus(cell.x, cell.y, 0, "invasor")]
+    s.enemies = [virus(cell.x, cell.y, 0, "salmonela")]
     sim.step(NONE)
     expect(sim.state().cells[0]!.hp).toBe(hp - 1)
-    expect(sim.state().enemies.some((e) => e.kind === "invasor")).toBe(false)
+    expect(sim.state().enemies.some((e) => e.kind === "salmonela")).toBe(false)
   })
 
   it("perder o organismo inteiro encerra a run mesmo com vidas sobrando", () => {
@@ -607,7 +607,7 @@ describe("o organismo — segunda forma de perder, sem segundo verbo", () => {
     while (sim.state().cells.length > 0 && sim.state().phase === "run") {
       const s = mut(sim)
       const cell = s.cells[0]!
-      s.enemies = [virus(cell.x, cell.y, 0, "invasor")]
+      s.enemies = [virus(cell.x, cell.y, 0, "salmonela")]
       sim.step(NONE)
     }
     expect(sim.state().phase).toBe("dead")
@@ -622,7 +622,7 @@ describe("o organismo — segunda forma de perder, sem segundo verbo", () => {
       const s = mut(sim)
       const cell = s.cells[0]
       if (cell === undefined) break
-      s.enemies = [virus(cell.x, cell.y, 0, "invasor")]
+      s.enemies = [virus(cell.x, cell.y, 0, "salmonela")]
       sim.step(NONE)
     }
     advance(sim, tuning.feel.deadLockTicks + 1)
@@ -741,6 +741,9 @@ describe("modificadores são comportamento, não porcentagem", () => {
         r.backRadius !== base.backRadius ||
         r.orbiters !== base.orbiters ||
         r.dashCharges !== base.dashCharges ||
+        r.interferonRadius !== base.interferonRadius ||
+        r.macrophages !== base.macrophages ||
+        r.cloudTicks !== base.cloudTicks ||
         r.lives !== base.lives ||
         r.shields !== base.shields ||
         Math.abs(r.killRadius - base.killRadius) > 8 ||
