@@ -9,14 +9,14 @@ import type { Tuning } from "../src/sim/types.ts"
  */
 
 const SMOKE = resolve(projectRoot, "replays", "smoke.json")
-const BASELINE_HASH = "8aa9d583"
+const BASELINE_HASH = "6844a433"
 
 /**
  * Run real do humano, 7,6 min: passa por morte, escolha de modificador e
  * reinício — a camada de que o gate depende, que a fixture sintética não toca.
  */
 const RUN_01 = resolve(projectRoot, "replays", "run-01.json")
-const RUN_01_HASH = "521311db"
+const RUN_01_HASH = "18d05eac"
 
 const smoke = () => loadReplay(SMOKE)
 const tuning = () => loadTuning()

@@ -1,5 +1,12 @@
 import { Packer } from "./hash.ts"
-import { applyModifiers, MODIFIERS, type RunStats } from "./modifiers.ts"
+import {
+  applyModifiers,
+  MODIFIERS,
+  MOD_EXTRA_LIFE,
+  waveStats,
+  type RunStats,
+  type WaveStats,
+} from "./modifiers.ts"
 import { createRng } from "./rng.ts"
 import type { Enemy, InputFrame, Sim, SimSnapshot, SimState, Tuning } from "./types.ts"
 
@@ -9,6 +16,10 @@ import type { Enemy, InputFrame, Sim, SimSnapshot, SimState, Tuning } from "./ty
  * Um verbo: o dash. Mover é atacar; parar é a única defesa e também a única
  * forma de não avançar o relógio. Oito direções fixas. Três toques. I-frames do
  * impacto até o fim do próximo dash.
+ *
+ * Ondas fecham por COTA DE KILLS, nunca por temporizador. O tempo é do jogador:
+ * um temporizador seria estalável parando quieto a 5% de creep. Cota exige
+ * dashar, e dashar é exatamente o que dá tempo aos inimigos.
  *
  * A dilatação vive AQUI, dentro da sim, e não na taxa do laço de render. Se ela
  * mudasse quantos ticks rodam por segundo, o replay de uma run cheia de creep
@@ -53,17 +64,22 @@ export function createSim(seed: number, tuning: Tuning): Sim {
   const rng = createRng(seed)
   const dt = 1 / tuning.sim.hz
   const { width, height } = tuning.arena
-  const packer = new Packer(1024)
+  const packer = new Packer(2048)
 
-  let stats: RunStats = applyModifiers(tuning, [])
+  let run: RunStats = applyModifiers(tuning, [])
+  let wave: WaveStats = waveStats(tuning, run, 1)
 
   const s: SimState = {
     tick: 0,
     phase: "run",
     runIndex: 0,
-    lives: stats.lives,
+    wave: 1,
+    waveKills: 0,
+    quota: wave.quota,
+    lives: run.lives,
     kills: 0,
     bestKills: 0,
+    bestWave: 1,
     player: {
       x: width / 2,
       y: height / 2,
@@ -72,10 +88,11 @@ export function createSim(seed: number, tuning: Tuning): Sim {
       dashDx: 0,
       dashDy: -1,
       invulnerable: false,
+      invulnSkipCurrent: false,
     },
     enemies: [],
-    spawnTimer: stats.spawnIntervalSeconds,
-    worldScale: stats.creep,
+    spawnTimer: wave.spawnIntervalSeconds,
+    worldScale: wave.creep,
     owned: MODIFIERS.map(() => 0),
     offer: [],
     cursor: 0,
@@ -83,25 +100,49 @@ export function createSim(seed: number, tuning: Tuning): Sim {
     rngState: rng.state(),
   }
 
-  const spawnInterval = (): number =>
-    Math.max(
-      tuning.enemy.minSpawnIntervalSeconds,
-      stats.spawnIntervalSeconds - s.kills * tuning.enemy.spawnRampPerKill,
-    )
+  /** Recalcula as duas camadas: o que os modificadores fixam, o que a onda aperta. */
+  const retune = (): void => {
+    run = applyModifiers(tuning, s.owned)
+    wave = waveStats(tuning, run, s.wave)
+    s.quota = wave.quota
+  }
 
-  const startRun = (): void => {
-    stats = applyModifiers(tuning, s.owned)
+  /**
+   * Começa uma onda. Abre com inimigos já em campo: tabuleiro vazio faz o
+   * jogador ESPERAR o spawn, e esperar é justamente o que este jogo pune.
+   */
+  const startWave = (): void => {
+    retune()
     s.phase = "run"
-    s.lives = stats.lives
-    s.kills = 0
+    s.waveKills = 0
     s.enemies = []
-    s.player.x = width / 2
-    s.player.y = height / 2
     s.player.dashTicks = 0
     s.player.recoverTicks = 0
+    s.spawnTimer = wave.spawnIntervalSeconds
+    s.worldScale = wave.creep
+    if (s.wave > s.bestWave) s.bestWave = s.wave
+
+    const opening = Math.min(
+      wave.quota,
+      tuning.enemy.openingBase + (s.wave - 1) * tuning.enemy.openingPerWave,
+    )
+    for (let i = 0; i < opening; i++) spawnEnemy()
+  }
+
+  /** Morreu: perde os modificadores, volta pra onda 1. */
+  const startRun = (): void => {
+    s.owned = MODIFIERS.map(() => 0)
+    s.wave = 1
+    s.kills = 0
+    s.offer = []
+    s.cursor = 0
+    s.player.x = width / 2
+    s.player.y = height / 2
     s.player.invulnerable = false
-    s.spawnTimer = spawnInterval()
-    s.worldScale = stats.creep
+    s.player.invulnSkipCurrent = false
+    retune()
+    s.lives = run.lives
+    startWave()
   }
 
   /** Nasce numa borda da arena — nunca em cima do jogador. */
@@ -130,13 +171,6 @@ export function createSim(seed: number, tuning: Tuning): Sim {
     s.cursor = 0
   }
 
-  const endRun = (): void => {
-    s.runIndex++
-    if (s.kills > s.bestKills) s.bestKills = s.kills
-    s.phase = "pick"
-    offerModifiers()
-  }
-
   const stepRun = (bits: number): void => {
     const p = s.player
 
@@ -146,23 +180,26 @@ export function createSim(seed: number, tuning: Tuning): Sim {
       if (dir !== null) {
         p.dashDx = dir.dx
         p.dashDy = dir.dy
-        p.dashTicks = stats.dashDurationTicks
+        p.dashTicks = run.dashDurationTicks
       }
     }
 
     const dashing = p.dashTicks > 0
     // Tempo de mundo: cheio enquanto o dash acontece, creep no resto. Nunca zero.
-    s.worldScale = dashing ? 1 : stats.creep
+    s.worldScale = dashing ? 1 : wave.creep
     const world = dt * s.worldScale
 
     if (dashing) {
-      p.x = clamp(p.x + p.dashDx * stats.dashSpeed * dt, tuning.player.size / 2, width - tuning.player.size / 2)
-      p.y = clamp(p.y + p.dashDy * stats.dashSpeed * dt, tuning.player.size / 2, height - tuning.player.size / 2)
+      const half = tuning.player.size / 2
+      p.x = clamp(p.x + p.dashDx * run.dashSpeed * dt, half, width - half)
+      p.y = clamp(p.y + p.dashDy * run.dashSpeed * dt, half, height - half)
       p.dashTicks--
       if (p.dashTicks === 0) {
-        // Fim do dash: é exatamente aqui que os i-frames caem.
-        p.recoverTicks = tuning.dash.recoveryTicks
-        p.invulnerable = false
+        // Fim do dash: é exatamente aqui que os i-frames caem — a menos que o
+        // toque tenha sido neste mesmo dash, caso em que vale o próximo.
+        p.recoverTicks = wave.recoveryTicks
+        if (p.invulnSkipCurrent) p.invulnSkipCurrent = false
+        else p.invulnerable = false
       }
     } else if (p.recoverTicks > 0) {
       p.recoverTicks--
@@ -183,26 +220,39 @@ export function createSim(seed: number, tuning: Tuning): Sim {
     s.spawnTimer -= world
     if (s.spawnTimer <= 0) {
       spawnEnemy()
-      s.spawnTimer += spawnInterval()
+      s.spawnTimer += wave.spawnIntervalSeconds
     }
 
-    // --- resolução: dashando você corta, parado você apanha
-    const killRadius = stats.killRadius
+    // --- resolução: você corta o que dasha PARA DENTRO, e apanha do resto.
+    //
+    // O corte é direcional de propósito. Aura em volta do jogador tornava o dash
+    // uma imunidade: limpava o espaço pessoal inteiro, e como a folga encolhe a
+    // cada onda o jogador acabava intocável 90% dos ticks — a curva de tensão
+    // invertia. Direcional é também o que "mover = atacar" diz ao pé da letra:
+    // você ataca para onde vai, e quem está às suas costas continua cobrando.
     const touchRadius = (tuning.player.size + tuning.enemy.size) / 2
     let hit = false
     const survivors: Enemy[] = []
     for (const e of s.enemies) {
-      const ex = p.x - e.x
-      const ey = p.y - e.y
+      const ex = e.x - p.x
+      const ey = e.y - p.y
       const dist = Math.sqrt(ex * ex + ey * ey)
-      if (dashing) {
-        if (dist <= killRadius) {
+
+      if (dashing && dist <= run.killRadius) {
+        // dist pode ser 0 quando o inimigo está exatamente em cima: conta como
+        // dentro do arco, senão ele fica imortal no pior lugar possível.
+        const facing =
+          dist < 0.0001 ? 1 : (ex / dist) * p.dashDx + (ey / dist) * p.dashDy
+        if (facing >= tuning.dash.killArc) {
           s.kills++
+          s.waveKills++
           continue
         }
-      } else if (dist <= touchRadius && !p.invulnerable && !hit) {
-        // Um toque por tick. O inimigo que acertou morre junto: sem isso ele
-        // fica grudado e cobra de novo assim que os i-frames caem.
+      }
+
+      if (dist <= touchRadius && !p.invulnerable && !hit) {
+        // Um toque por tick, dashando ou não. O inimigo que acertou morre junto:
+        // sem isso ele fica grudado e cobra de novo assim que os i-frames caem.
         hit = true
         continue
       }
@@ -213,7 +263,19 @@ export function createSim(seed: number, tuning: Tuning): Sim {
     if (hit) {
       s.lives--
       p.invulnerable = true
-      if (s.lives <= 0) endRun()
+      // Apanhou com o dash ainda em curso: o fim dele não vale, vale o próximo.
+      if (p.dashTicks > 0) p.invulnSkipCurrent = true
+      if (s.lives <= 0) {
+        if (s.kills > s.bestKills) s.bestKills = s.kills
+        s.phase = "dead"
+        return
+      }
+    }
+
+    // Cota batida encerra a onda — mesmo no tick em que o jogador levou um toque.
+    if (s.waveKills >= s.quota) {
+      s.phase = "pick"
+      offerModifiers()
     }
   }
 
@@ -221,15 +283,29 @@ export function createSim(seed: number, tuning: Tuning): Sim {
     const pressed = bits & ~s.prevBits
     const count = s.offer.length
     if (count === 0) {
-      startRun()
+      s.wave++
+      startWave()
       return
     }
     if (pressed & BIT_LEFT) s.cursor = (s.cursor + count - 1) % count
     if (pressed & BIT_RIGHT) s.cursor = (s.cursor + 1) % count
     if (pressed & BIT_ACTION) {
       const id = s.offer[s.cursor]
-      if (id !== undefined) s.owned[id] = (s.owned[id] ?? 0) + 1
+      if (id !== undefined) {
+        s.owned[id] = (s.owned[id] ?? 0) + 1
+        // Vida é contador, não curva: precisa entrar agora, não só no próximo cálculo.
+        if (id === MOD_EXTRA_LIFE) s.lives++
+      }
       s.offer = []
+      s.wave++
+      startWave()
+    }
+  }
+
+  /** Não recomeça sozinho: a segunda partida precisa ser um ato deliberado. */
+  const stepDead = (bits: number): void => {
+    if ((bits & ~s.prevBits) & BIT_ACTION) {
+      s.runIndex++
       startRun()
     }
   }
@@ -237,7 +313,8 @@ export function createSim(seed: number, tuning: Tuning): Sim {
   const step = (input: InputFrame): void => {
     const bits = bitsOf(input)
     if (s.phase === "run") stepRun(bits)
-    else stepPick(bits)
+    else if (s.phase === "pick") stepPick(bits)
+    else stepDead(bits)
     s.prevBits = bits
     s.rngState = rng.state()
     s.tick++
@@ -247,11 +324,15 @@ export function createSim(seed: number, tuning: Tuning): Sim {
     packer
       .reset()
       .u32(s.tick)
-      .u8(s.phase === "run" ? 0 : 1)
+      .u8(s.phase === "run" ? 0 : s.phase === "pick" ? 1 : 2)
       .u32(s.runIndex)
+      .u32(s.wave)
+      .u32(s.waveKills)
+      .u32(s.quota)
       .u32(s.lives < 0 ? 0 : s.lives)
       .u32(s.kills)
       .u32(s.bestKills)
+      .u32(s.bestWave)
       .f64(s.player.x)
       .f64(s.player.y)
       .f64(s.player.dashDx)
@@ -259,6 +340,7 @@ export function createSim(seed: number, tuning: Tuning): Sim {
       .u32(s.player.dashTicks)
       .u32(s.player.recoverTicks)
       .bool(s.player.invulnerable)
+      .bool(s.player.invulnSkipCurrent)
       .f64(s.spawnTimer)
       .f64(s.worldScale)
       .u32(s.enemies.length)
@@ -271,6 +353,10 @@ export function createSim(seed: number, tuning: Tuning): Sim {
 
     return { tick: s.tick, hash: packer.digest() }
   }
+
+  // A primeira onda passa pelo mesmo caminho das outras — senão a run inicial
+  // seria a única a abrir com o tabuleiro vazio.
+  startWave()
 
   return {
     step,

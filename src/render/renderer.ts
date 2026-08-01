@@ -52,7 +52,21 @@ export async function createRenderer(mount: HTMLElement, tuning: Tuning): Promis
   const player = new Graphics()
   const hud = new Container()
   const pickLayer = new Container()
-  app.stage.addChild(floor, enemyLayer, player, hud, pickLayer)
+  const deadLayer = new Container()
+  app.stage.addChild(floor, enemyLayer, player, hud, pickLayer, deadLayer)
+
+  const deadBg = new Graphics()
+  const deadText = new Text({
+    text: "",
+    style: new TextStyle({
+      fontFamily: "monospace",
+      fontSize: 14,
+      fill: COLOR_PLAYER,
+      align: "center",
+      lineHeight: 22,
+    }),
+  })
+  deadLayer.addChild(deadBg, deadText)
 
   // --- HUD: vidas como quadradinhos, kills como número
   const hudStyle = new TextStyle({ fontFamily: "monospace", fontSize: 13, fill: COLOR_DIM })
@@ -131,12 +145,39 @@ export async function createRenderer(mount: HTMLElement, tuning: Tuning): Promis
     for (let i = 0; i < Math.max(0, cur.lives); i++) {
       lives.rect(tuning.arena.width - 16 - i * 12, 10, 8, 8).fill(COLOR_PLAYER)
     }
-    killsText.text = `${cur.kills}${cur.bestKills > 0 ? `  melhor ${cur.bestKills}` : ""}`
+    killsText.text = `onda ${cur.wave}   ${cur.waveKills}/${cur.quota}${
+      cur.bestWave > 1 ? `   melhor ${cur.bestWave}` : ""
+    }`
+
+    // Progresso da onda: uma barra que só anda quando você corta.
+    lives.rect(10, 26, ((tuning.arena.width - 20) * cur.waveKills) / cur.quota, 2).fill(COLOR_DIM)
 
     // Largura proporcional à velocidade do mundo agora: creep é quase nada.
+    // Ela cresce a cada onda — é a leitura direta da folga encolhendo.
+    // Fora do jogo `worldScale` fica com o último valor da run; não mostrar.
     clockBar.clear()
-    const w = (tuning.arena.width - 20) * cur.worldScale
-    clockBar.rect(10, tuning.arena.height - 8, w, 3).fill(COLOR_PLAYER_DASH)
+    if (cur.phase === "run") {
+      const w = (tuning.arena.width - 20) * Math.min(1, cur.worldScale)
+      clockBar.rect(10, tuning.arena.height - 8, w, 3).fill(COLOR_PLAYER_DASH)
+    }
+  }
+
+  const drawDead = (cur: SimState): void => {
+    const on = cur.phase === "dead"
+    deadLayer.visible = on
+    if (!on) return
+    deadBg
+      .clear()
+      .rect(0, 0, tuning.arena.width, tuning.arena.height)
+      .fill({ color: COLOR_BG, alpha: 0.9 })
+    deadText.text =
+      `parou na onda ${cur.wave}, com ${cur.kills}.\n` +
+      `os modificadores ficam aqui.\n\n` +
+      `espaço pra começar de novo`
+    deadText.position.set(
+      (tuning.arena.width - deadText.width) / 2,
+      (tuning.arena.height - deadText.height) / 2,
+    )
   }
 
   const drawPick = (cur: SimState): void => {
@@ -148,7 +189,7 @@ export async function createRenderer(mount: HTMLElement, tuning: Tuning): Promis
       .clear()
       .rect(0, 0, tuning.arena.width, tuning.arena.height)
       .fill({ color: COLOR_BG, alpha: 0.88 })
-    pickTitle.text = `caiu com ${cur.kills}.  ←/→ escolhe, espaço confirma`
+    pickTitle.text = `onda ${cur.wave} limpa.  ←/→ escolhe, espaço confirma`
     pickTitle.position.set(
       (tuning.arena.width - pickTitle.width) / 2,
       tuning.arena.height / 2 - 92,
@@ -209,6 +250,7 @@ export async function createRenderer(mount: HTMLElement, tuning: Tuning): Promis
 
       drawHud(cur)
       drawPick(cur)
+      drawDead(cur)
       app.render()
     },
     destroy() {

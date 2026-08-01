@@ -29,3 +29,10 @@ Sem prosa. Se precisar de parágrafo, é decisão de arquitetura e vai pro `CLAU
 - 31/07 · tensão · vem de encolher a folga, não de somar inimigos · H: "te dei tempo para entender seu movimento, mas seja rápido"; creep e recuperação viram curva
 - 31/07 · tema · célula imunológica defendendo o organismo · H escolheu sobre a versão micróbio-sobrevivente; mesmo ambiente, herói invertido, mas esta rende progressão
 - 31/07 · tema · arte adiada, decisão registrada · primitivas geométricas fazem o tema custar quase nada depois; sistema de recompensa ainda não está medido
+- 31/07 · ondas · cota de kills, nunca temporizador · o tempo é do jogador; temporizador é estalável a 5% de creep, cota exige dashar e dashar é o que dá tempo ao inimigo
+- 31/07 · modificadores · perde tudo na morte, arco dentro da run · H sobre manter entre runs; custo aceito e conhecido: o carrinho entre runs foi o que produziu a segunda partida, gate precisa ser remedido
+- 31/07 · inimigo · velocidade constante entre ondas · tensão vem de encolher a folga, não de buffar inimigo; buffar seria o eixo que o H recusou
+- 31/07 · corte · direcional, não aura · CHAMADA MINHA, sujeita a veto: aura fazia o dash ser imunidade e a folga encolhendo deixava o jogador intocável 90% dos ticks — a curva de tensão invertia; veto custa `dash.killArc: -1`
+- 31/07 · i-frames · toque durante o dash vale até o fim do PRÓXIMO · consequência do corte direcional; sem isso, apanhar dashando daria dois ticks de invulnerabilidade
+- 31/07 · onda · abre com inimigos em campo · medido: tabuleiro vazio fazia a onda 1 durar 78s esperando spawn
+- 31/07 · ritmo · cota 16 +6 por onda · medido com bot em 4 configurações; 16/6 dá onda de 11→29s e morte entre a onda 12 e 20, contra escolha a cada 7s nas cotas baixas

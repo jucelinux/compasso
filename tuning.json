@@ -7,7 +7,8 @@
     "height": 360
   },
   "time": {
-    "creep": 0.05
+    "creep": 0.05,
+    "creepPerWave": 0.022
   },
   "player": {
     "size": 18
@@ -15,8 +16,15 @@
   "dash": {
     "durationTicks": 9,
     "recoveryTicks": 7,
+    "recoveryPerWave": 0.35,
+    "minRecoveryTicks": 1,
     "speed": 620,
-    "killRadius": 26
+    "killRadius": 26,
+    "killArc": 0.15
+  },
+  "wave": {
+    "baseQuota": 16,
+    "quotaGrowth": 6
   },
   "run": {
     "lives": 3
@@ -24,9 +32,10 @@
   "enemy": {
     "size": 16,
     "speed": 74,
-    "spawnIntervalSeconds": 1.0,
-    "spawnRampPerKill": 0.012,
-    "minSpawnIntervalSeconds": 0.28,
+    "spawnIntervalSeconds": 0.45,
+    "spawnPerWave": 0.18,
+    "openingBase": 3,
+    "openingPerWave": 1,
     "maxAlive": 48
   },
   "pick": {
