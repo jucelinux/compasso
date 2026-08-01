@@ -23,11 +23,13 @@ export const MODIFIERS: readonly Modifier[] = [
   { id: 6, name: "REFLEXO", blurb: "levanta mais rápido" },
   { id: 7, name: "CORTE LARGO", blurb: "abre o leque do golpe" },
   { id: 8, name: "MEMBRANA", blurb: "absorve um toque por onda" },
+  { id: 9, name: "REPARO", blurb: "regenera o organismo" },
 ]
 
 /** O modificador de vida é o único que mexe num contador, não numa curva. */
 export const MOD_EXTRA_LIFE = 2
 export const MOD_SHIELD = 8
+export const MOD_REPAIR = 9
 
 /** Números que os modificadores fixam para a run inteira. */
 export interface RunStats {

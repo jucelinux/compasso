@@ -9,7 +9,8 @@
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
     "replay": "node src/harness/runner.ts",
-    "smoke": "node src/harness/makeSmoke.ts"
+    "smoke": "node src/harness/makeSmoke.ts",
+    "pace": "node src/harness/bot.ts"
   },
   "dependencies": {
     "pixi.js": "^8.6.6"

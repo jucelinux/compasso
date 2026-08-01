@@ -5,7 +5,10 @@ export { createRng } from "./rng.ts"
 export type { Rng } from "./rng.ts"
 export { fnv1a, hashString, Packer } from "./hash.ts"
 export type {
+  Cell,
   Enemy,
+  Hunts,
+  KindSpec,
   InputFrame,
   Phase,
   Player,

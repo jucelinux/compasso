@@ -3,23 +3,36 @@ import {
   applyModifiers,
   MODIFIERS,
   MOD_EXTRA_LIFE,
+  MOD_REPAIR,
   waveStats,
   type RunStats,
   type WaveStats,
 } from "./modifiers.ts"
 import { createRng } from "./rng.ts"
-import type { Enemy, InputFrame, Sim, SimSnapshot, SimState, Tuning } from "./types.ts"
+import type {
+  Enemy,
+  InputFrame,
+  KindSpec,
+  Sim,
+  SimSnapshot,
+  SimState,
+  Tuning,
+} from "./types.ts"
 
 /**
  * COMPASSO — o tempo só anda quando você anda.
  *
  * Um verbo: o dash. Mover é atacar; parar é a única defesa e também a única
  * forma de não avançar o relógio. Oito direções fixas. Três toques. I-frames do
- * impacto até o fim do próximo dash.
+ * impacto até o fim do próximo dash. O corte é direcional: você mata o que
+ * dasha para dentro, e quem está atrás continua cobrando.
  *
  * Ondas fecham por COTA DE KILLS, nunca por temporizador. O tempo é do jogador:
- * um temporizador seria estalável parando quieto a 5% de creep. Cota exige
- * dashar, e dashar é exatamente o que dá tempo aos inimigos.
+ * um temporizador seria estalável parando quieto a 5% de creep.
+ *
+ * Duas formas de perder: os três toques, ou o organismo. As células não se
+ * movem e não atacam — mas os invasores ignoram você e vão atrás delas, então
+ * limpar a cota e defender competem pelo mesmo dash.
  *
  * A dilatação vive AQUI, dentro da sim, e não na taxa do laço de render. Se ela
  * mudasse quantos ticks rodam por segundo, o replay de uma run cheia de creep
@@ -62,15 +75,21 @@ function clamp(v: number, min: number, max: number): number {
   return v < min ? min : v > max ? max : v
 }
 
+/** Estilhaço é o filho do divisor. Nomeado aqui porque a regra o cita. */
+const KIND_SHARD = "estilhaco"
+
 export function createSim(seed: number, tuning: Tuning): Sim {
   const rng = createRng(seed)
   const dt = 1 / tuning.sim.hz
   const { width, height } = tuning.arena
-  const packer = new Packer(2048)
+  const packer = new Packer(4096)
 
-  let nextEnemyId = 0
+  let nextId = 0
   let run: RunStats = applyModifiers(tuning, [])
   let wave: WaveStats = waveStats(tuning, run, 1)
+
+  const kindOf = (name: string): KindSpec => tuning.enemy.kinds[name]!
+  const sizeOf = (e: Enemy): number => tuning.enemy.size * kindOf(e.kind).sizeScale
 
   const s: SimState = {
     tick: 0,
@@ -94,6 +113,9 @@ export function createSim(seed: number, tuning: Tuning): Sim {
       invulnSkipCurrent: false,
     },
     enemies: [],
+    cells: [],
+    cellsLost: 0,
+    lostByCells: false,
     spawnTimer: wave.spawnIntervalSeconds,
     frozen: 0,
     shields: 0,
@@ -106,17 +128,72 @@ export function createSim(seed: number, tuning: Tuning): Sim {
     rngState: rng.state(),
   }
 
-  /** Recalcula as duas camadas: o que os modificadores fixam, o que a onda aperta. */
   const retune = (): void => {
     run = applyModifiers(tuning, s.owned)
     wave = waveStats(tuning, run, s.wave)
     s.quota = wave.quota
   }
 
-  /**
-   * Começa uma onda. Abre com inimigos já em campo: tabuleiro vazio faz o
-   * jogador ESPERAR o spawn, e esperar é justamente o que este jogo pune.
-   */
+  /** Composição desta onda: a última linha da tabela cuja `fromWave` já passou. */
+  const weightsFor = (waveNumber: number): ReadonlyArray<[string, number]> => {
+    let chosen = tuning.enemy.spawnTable[0]!
+    for (const row of tuning.enemy.spawnTable) {
+      if (waveNumber >= row.fromWave) chosen = row
+    }
+    return Object.entries(chosen.weights).filter(([, w]) => w > 0)
+  }
+
+  const rollKind = (): string => {
+    const entries = weightsFor(s.wave)
+    let total = 0
+    for (const [, w] of entries) total += w
+    let pick = rng.nextInt(0, total)
+    for (const [name, w] of entries) {
+      pick -= w
+      if (pick < 0) return name
+    }
+    return entries[0]![0]!
+  }
+
+  const pushEnemy = (kind: string, x: number, y: number): void => {
+    if (s.enemies.length >= tuning.enemy.maxAlive) return
+    const half = (tuning.enemy.size * kindOf(kind).sizeScale) / 2
+    s.enemies.push({
+      id: nextId++,
+      kind,
+      x: clamp(x, half, width - half),
+      y: clamp(y, half, height - half),
+      hp: kindOf(kind).hp,
+      bornTick: s.tick,
+    })
+  }
+
+  /** Nasce numa borda da arena — nunca em cima do jogador. */
+  const spawnEnemy = (): void => {
+    const along = rng.nextFloat()
+    const edge = rng.nextInt(0, 4)
+    const x = edge === 0 ? 0 : edge === 1 ? width : along * width
+    const y = edge === 2 ? 0 : edge === 3 ? height : along * height
+    pushEnemy(rollKind(), x, y)
+  }
+
+  /** Células em posições fixas: o jogador aprende o mapa, não sorteia. */
+  const placeCells = (): void => {
+    const m = 74
+    const spots: ReadonlyArray<readonly [number, number]> = [
+      [m, m],
+      [width - m, height - m],
+      [width - m, m],
+      [m, height - m],
+      [width / 2, m],
+    ]
+    s.cells = []
+    for (let i = 0; i < Math.min(tuning.cells.count, spots.length); i++) {
+      const spot = spots[i]!
+      s.cells.push({ id: i, x: spot[0], y: spot[1], hp: tuning.cells.hp })
+    }
+  }
+
   const startWave = (): void => {
     retune()
     s.phase = "run"
@@ -130,6 +207,11 @@ export function createSim(seed: number, tuning: Tuning): Sim {
     s.shields = run.shields
     if (s.wave > s.bestWave) s.bestWave = s.wave
 
+    // O organismo entra em cena a partir da onda marcada e persiste na run.
+    if (s.wave >= tuning.cells.fromWave && s.cells.length === 0 && s.cellsLost === 0) {
+      placeCells()
+    }
+
     const opening = Math.min(
       wave.quota,
       tuning.enemy.openingBase + (s.wave - 1) * tuning.enemy.openingPerWave,
@@ -137,13 +219,16 @@ export function createSim(seed: number, tuning: Tuning): Sim {
     for (let i = 0; i < opening; i++) spawnEnemy()
   }
 
-  /** Morreu: perde os modificadores, volta pra onda 1. */
+  /** Morreu: perde os modificadores, o organismo e a onda. */
   const startRun = (): void => {
     s.owned = MODIFIERS.map(() => 0)
     s.wave = 1
     s.kills = 0
     s.offer = []
     s.cursor = 0
+    s.cells = []
+    s.cellsLost = 0
+    s.lostByCells = false
     s.player.x = width / 2
     s.player.y = height / 2
     s.player.invulnerable = false
@@ -153,24 +238,11 @@ export function createSim(seed: number, tuning: Tuning): Sim {
     startWave()
   }
 
-  /** Nasce numa borda da arena — nunca em cima do jogador. */
-  const spawnEnemy = (): void => {
-    if (s.enemies.length >= tuning.enemy.maxAlive) return
-    const half = tuning.enemy.size / 2
-    const along = rng.nextFloat()
-    const edge = rng.nextInt(0, 4)
-    const x = edge === 0 ? half : edge === 1 ? width - half : along * width
-    const y = edge === 2 ? half : edge === 3 ? height - half : along * height
-    s.enemies.push({
-      id: nextEnemyId++,
-      x: clamp(x, half, width - half),
-      y: clamp(y, half, height - half),
-      bornTick: s.tick,
-    })
-  }
-
   const offerModifiers = (): void => {
-    const pool = MODIFIERS.map((m) => m.id)
+    // Reparo só entra na oferta com organismo em campo e machucado.
+    const pool = MODIFIERS.map((m) => m.id).filter(
+      (id) => id !== MOD_REPAIR || s.cells.some((c) => c.hp < tuning.cells.hp),
+    )
     const offer: number[] = []
     const count = Math.min(tuning.pick.offerCount, pool.length)
     for (let i = 0; i < count; i++) {
@@ -178,6 +250,14 @@ export function createSim(seed: number, tuning: Tuning): Sim {
     }
     s.offer = offer
     s.cursor = 0
+  }
+
+  const endRun = (byCells: boolean): void => {
+    if (s.kills > s.bestKills) s.bestKills = s.kills
+    s.lostByCells = byCells
+    s.phase = "dead"
+    s.deadLock = tuning.feel.deadLockTicks
+    s.frozen = 0
   }
 
   const stepRun = (bits: number): void => {
@@ -202,7 +282,6 @@ export function createSim(seed: number, tuning: Tuning): Sim {
     }
 
     const dashing = p.dashTicks > 0
-    // Tempo de mundo: cheio enquanto o dash acontece, creep no resto. Nunca zero.
     s.worldScale = dashing ? 1 : wave.creep
     const world = dt * s.worldScale
 
@@ -212,8 +291,6 @@ export function createSim(seed: number, tuning: Tuning): Sim {
       p.y = clamp(p.y + p.dashDy * run.dashSpeed * dt, half, height - half)
       p.dashTicks--
       if (p.dashTicks === 0) {
-        // Fim do dash: é exatamente aqui que os i-frames caem — a menos que o
-        // toque tenha sido neste mesmo dash, caso em que vale o próximo.
         p.recoverTicks = wave.recoveryTicks
         if (p.invulnSkipCurrent) p.invulnSkipCurrent = false
         else p.invulnerable = false
@@ -222,15 +299,30 @@ export function createSim(seed: number, tuning: Tuning): Sim {
       p.recoverTicks--
     }
 
-    // --- inimigos: perseguem, mas só no tempo que o jogador liberou
-    const half = tuning.enemy.size / 2
+    // --- vírus: cada tipo persegue o seu alvo, e só no tempo que o jogador liberou
     for (const e of s.enemies) {
-      const ex = p.x - e.x
-      const ey = p.y - e.y
+      const spec = kindOf(e.kind)
+      let tx = p.x
+      let ty = p.y
+      if (spec.hunts === "cell") {
+        let bd = Infinity
+        for (const c of s.cells) {
+          const d = (c.x - e.x) * (c.x - e.x) + (c.y - e.y) * (c.y - e.y)
+          if (d < bd) {
+            bd = d
+            tx = c.x
+            ty = c.y
+          }
+        }
+        // Sem organismo em campo, o invasor volta a caçar o jogador.
+      }
+      const ex = tx - e.x
+      const ey = ty - e.y
       const dist = Math.sqrt(ex * ex + ey * ey)
       if (dist > 0.0001) {
-        e.x = clamp(e.x + (ex / dist) * tuning.enemy.speed * world, half, width - half)
-        e.y = clamp(e.y + (ey / dist) * tuning.enemy.speed * world, half, height - half)
+        const half = sizeOf(e) / 2
+        e.x = clamp(e.x + (ex / dist) * spec.speed * world, half, width - half)
+        e.y = clamp(e.y + (ey / dist) * spec.speed * world, half, height - half)
       }
     }
 
@@ -241,45 +333,77 @@ export function createSim(seed: number, tuning: Tuning): Sim {
     }
 
     // --- resolução: você corta o que dasha PARA DENTRO, e apanha do resto.
-    //
-    // O corte é direcional de propósito. Aura em volta do jogador tornava o dash
-    // uma imunidade: limpava o espaço pessoal inteiro, e como a folga encolhe a
-    // cada onda o jogador acabava intocável 90% dos ticks — a curva de tensão
-    // invertia. Direcional é também o que "mover = atacar" diz ao pé da letra:
-    // você ataca para onde vai, e quem está às suas costas continua cobrando.
-    const touchRadius = (tuning.player.size + tuning.enemy.size) / 2
+    const touchBase = tuning.player.size / 2
     let hit = false
     const survivors: Enemy[] = []
+    const spawned: Array<{ kind: string; x: number; y: number }> = []
+
     for (const e of s.enemies) {
+      const half = sizeOf(e) / 2
       const ex = e.x - p.x
       const ey = e.y - p.y
       const dist = Math.sqrt(ex * ex + ey * ey)
 
       if (dashing && dist <= run.killRadius) {
-        // dist pode ser 0 quando o inimigo está exatamente em cima: conta como
-        // dentro do arco, senão ele fica imortal no pior lugar possível.
-        const facing =
-          dist < 0.0001 ? 1 : (ex / dist) * p.dashDx + (ey / dist) * p.dashDy
+        const facing = dist < 0.0001 ? 1 : (ex / dist) * p.dashDx + (ey / dist) * p.dashDy
         if (facing >= run.killArc) {
-          s.kills++
-          s.waveKills++
+          e.hp--
+          if (e.hp <= 0) {
+            s.kills++
+            s.waveKills++
+            const spec = kindOf(e.kind)
+            // Estilhaços saem PERPENDICULARES ao dash e longe o bastante para
+            // ficarem fora do alcance de toque. Nascendo em cima do jogador, o
+            // divisor matava sem que houvesse resposta possível.
+            for (let i = 0; i < spec.splits; i++) {
+              const side = i % 2 === 0 ? -1 : 1
+              const off = tuning.enemy.splitOffset * side
+              spawned.push({
+                kind: KIND_SHARD,
+                x: e.x - p.dashDy * off,
+                y: e.y + p.dashDx * off,
+              })
+            }
+            continue
+          }
+          // Sobreviveu ao corte: é empurrado, para o segundo golpe ser possível.
+          e.x = clamp(e.x + p.dashDx * 22, half, width - half)
+          e.y = clamp(e.y + p.dashDy * 22, half, height - half)
+          survivors.push(e)
           continue
         }
       }
 
-      if (dist <= touchRadius && !p.invulnerable && !hit) {
-        // Um toque por tick, dashando ou não. O inimigo que acertou morre junto:
-        // sem isso ele fica grudado e cobra de novo assim que os i-frames caem.
+      // --- o organismo: quem encosta numa célula tira 1 de vida dela e morre junto
+      let consumed = false
+      for (const c of s.cells) {
+        if (c.hp <= 0) continue
+        const cx = c.x - e.x
+        const cy = c.y - e.y
+        if (Math.sqrt(cx * cx + cy * cy) <= tuning.cells.size / 2 + half) {
+          c.hp--
+          if (c.hp <= 0) s.cellsLost++
+          consumed = true
+          break
+        }
+      }
+      if (consumed) continue
+
+      // Carência de nascimento: nada machuca no instante em que aparece.
+      const newborn = s.tick - e.bornTick < tuning.enemy.spawnGraceTicks
+      if (dist <= touchBase + half && !newborn && !p.invulnerable && !hit) {
         hit = true
         continue
       }
       survivors.push(e)
     }
+
     s.enemies = survivors
+    for (const sp of spawned) pushEnemy(sp.kind, sp.x, sp.y)
+    s.cells = s.cells.filter((c) => c.hp > 0)
 
     if (hit) {
       p.invulnerable = true
-      // Apanhou com o dash ainda em curso: o fim dele não vale, vale o próximo.
       if (p.dashTicks > 0) p.invulnSkipCurrent = true
       s.frozen = tuning.feel.hitFreezeTicks
 
@@ -288,16 +412,18 @@ export function createSim(seed: number, tuning: Tuning): Sim {
       } else {
         s.lives--
         if (s.lives <= 0) {
-          if (s.kills > s.bestKills) s.bestKills = s.kills
-          s.phase = "dead"
-          s.deadLock = tuning.feel.deadLockTicks
-          s.frozen = 0
+          endRun(false)
           return
         }
       }
     }
 
-    // Cota batida encerra a onda — mesmo no tick em que o jogador levou um toque.
+    // Perder o organismo inteiro encerra a run mesmo com vidas sobrando.
+    if (s.cellsLost > 0 && s.cells.length === 0) {
+      endRun(true)
+      return
+    }
+
     if (s.waveKills >= s.quota) {
       s.phase = "pick"
       s.frozen = tuning.feel.waveFreezeTicks
@@ -319,8 +445,9 @@ export function createSim(seed: number, tuning: Tuning): Sim {
       const id = s.offer[s.cursor]
       if (id !== undefined) {
         s.owned[id] = (s.owned[id] ?? 0) + 1
-        // Vida é contador, não curva: precisa entrar agora, não só no próximo cálculo.
+        // Contadores entram agora; curvas entram no próximo `retune`.
         if (id === MOD_EXTRA_LIFE) s.lives++
+        if (id === MOD_REPAIR) for (const c of s.cells) c.hp = tuning.cells.hp
       }
       s.offer = []
       s.wave++
@@ -380,19 +507,24 @@ export function createSim(seed: number, tuning: Tuning): Sim {
       .u32(s.frozen)
       .u32(s.shields)
       .u32(s.deadLock)
+      .u32(s.cellsLost)
+      .bool(s.lostByCells)
       .u32(s.enemies.length)
+      .u32(s.cells.length)
       .u32(s.cursor)
       .u8(s.prevBits)
       .u32(s.rngState)
-    for (const e of s.enemies) packer.u32(e.id).f64(e.x).f64(e.y).u32(e.bornTick)
+    for (const e of s.enemies) {
+      packer.u32(e.id).f64(e.x).f64(e.y).u32(e.hp).u32(e.bornTick)
+      for (let i = 0; i < e.kind.length; i++) packer.u8(e.kind.charCodeAt(i))
+    }
+    for (const c of s.cells) packer.u32(c.id).f64(c.x).f64(c.y).u32(c.hp)
     for (const n of s.owned) packer.u32(n)
     for (const id of s.offer) packer.u32(id)
 
     return { tick: s.tick, hash: packer.digest() }
   }
 
-  // A primeira onda passa pelo mesmo caminho das outras — senão a run inicial
-  // seria a única a abrir com o tabuleiro vazio.
   startWave()
 
   return {

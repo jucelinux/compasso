@@ -47,13 +47,28 @@ export interface Tuning {
   readonly run: { readonly lives: number }
   readonly enemy: {
     readonly size: number
-    readonly speed: number
     readonly spawnIntervalSeconds: number
     readonly spawnPerWave: number
     /** Inimigos já em campo quando a onda abre — tabuleiro vazio vira espera. */
     readonly openingBase: number
     readonly openingPerWave: number
     readonly maxAlive: number
+    /** Distância perpendicular em que os estilhaços nascem. */
+    readonly splitOffset: number
+    /** Ticks em que um vírus recém-nascido não machuca. */
+    readonly spawnGraceTicks: number
+    readonly kinds: Readonly<Record<string, KindSpec>>
+    /** Composição por onda. A run muda porque a AMEAÇA muda, não a carta. */
+    readonly spawnTable: ReadonlyArray<{
+      readonly fromWave: number
+      readonly weights: Readonly<Record<string, number>>
+    }>
+  }
+  readonly cells: {
+    readonly count: number
+    readonly fromWave: number
+    readonly size: number
+    readonly hp: number
   }
   readonly pick: { readonly offerCount: number }
   readonly feel: {
@@ -74,6 +89,18 @@ export interface Tuning {
  */
 export type Phase = "run" | "pick" | "dead"
 
+/** O que um vírus persegue. `cell` ignora o jogador e vai atrás do organismo. */
+export type Hunts = "player" | "cell"
+
+export interface KindSpec {
+  readonly speed: number
+  readonly hp: number
+  readonly sizeScale: number
+  /** Quantos estilhaços nascem quando ele morre. */
+  readonly splits: number
+  readonly hunts: Hunts
+}
+
 export interface Enemy {
   /**
    * Identidade estável. O render pareia quadro a quadro por isto — `bornTick`
@@ -81,9 +108,19 @@ export interface Enemy {
    * interpolação acabava misturando inimigos diferentes.
    */
   id: number
+  kind: string
   x: number
   y: number
+  hp: number
   bornTick: number
+}
+
+/** Célula do organismo. Não se move, não ataca, e perdê-las encerra a run. */
+export interface Cell {
+  id: number
+  x: number
+  y: number
+  hp: number
 }
 
 export interface Player {
@@ -120,6 +157,11 @@ export interface SimState {
   bestWave: number
   player: Player
   enemies: Enemy[]
+  cells: Cell[]
+  /** Células perdidas nesta run. Só pra tela de morte dizer como você perdeu. */
+  cellsLost: number
+  /** `true` quando a run acabou por perder o organismo, não as vidas. */
+  lostByCells: boolean
   spawnTimer: number
   /** Ticks de congelamento no impacto. Nada se move; a escala do tempo não muda. */
   frozen: number

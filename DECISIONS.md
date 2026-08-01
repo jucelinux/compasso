@@ -45,5 +45,15 @@ Sem prosa. Se precisar de parágrafo, é decisão de arquitetura e vai pro `CLAU
 - 31/07 · gate · o input do gate é reflexo, não intenção · replay mostra espaço apertado 2,9s após a morte, mas H diz que não quis; mesma tecla que ele apertou a cada 20s por 5 min — tecla separada + trava
 - 31/07 · pool · 7 modificadores para 10 escolhas · ofertas até equilibradas (3–5 cada); "poucas powerups" é variedade, medida à parte de visibilidade
 - 31/07 · tema · aplicado agora, H sobrepôs "arte adiada" · "gostaria de ver a forma do jogo para decidir se está valendo a pena" é chamada de direção dele; primitivas continuam valendo- 31/07 · camada visual · aprovada · H: "ficou legal"; tema, hitstop, leque de corte e build visível entregues
-- 31/07 · gate · run-03: morreu na onda 8, 84s na tela de morte, ZERO reinício · com tecla própria e trava o sinal é confiável; se conta como 2 de 3 é chamada do H, ainda em aberto
+- 31/07 · gate · NÃO (2 de 3) · run-03: morreu na onda 8, 84s na tela de morte, zero reinício; H: "de tão pequeno esse incremento, não quis jogar novamente pois saquei que seria mais do mesmo"
+- 31/07 · causa do gate · incremento por rodada, não o jogo em si · H jogou a run-03 só pra validar a evolução; o que matou a vontade foi previsibilidade, não dificuldade nem feel
+- 31/07 · corte direcional · MANTIDO · H confirmou a chamada que eu tinha feito sozinho
+- 31/07 · duração da run · alvo ~2 min, era 5,7 · morrer custava 6 minutos; baratear o recomeço é a alavanca mais direta sobre a taxa de segunda partida
+- 31/07 · variedade · tipos de vírus com comportamento + células a defender · H escolheu sobre desbloqueio entre runs; run 2 difere da run 1 pela AMEAÇA, não pela carta sorteada
 - 31/07 · processo · H quer mais progresso por rodada · rodadas maiores, menos idas e vindas; rodada de camada visual foi grande e ainda assim ele sentiu falta de avanço
+- 31/07 · bar · um por eixo, provisório até H confirmar · SUPERHOT (ideia), Vampire Survivors (motivo de rejogar), Hyper Light Drifter (dash), Geometry Wars (primitiva como identidade), Devil Daggers (run curta)
+- 31/07 · bar ativo · Vampire Survivors, para o eixo que está falhando · critério afiado: se pegar modificador não muda o que aparece na TELA, a escolha não vale
+- 31/07 · estilhaço · nasce perpendicular ao dash, a 30 unidades · nascia a 14, e o toque acontece a 13,8: cortar divisor de perto matava sem resposta possível
+- 31/07 · carência · 4 ticks sem machucar ao nascer · trava o mesmo bug pela raiz; a 10 ticks o bot virava imortal, a 4 continua mortal
+- 31/07 · bot · promovido para src/harness/bot.ts · segunda vez que precisei dele; agora defende o organismo, senão a medição só media a burrice dele
+- 31/07 · cota · 13 +4 por onda · ondas de 7-12s no bot ≈ 20-30s no humano; alvo de run de ~2 min pela razão medida na run-03

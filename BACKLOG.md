@@ -12,13 +12,14 @@ log de decisão morre.
   medição, o projeto não tem métrica de direção válida.
 - **Nenhuma fixture cobre morte → reinício.** `run-01` é anterior às ondas, `run-02` é
   anterior à tecla de reinício separada. Precisa de uma gravação do build atual.
+- **Sem fixture de morte→reinício ainda.** run-03 cobre morte, mas ninguém reiniciou.
 - **O hitstop deixou o jogo um pouco mais fácil.** Bot ia até a onda 12–20, agora bate o
   teto de 6 min na onda 19–21. Efeito colateral de feel, não de tuning — não mexi na
   dificuldade nesta rodada de propósito, para a próxima leitura ser atribuível.
-- **Bot de ritmo.** Achou a onda 1 de 78s e a inversão da curva de tensão (dash =
-  imunidade). Vive em tmp de job e morre com ele. Se a próxima rodada de tuning precisar,
-  vai ser reescrito do zero — vale commitar em `src/harness/` quando isso acontecer a
-  segunda vez.
+- **O bot é bom demais para medir morte.** Promovido para `src/harness/bot.ts` (`npm run
+  pace`) e agora defende o organismo. Mede duração de onda muito bem, mas sobrevive 6 min
+  em 3 de 5 seeds porque nunca erra a mira. A duração de RUN é estimada pela razão medida
+  contra a run-03 (o humano leva ~2,7x o tempo do bot por onda), não medida direto.
 - **Escolha a cada ~18s.** Melhor que os 7s da cota baixa, mas 12–20 escolhas por run
   ainda pode ser interrupção demais. Medir depois que o humano jogar.
 

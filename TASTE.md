@@ -23,6 +23,23 @@ não vá acumulando._
 
 ---
 
+## 1b. Bar por eixo
+
+_Provisório, proposto pelo modelo em 31/07 a pedido do H. Um bar geral não dá gradiente._
+
+| eixo | bar |
+|---|---|
+| ideia central (dilatação) | SUPERHOT |
+| motivo de rejogar | Vampire Survivors |
+| feel do dash | Hyper Light Drifter |
+| primitiva como identidade | Geometry Wars |
+| escalada em run curta | Devil Daggers |
+
+Critério do bar ativo: **se pegar um modificador não muda o que aparece na tela, a
+escolha não vale.**
+
+---
+
 ## 2. Vieses declarados do modelo
 
 Isto existe porque a sessão de amanhã não lembra da conversa que originou o projeto.

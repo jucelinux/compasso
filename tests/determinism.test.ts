@@ -9,7 +9,7 @@ import type { Tuning } from "../src/sim/types.ts"
  */
 
 const SMOKE = resolve(projectRoot, "replays", "smoke.json")
-const BASELINE_HASH = "d482aa08"
+const BASELINE_HASH = "a2847ab3"
 
 /**
  * Run real do humano, 7,6 min de input de verdade.
@@ -21,7 +21,7 @@ const BASELINE_HASH = "d482aa08"
  * por uma gravação do build com ondas.
  */
 const RUN_01 = resolve(projectRoot, "replays", "run-01.json")
-const RUN_01_HASH = "979944f3"
+const RUN_01_HASH = "c08cf38c"
 
 /**
  * Segunda run real: 5 min, 10 ondas, uma morte. Gravada antes da tecla de
@@ -30,14 +30,14 @@ const RUN_01_HASH = "979944f3"
  * morte → reinício sob as regras atuais; só uma gravação nova resolve.
  */
 const RUN_02 = resolve(projectRoot, "replays", "run-02.json")
-const RUN_02_HASH = "6da6d297"
+const RUN_02_HASH = "a29a14d8"
 
 /**
  * Terceira run real, build atual: 5,7 min, 7 ondas, uma morte, 84s na tela de
  * morte sem reiniciar. É a fixture que cobre morte sob as regras vigentes.
  */
 const RUN_03 = resolve(projectRoot, "replays", "run-03.json")
-const RUN_03_HASH = "b0f7692a"
+const RUN_03_HASH = "3f4f1d5b"
 
 const smoke = () => loadReplay(SMOKE)
 const tuning = () => loadTuning()

@@ -22,6 +22,14 @@ const COLOR_CELL_DASH = 0x7fe9ff
 const COLOR_NUCLEUS = 0x9fb4d8
 const COLOR_HURT = 0xff3b5c
 const COLOR_VIRUS = 0xff6a3d
+const KIND_STYLE: Readonly<Record<string, { color: number; spikes: number; ring: boolean }>> = {
+  comum: { color: 0xff6a3d, spikes: 7, ring: false },
+  divisor: { color: 0xffd23d, spikes: 5, ring: true },
+  estilhaco: { color: 0xffe58a, spikes: 4, ring: false },
+  blindado: { color: 0x9d6bff, spikes: 9, ring: true },
+  invasor: { color: 0x3dff9e, spikes: 3, ring: false },
+}
+const COLOR_CELL_ORG = 0x6ec2ff
 const COLOR_DIM = 0x7a4450
 const COLOR_SHIELD = 0x8affc8
 
@@ -110,34 +118,40 @@ export async function createRenderer(mount: HTMLElement, tuning: Tuning): Promis
   })
   overlay.addChild(deadText)
 
-  // --- vírus: polígono espinhoso, gerado uma vez por variante
-  const virusShapes: number[][] = []
-  for (let v = 0; v < 4; v++) {
+  const shapeFor = (spikes: number): number[] => {
     const pts: number[] = []
-    const spikes = 7
     for (let i = 0; i < spikes * 2; i++) {
-      // Ângulos de uma tabela fixa: o render pode usar trigonometria à vontade,
-      // mas manter isto determinístico deixa a silhueta estável entre sessões.
       const a = (i / (spikes * 2)) * Math.PI * 2
-      const r = (i % 2 === 0 ? 1 : 0.52) * (1 + ((v * 7 + i) % 3) * 0.06)
+      const r = i % 2 === 0 ? 1 : 0.5
       pts.push(Math.cos(a) * r, Math.sin(a) * r)
     }
-    virusShapes.push(pts)
+    return pts
   }
 
   const enemyPool: Graphics[] = []
-  const enemyFor = (i: number, variant: number): Graphics => {
+  /**
+   * Cada tipo tem cor, número de pontas e tamanho próprios. Ler a ameaça pela
+   * silhueta é o que faz a variedade valer — se todos parecessem iguais, ter
+   * quatro comportamentos seria só dificuldade escondida.
+   */
+  const enemyFor = (i: number, kind: string): Graphics => {
     let g = enemyPool[i]
     if (g === undefined) {
       g = new Graphics()
       enemyPool[i] = g
       enemyLayer.addChild(g)
     }
-    const half = tuning.enemy.size / 2
-    const pts = virusShapes[variant % virusShapes.length]!.map((p) => p * half)
-    g.clear().poly(pts).fill(COLOR_VIRUS).stroke({ width: 1, color: 0xffb08a, alpha: 0.5 })
+    const style = KIND_STYLE[kind] ?? KIND_STYLE["comum"]!
+    const spec = tuning.enemy.kinds[kind]
+    const half = (tuning.enemy.size * (spec?.sizeScale ?? 1)) / 2
+    const pts = shapeFor(style.spikes).map((p) => p * half)
+    g.clear().poly(pts).fill(style.color).stroke({ width: 1, color: 0xffffff, alpha: 0.25 })
+    if (style.ring) g.circle(0, 0, half * 0.45).stroke({ width: 1.5, color: 0xffffff, alpha: 0.5 })
     return g
   }
+
+  const cellLayer = new Graphics()
+  world.addChildAt(cellLayer, 1)
 
   // --- partículas: puramente decorativas, fora da sim
   let particles: Particle[] = []
@@ -159,6 +173,7 @@ export async function createRenderer(mount: HTMLElement, tuning: Tuning): Promis
 
   let seenIds = new Set<number>()
   let prevLives = -1
+  let prevCellsLost = 0
   let flash = 0
   let shake = 0
 
@@ -202,6 +217,7 @@ export async function createRenderer(mount: HTMLElement, tuning: Tuning): Promis
   }
 
   const drawHud = (cur: SimState): void => {
+    waveText.position.set(cur.cells.length > 0 ? 14 + cur.cells.length * 13 : 10, 8)
     waveText.text = `ONDA ${cur.wave}   ${cur.waveKills}/${cur.quota}${
       cur.bestWave > 1 ? `   melhor ${cur.bestWave}` : ""
     }`
@@ -218,6 +234,14 @@ export async function createRenderer(mount: HTMLElement, tuning: Tuning): Promis
     hudBars
       .rect(10, 28, ((tuning.arena.width - 20) * cur.waveKills) / cur.quota, 3)
       .fill(COLOR_VIRUS)
+
+    // Organismo restante, ao lado das vidas: as duas formas de perder, lado a lado.
+    for (let i = 0; i < cur.cells.length; i++) {
+      hudBars
+        .circle(14 + i * 13, 14, 4)
+        .fill({ color: COLOR_CELL_ORG, alpha: cur.cells[i]!.hp / tuning.cells.hp })
+        .stroke({ width: 1, color: COLOR_CELL_ORG })
+    }
 
     if (cur.phase === "run") {
       hudBars
@@ -248,7 +272,7 @@ export async function createRenderer(mount: HTMLElement, tuning: Tuning): Promis
       overlayTitle.text = ""
       deadText.visible = true
       deadText.text =
-        `A INFECÇÃO VENCEU\n\n` +
+        (cur.lostByCells ? `O ORGANISMO CAIU\n\n` : `A INFECÇÃO VENCEU\n\n`) +
         `onda ${cur.wave} · ${cur.kills} vírus\n` +
         (cur.bestWave > cur.wave ? `melhor: onda ${cur.bestWave}\n` : "") +
         `\nR ou ENTER pra outra`
@@ -299,8 +323,18 @@ export async function createRenderer(mount: HTMLElement, tuning: Tuning): Promis
       // --- eventos, deduzidos por diff de id. A sim não guarda efeito.
       const live = new Set(cur.enemies.map((e) => e.id))
       for (const e of prev.enemies) {
-        if (!live.has(e.id) && seenIds.has(e.id)) burst(e.x, e.y, COLOR_VIRUS, 7, 2.6)
+        if (!live.has(e.id) && seenIds.has(e.id)) {
+          burst(e.x, e.y, (KIND_STYLE[e.kind] ?? KIND_STYLE["comum"]!).color, 7, 2.6)
+        }
       }
+      // Célula perdida: explosão grande, porque é a outra forma de perder.
+      if (cur.cellsLost > prevCellsLost) {
+        const gone = prev.cells.find((c) => !cur.cells.some((k) => k.id === c.id))
+        if (gone) burst(gone.x, gone.y, COLOR_CELL_ORG, 22, 3.4)
+        flash = 1
+        shake = 9
+      }
+      prevCellsLost = cur.cellsLost
       seenIds = live
 
       if (prevLives >= 0 && cur.lives < prevLives) {
@@ -315,10 +349,25 @@ export async function createRenderer(mount: HTMLElement, tuning: Tuning): Promis
       const t = frozen ? 0 : alpha
       drawPlayer(cur, lerp(prev.player.x, cur.player.x, t), lerp(prev.player.y, cur.player.y, t))
 
+      // --- organismo: o que você está defendendo
+      cellLayer.clear()
+      for (const c of cur.cells) {
+        const frac = c.hp / tuning.cells.hp
+        cellLayer
+          .circle(c.x, c.y, tuning.cells.size / 2)
+          .fill({ color: COLOR_CELL_ORG, alpha: 0.16 + 0.24 * frac })
+          .stroke({ width: 2, color: COLOR_CELL_ORG, alpha: 0.5 + 0.5 * frac })
+        for (let i = 0; i < c.hp; i++) {
+          cellLayer
+            .circle(c.x - (c.hp - 1) * 4 + i * 8, c.y + tuning.cells.size / 2 + 8, 2)
+            .fill(COLOR_CELL_ORG)
+        }
+      }
+
       const prevById = new Map(prev.enemies.map((e) => [e.id, e]))
       for (let i = 0; i < cur.enemies.length; i++) {
         const e = cur.enemies[i]!
-        const g = enemyFor(i, e.id)
+        const g = enemyFor(i, e.kind)
         const p = prevById.get(e.id)
         g.visible = true
         g.position.set(p ? lerp(p.x, e.x, t) : e.x, p ? lerp(p.y, e.y, t) : e.y)
