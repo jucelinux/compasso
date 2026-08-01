@@ -100,3 +100,21 @@ Sem prosa. Se precisar de parágrafo, é decisão de arquitetura e vai pro `CLAU
 - 01/08 · gate · contador zerado · o core mudou; medir a tese antiga contra o jogo novo não diria nada
 - 01/08 · determinismo · Math.pow banido da sim, duas vezes · o teste de fronteira pegou a curva do relógio e a curva da cota; trocadas por t*sqrt(t) e por quadrática, que são exatas
 - 01/08 · ritmo · run média de 127s contra alvo de 120, e as 5 seeds do bot morrem · primeira vez que o bot é consistentemente mortal; o core contínuo com fagocitose por velocidade cria risco de verdade
+- 01/08 · estética · PIXEL ART NATIVO 640x360, paleta travada de 56 cores · escolha do H entre "pixel art de verdade" e "craft de SNES com render suave"; substitui a expectativa de quase fotorrealismo registrada horas antes, que era incompatível
+- 01/08 · grade · 640x360 com upscale 1x, não 320x180 com 2x · escolha do H; cabem 5-8 tons por corpo e os 6 patógenos continuam distinguíveis, ao custo de o pixel gritar menos
+- 01/08 · diagnóstico · o gráfico não estagnou por falta de textura, estagnou por falta de ANIMAÇÃO · não havia um único quadro no jogo; tudo era uma textura estática escalada e girada
+- 01/08 · pipeline · buffer indexado DOM-free, cor só na conversão final · o travamento de paleta deixa de ser disciplina e vira estrutura, e a arte inteira passa a rodar sob vitest
+- 01/08 · relógio duplo no render · o corpo do jogador anima em tempo real, patógeno e fundo em tempo de MUNDO · parado, você respira enquanto a infecção quase congela; a tese passa a ser visível no desenho, não só na barra
+- 01/08 · rotação · proibida em tempo de execução; 8 direções assadas por corpo · ângulo livre destrói a grade de pixel, e era a causa do defeito "Salmonella gira no próprio eixo"
+- 01/08 · silhueta · o sprite redondo cabe na hitbox da sim, com teste · influenza e corona desenhavam 40% e 50% maiores; num jogo onde encostar engole ou machuca, isso é mentira de leitura
+- 01/08 · defeito achado por teste · metade dos quadros do flagelo e da célula eram cópia · a onda completava dois ciclos em seis fases; comparar só quadros vizinhos não pegava
+- 01/08 · fonte · bitmap 5x7 própria, acento composto · uma legenda de webfont antialiasada desmancha a leitura de pixel do resto da tela
+- 01/08 · defeito achado na captura · o parallax desenhava as DUAS cópias de cada camada no mesmo lugar · a normalização do resto vinha depois de somar o deslocamento e o anulava; aparecia como blocos retangulares no fundo, e estava lá desde 31/07
+- 01/08 · defeito achado na captura · o corpo do jogador lia como pedra · faltava membrana e especular, o núcleo caía na faixa de valor do citoplasma, e a luz punha o brilho no centro em vez de na direção dela
+- 01/08 · rastro de velocidade · espaçado por DISTÂNCIA, não por quadro · contando quadros, o borrão vira colar de contas assim que a taxa cai
+- 01/08 · GATE · esta rodada não produziu leitura nenhuma sobre dificuldade · o pedido foi de qualidade gráfica e foi atendido; a reprovação de 01/08 ("não achei tão desafiador") segue de pé e sem medição
+- 01/08 · PROCESSO · primeira aprovação forte de qualidade gráfica · H: "deixou de ser algo caseiro e feito por IA"; o que mudou foi o método, não o esforço
+- 01/08 · método · pergunta binária ANTES de escrever código resolveu uma contradição que teria queimado a reescrita inteira · "fotorrealismo" (ontem) e "SNES" (hoje) são opostos; adivinhar custaria a rodada
+- 01/08 · método · achar o defeito REAL, não o aparente · eu vinha melhorando textura; o defeito era ausência de animação. O diagnóstico anterior ("canvas 2D tem teto, o salto é shader") nomeava o meio, não o problema
+- 01/08 · método · substrato testável antes de acabamento · índice de paleta sem DOM fez a arte rodar sob vitest e pegou 3 defeitos que eu não acharia lendo
+- 01/08 · método · restrição dura faz o desenho no meu lugar · paleta travada, sem rotação, posição inteira, silhueta dentro da hitbox; pixel art me serve porque é regida por regra, e eu obedeço melhor do que invento

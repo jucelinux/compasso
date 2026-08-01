@@ -19,6 +19,28 @@ const keyboard = createKeyboard()
 const recorder = createRecorder(seed, tuning, browserGitSha())
 const renderer = await createRenderer(mount, tuning)
 
+/**
+ * Escala inteira.
+ *
+ * Decorre direto do pixel art nativo escolhido em 01/08: com vizinho-próximo em
+ * escala fracionária, uma parte dos pixels ocupa 2 unidades de tela e outra 3, e
+ * a diferença aparece como cintilação assim que o fundo rola. Múltiplo inteiro
+ * custa uma tarja preta e devolve a grade intacta. 640x360 é exatamente 1/3 de
+ * 1920x1080 e 1/2 de 1280x720, então na maioria das telas não sobra nada.
+ */
+function fitInteger(): void {
+  const canvas = mount.querySelector("canvas")
+  if (canvas === null) return
+  const scale = Math.max(
+    1,
+    Math.floor(Math.min(window.innerWidth / tuning.arena.width, window.innerHeight / tuning.arena.height)),
+  )
+  canvas.style.width = `${tuning.arena.width * scale}px`
+  canvas.style.height = `${tuning.arena.height * scale}px`
+}
+fitInteger()
+window.addEventListener("resize", fitInteger)
+
 const clone = (s: Readonly<SimState>): SimState => structuredClone(s) as SimState
 let prev = clone(sim.state())
 

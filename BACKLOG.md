@@ -55,8 +55,12 @@ log de decisão morre.
 
 ## Conhecido e adiado de propósito
 
-- **Arte do tema.** Primitivas geométricas tornam o tema barato depois. Antes do sistema de
-  recompensa estar medido, mexer nisso é o viés do `TASTE.md` §2 falando.
+- **Ciclagem de paleta além do plasma.** A máquina já existe (`cycledPalette`); hoje só o
+  fundo usa. Membrana pulsando por troca de tabela sairia de graça.
+- **Palette swap de dano assado.** O flash de dano usa `tint` do Pixi, que é a única
+  multiplicação de cor do render. Assar uma folha vermelha do jogador custaria 192 quadros.
+- **Sprite de captura.** Sem Playwright no projeto, a conferência visual é ASCII no
+  terminal. Comparar quadros entre rodadas exigiria a dependência — propor antes.
 - **Mobile sem controle de toque.** Alvo inclui mobile; slice só tem teclado.
 - **Áudio.** Nada ainda.
 - **Fase 2 do harness.** Gatilho em `HARNESS.md` §7: mesmo eixo subjetivo julgado mais de

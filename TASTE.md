@@ -35,6 +35,7 @@ _Provisório, proposto pelo modelo em 31/07 a pedido do H. Um bar geral não dá
 | primitiva como identidade | Geometry Wars |
 | escalada em run curta | Devil Daggers |
 | escalada de recompensa | Candy Crush |
+| primor técnico da arte | os melhores jogos de SNES (declarado pelo H em 01/08) |
 
 Critério do bar ativo: **se pegar um modificador não muda o que aparece na tela, a
 escolha não vale.**

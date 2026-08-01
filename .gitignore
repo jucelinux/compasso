@@ -3,3 +3,6 @@ dist/
 out/
 .DS_Store
 *.log
+
+# Dumps do F9 caem na raiz; fixture de regressao mora em replays/ (HARNESS.md)
+/f9-*.json

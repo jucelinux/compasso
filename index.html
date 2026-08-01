@@ -14,12 +14,21 @@
         overflow: hidden;
       }
       #app { display: grid; place-items: center; height: 100%; }
-      /* Arena é 640x360 fixos na sim; aqui só escala mantendo a proporção. */
-      #app canvas { width: min(100vw, 177.78vh); height: auto; display: block; }
+      /*
+       * O buffer é 640x360 de verdade. O tamanho final vem de `main.ts`, que
+       * escolhe um múltiplo INTEIRO — em escala fracionária o vizinho-próximo
+       * faz uns pixels virarem 2 e outros 3, e a imagem cintila ao rolar.
+       */
+      #app canvas {
+        display: block;
+        image-rendering: pixelated;
+        image-rendering: crisp-edges;
+      }
       #hud {
         position: fixed;
-        top: 8px;
-        left: 10px;
+        bottom: 6px;
+        left: 8px;
+        opacity: 0.5;
         pointer-events: none;
         white-space: pre;
       }
