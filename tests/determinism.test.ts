@@ -11,7 +11,7 @@ import type { Tuning } from "../src/sim/types.ts"
  */
 
 const SMOKE = resolve(projectRoot, "replays", "smoke.json")
-const BASELINE_HASH = "4dc9b422"
+const BASELINE_HASH = "e17874bd"
 
 /**
  * Run real do humano, 7,6 min de input de verdade, do core do dash (`7c952a6`).
@@ -21,7 +21,7 @@ const BASELINE_HASH = "4dc9b422"
  * leitura de ritmo, e não como cobertura de morte.
  */
 const RUN_01 = resolve(projectRoot, "replays", "run-01.json")
-const RUN_01_HASH = "5f3fe168"
+const RUN_01_HASH = "8c8b7194"
 
 /**
  * Segunda run real: 5 min, 10 ondas, uma morte. Gravada antes da tecla de
@@ -29,7 +29,7 @@ const RUN_01_HASH = "5f3fe168"
  * Vale como determinismo sobre input humano longo.
  */
 const RUN_02 = resolve(projectRoot, "replays", "run-02.json")
-const RUN_02_HASH = "db7a925c"
+const RUN_02_HASH = "c646b82f"
 
 /**
  * Terceira run real: 5,7 min de input humano, gravada quando os modificadores
@@ -38,16 +38,18 @@ const RUN_02_HASH = "db7a925c"
  * Com os patógenos reais este input voltou a morrer, na onda 6.
  */
 const RUN_03 = resolve(projectRoot, "replays", "run-03.json")
-const RUN_03_HASH = "65d6eb88"
+const RUN_03_HASH = "a81b1a7d"
 
 /**
- * Primeira fixture do core contínuo, gravada por `npm run rec` em 01/08 no
- * `gitSha 669ee03`. Sintética, não humana: serve de âncora de determinismo, não
- * para julgar ritmo. É a ÚNICA que atravessa morte → reinício, que é o gesto que
- * o gate mede — as quatro anteriores são todas do `7c952a6`, anterior ao pivô.
+ * Fixture do core contínuo, gravada por `npm run rec`. **Regravada em 02/08**
+ * (`gitSha c0a30ec`): com o tecido resistindo, o input de 01/08 deixou de morrer
+ * e a fixture perdeu a única coisa que a tornava especial. Sintética, não humana:
+ * serve de âncora de determinismo, não para julgar ritmo. É a ÚNICA que atravessa
+ * morte → reinício, que é o gesto que o gate mede — as quatro anteriores são
+ * todas do `7c952a6`, anterior ao pivô.
  */
 const CORE_ATUAL = resolve(projectRoot, "replays", "core-atual.json")
-const CORE_ATUAL_HASH = "2f7c2baf"
+const CORE_ATUAL_HASH = "524af4bd"
 
 const smoke = () => loadReplay(SMOKE)
 const tuning = () => loadTuning()
@@ -61,6 +63,11 @@ const tuning = () => loadTuning()
  *    deixou de congelar o alastramento junto com o resto do mundo. A arena deixou de ser vazio: 576 tiles de infecção agora
  *    fazem parte do estado e do hash, as três células discretas do organismo
  *    saíram, e a fase acaba por contenção em vez de por cota.
+ *
+ * E uma terceira vez em 02/08: **o tecido passou a RESISTIR.** A velocidade
+ * máxima agora cai com quanta hemácia há no ponto, então todo input antigo
+ * produz outra trajetória. Não é regressão; é a mudança que o H pediu, e o
+ * rebase é o preço declarado dela.
  */
 describe("determinismo", () => {
   it("mesma seed + mesmos inputs = mesmo hash", () => {

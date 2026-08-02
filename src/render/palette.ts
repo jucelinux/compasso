@@ -96,7 +96,7 @@ export const DIM0 = 54
 export const DIM1 = 55
 
 /** RGB de cada índice. A ordem é a das constantes acima e não pode mudar. */
-export const PALETTE: ReadonlyArray<number> = [
+const RGB: number[] = [
   0x000000, // 0 transparente (alpha 0; o RGB não é lido)
   0x0a0409, // 1 INK
   0x1a0a12, // 2 INK2
@@ -167,6 +167,221 @@ export const PALETTE: ReadonlyArray<number> = [
   0x7a4450, // 54 DIM0
   0x4a2830, // 55 DIM1
 ]
+
+/**
+ * A tabela viva. `RGB` é o mesmo objeto, então trocar valores nele muda a
+ * paleta inteira do jogo sem tocar num pixel de geometria.
+ */
+export const PALETTE: ReadonlyArray<number> = RGB
+
+/** Escala um RGB por um fator, canal a canal. */
+function shade(rgb: number, f: number): number {
+  const r = Math.min(255, Math.round(((rgb >> 16) & 0xff) * f))
+  const g = Math.min(255, Math.round(((rgb >> 8) & 0xff) * f))
+  const b = Math.min(255, Math.round((rgb & 0xff) * f))
+  return (r << 16) | (g << 8) | b
+}
+
+/**
+ * O plasma DERIVA da hemácia escura, em vez de ser declarado à parte.
+ *
+ * Pedido do H em 02/08: *"lá no fundo a variação entre o vermelho e o preto
+ * pode ser muito mais sutil"*. O fundo lia como buraco preto entre as células,
+ * e buraco não preenche — era essa a causa real do "o parallax não preenche",
+ * que nem era do parallax.
+ *
+ * Amarrando o plasma ao `HEM0` da paleta em vigor, o fundo passa a ser hemácia
+ * fora de foco em vez de vazio, a variação interna fica estreita por
+ * construção, e a correção vale para as nove variantes de uma vez sem eu
+ * reescrever quatro números em cada uma.
+ */
+export function plasmaFrom(hem0: number): [number, number, number, number] {
+  return [shade(hem0, 0.55), shade(hem0, 0.68), shade(hem0, 0.81), shade(hem0, 0.95)]
+}
+
+{
+  const base = plasmaFrom(RGB[HEM0]!)
+  RGB[PLASMA0] = base[0]
+  RGB[PLASMA1] = base[1]
+  RGB[PLASMA2] = base[2]
+  RGB[PLASMA3] = base[3]
+}
+
+const BASE: ReadonlyArray<number> = RGB.slice()
+
+/**
+ * Sonda de paleta — `TASTE-LOOP.md` §3.0, e descartável por construção.
+ *
+ * O pedido do H em 02/08: o vermelho escuro dramatiza como jogo de violência, e
+ * ele quer VER outras leituras no estilo retro antes de decidir. Cada variante
+ * troca só o AMBIENTE — tinta, plasma, hemácia, fibrina. Jogador, patógeno e
+ * colônia ficam onde estão de propósito: são as cores que carregam regra, e
+ * mexer nelas junto tornaria impossível atribuir a reação dele ao ambiente.
+ *
+ * São idiomas materialmente diferentes, não três tons do mesmo vermelho — a
+ * sonda existe para varrer a faixa, e variante de variante não varre nada.
+ *
+ * **Segunda rodada, 02/08.** A primeira varria o MATIZ — turquesa de campo
+ * escuro, magenta de coloração de Gram, âmbar de fósforo. O veredito do H foi o
+ * mesmo para as quatro: *"todas muito escuras"*, e o arterial ganhou. Ou seja,
+ * o eixo que importava não era matiz, era VALOR, e a sonda varreu o eixo errado.
+ * As três reprovadas saíram do arquivo — `DECISIONS.md` as guarda; arquivo de
+ * estado guarda o presente.
+ *
+ * Esta rodada varre quatro MECANISMOS diferentes de clarear, porque "mais claro"
+ * não é uma direção só: levantar o piso, esquentar o matiz, dessaturar e abrir
+ * o contraste produzem quatro sensações distintas de luz.
+ *
+ * O que olhar: o leucócito é azul-claro e NÃO muda nestas amostras. Quanto mais
+ * claro o campo, menos ele se separa dele. Se o vencedor for um dos claros, a
+ * cor do jogador vira o passo seguinte, não parte deste.
+ */
+export const PALETTE_VARIANTS: Readonly<Record<string, Readonly<Record<number, number>>>> = {
+  /** Como está hoje: sangue arterial, escuro e saturado. A referência. */
+  arterial: {},
+
+  /**
+   * Piso levantado, mesmo matiz. O vermelho é o mesmo; o que sai é o quase-preto.
+   * É a tradução mais literal de "está escuro demais", e serve de controle: se
+   * esta bastar, as outras três são complicação.
+   */
+  "arterial-claro": {
+    [INK]: 0x1c0c12,
+    [INK2]: 0x2e131c,
+    [HEM0]: 0x7e2032,
+    [HEM1]: 0xaa2e42,
+    [HEM2]: 0xd44357,
+    [FIB0]: 0x8e4c58,
+    [FIB1]: 0xc0868f,
+  },
+
+  /**
+   * Sangue OXIGENADO. O vermelho escuro do jogo é sangue venoso; o arterial de
+   * verdade é mais claro e mais alaranjado. Clareia por matiz, não por valor —
+   * e é a variante em que o tema faz o trabalho, porque a cor está certa.
+   */
+  "arterial-oxigenado": {
+    [INK]: 0x1e0a08,
+    [INK2]: 0x331410,
+    [HEM0]: 0x992a1a,
+    [HEM1]: 0xcc4226,
+    [HEM2]: 0xf9663c,
+    [FIB0]: 0xa25f4c,
+    [FIB1]: 0xdb9c86,
+  },
+
+  /**
+   * Dessaturado para cima. **Dessaturação é o que o olho lê como luz** — uma cor
+   * saturada e clara ainda parece pigmento, uma cor lavada parece iluminada.
+   * É a variante que mais deve clarear a sensação e a que mais custa em drama.
+   */
+  "arterial-rosa": {
+    [INK]: 0x241820,
+    [INK2]: 0x38262e,
+    [HEM0]: 0x8e4a58,
+    [HEM1]: 0xb46a78,
+    [HEM2]: 0xd8909c,
+    [FIB0]: 0xa07d86,
+    [FIB1]: 0xd4b8be,
+  },
+
+  /**
+   * Contraste em vez de brilho. Os escuros ficam quase onde estão e as altas
+   * luzes sobem muito, então existe LUZ batendo nas células em vez de tudo
+   * subir junto. Clareia sem lavar, e é a única que não perde o drama — a
+   * aposta é que "escuro demais" era falta de luz, não excesso de escuridão.
+   */
+  "arterial-contraste": {
+    [INK]: 0x0a0409,
+    [INK2]: 0x1c0d16,
+    [HEM0]: 0x6e1626,
+    [HEM1]: 0xb42c40,
+    [HEM2]: 0xec546a,
+    [FIB0]: 0x7e3c4a,
+    [FIB1]: 0xc89ca4,
+  },
+
+  /*
+   * As quatro abaixo entraram na terceira passada, e a razão é um erro meu de
+   * calibragem: o H disse "todas muito escuras" sobre quatro amostras, eu subi
+   * pouco, e a minha própria variante de controle continuou escura. Uma sonda
+   * serve para CERCAR a resposta, então esta leva vai deliberadamente longe
+   * demais de um lado — se a mais clara for clara demais, isso é informação, e
+   * é mais barato do que subir de pouquinho em pouquinho por três rodadas.
+   */
+
+  /** Contraste levado ao extremo: escuros onde estão, luz até quase branco. */
+  "arterial-vivo": {
+    [INK]: 0x0a0409,
+    [INK2]: 0x1c0d16,
+    [HEM0]: 0x8a1c30,
+    [HEM1]: 0xd43a52,
+    [HEM2]: 0xff8098,
+    [FIB0]: 0x8e4858,
+    [FIB1]: 0xe8b8c0,
+  },
+
+  /** Dessaturada E quente: pêssego. A rosa com o matiz do oxigenado. */
+  "arterial-quente": {
+    [INK]: 0x2a1a14,
+    [INK2]: 0x40281e,
+    [HEM0]: 0xa85440,
+    [HEM1]: 0xcc7458,
+    [HEM2]: 0xefa084,
+    [FIB0]: 0xb88a74,
+    [FIB1]: 0xe8c4b0,
+  },
+
+  /** O mais claro que o vermelho aguenta antes de virar rosa de doce. */
+  "arterial-luz": {
+    [INK]: 0x3a2028,
+    [INK2]: 0x50303a,
+    [HEM0]: 0xb04050,
+    [HEM1]: 0xd4606e,
+    [HEM2]: 0xf0909c,
+    [FIB0]: 0xc09096,
+    [FIB1]: 0xecc8cc,
+  },
+
+  /**
+   * Lâmina sob luz forte. É o extremo do outro lado e provavelmente longe
+   * demais: o leucócito é azul-claro e aqui o campo inteiro é claro, então a
+   * aposta é que ele SUMA. Está na sonda exatamente por isso — o limite só é
+   * conhecido quando alguém passa dele.
+   */
+  "arterial-lamina": {
+    [INK]: 0x4a3038,
+    [INK2]: 0x624048,
+    [HEM0]: 0xc06874,
+    [HEM1]: 0xdc8c96,
+    [HEM2]: 0xf4b4bc,
+    [FIB0]: 0xd4a8ae,
+    [FIB1]: 0xf4dcdf,
+  },
+}
+
+/** Ordem de ciclagem da tecla P, no build de dev. */
+export const PALETTE_NAMES: ReadonlyArray<string> = Object.keys(PALETTE_VARIANTS)
+
+/**
+ * Aplica uma variante. Volta sempre à base antes, então aplicar duas vezes não
+ * acumula. Chamada UMA vez, no boot, antes de assar o atlas — depois disso as
+ * texturas já estão na GPU e a tabela não é mais lida.
+ */
+export function applyPaletteVariant(name: string): boolean {
+  const v = PALETTE_VARIANTS[name]
+  if (v === undefined) return false
+  for (let i = 0; i < RGB.length; i++) RGB[i] = BASE[i]!
+  for (const [idx, rgb] of Object.entries(v)) RGB[Number(idx)] = rgb
+  // O plasma nunca é declarado por variante: ele SEGUE a hemácia escura dela.
+  // Assim o fundo de qualquer paleta é hemácia fora de foco, e não vazio preto.
+  const p = plasmaFrom(RGB[HEM0]!)
+  RGB[PLASMA0] = p[0]
+  RGB[PLASMA1] = p[1]
+  RGB[PLASMA2] = p[2]
+  RGB[PLASMA3] = p[3]
+  return true
+}
 
 /**
  * Rampas de sombreamento: do mais escuro ao mais claro. A função de corpo em

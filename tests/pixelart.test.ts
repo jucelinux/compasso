@@ -10,14 +10,19 @@ import {
   PLAYER_TIERS,
   pathogenSheet,
   playerSheet,
-  BED_FRAMES,
+  bloodCell,
+  CELL_LEVELS,
   colonyTile,
-  tissueBed,
-  tissueFront,
   TISSUE_LEVELS,
   type Sheet,
 } from "../src/render/sprites.ts"
-import { layerBuf, plasmaBuf } from "../src/render/backdrop.ts"
+import {
+  CROWD_VARIANTS,
+  crowdLayout,
+  crowdShape,
+  layerBuf,
+  plasmaBuf,
+} from "../src/render/backdrop.ts"
 
 const tuning = tuningJson as Tuning
 
@@ -231,37 +236,97 @@ describe("quadros de animação", () => {
     }
   })
 
-  it("o leito de hemácias não tem grade — a reprovação foi de xadrez", () => {
-    const bed = tissueBed(160, 120, 7)
+  /**
+   * A MULTIDÃO substituiu o leito assado em 02/08.
+   *
+   * O que morreu junto: `tissueBed` (uma textura de tela cheia) e `tissueFront`
+   * (uma camada por cima). Nenhuma das duas podia ser EMPURRADA, e foi isso —
+   * não ordem de desenho — o que o H pediu três vezes. Testar as duas seria
+   * manter verde um código que a tela não alcança mais.
+   */
+  const compoe = (w: number, h: number, necrose = 0): Buf => {
+    const campo = makeBuf(w, h)
+    const formas = Array.from({ length: CROWD_VARIANTS }, (_, v) => {
+      const f = crowdShape(v)
+      return bloodCell(f.r, f.squash, f.tilt, necrose)
+    })
+    for (const c of crowdLayout(w, h, 4242)) {
+      const cel = formas[c.variant]!
+      for (let y = 0; y < cel.h; y++) {
+        for (let x = 0; x < cel.w; x++) {
+          const v = cel.d[y * cel.w + x]!
+          if (v === 0) continue
+          const dx = Math.round(c.hx - cel.w / 2) + x
+          const dy = Math.round(c.hy - cel.h / 2) + y
+          if (dx < 0 || dy < 0 || dx >= w || dy >= h) continue
+          campo.d[dy * w + dx] = v
+        }
+      }
+    }
+    return campo
+  }
+
+  it("a multidão cobre o campo na mesma densidade do leito que ela substituiu", () => {
     /*
-     * Densa, mas não sólida. O microscópio mostra célula encostando em célula;
-     * aqui fica em torno de dois terços de propósito, porque o leito ocupa a
-     * tela inteira e precisa deixar plasma aparecer entre as células — sem isso
-     * vira massa única e o jogador, que tem 20px, some dentro dela.
+     * A faixa é a mesma que o leito assado tinha que respeitar, e por um motivo
+     * de método: o H olhou a densidade em 02/08 e disse "vamos manter como
+     * está". Trocar a TÉCNICA e a DENSIDADE na mesma leva tornaria a reação
+     * dele inatribuível — é a falha de 31/07, quando muita coisa se moveu junto.
      */
-    const cheio = bed.d.reduce((n, v) => n + (v === 0 ? 0 : 1), 0) / bed.d.length
-    expect(cheio, "leito ralo demais").toBeGreaterThan(0.6)
-    expect(cheio, "leito sólido demais — sem plasma entre células").toBeLessThan(0.92)
-    // E sem repetição: se houvesse grade, colunas distantes seriam iguais.
-    const coluna = (x: number): string =>
-      Array.from({ length: bed.h }, (_, y) => bed.d[y * bed.w + x]!).join(",")
-    expect(coluna(20)).not.toEqual(coluna(60))
-    expect(coluna(20)).not.toEqual(coluna(100))
+    const campo = compoe(320, 180)
+    const cheio = campo.d.reduce((n: number, v: number) => n + (v === 0 ? 0 : 1), 0) / campo.d.length
+    expect(cheio, "multidão rala demais").toBeGreaterThan(0.6)
+    expect(cheio, "multidão sólida demais — sem plasma entre células").toBeLessThan(0.92)
   })
 
-  it("o leito treme, e a camada da frente é esparsa o bastante para não esconder o jogo", () => {
-    // Tremor: sem isto o leito é papel de parede. O humano pediu vida em 01/08.
-    const quadros = new Set(
-      Array.from({ length: BED_FRAMES }, (_, f) => tissueBed(120, 90, 7, f).d.join(",")),
-    )
-    expect(quadros.size, "quadros do leito são cópia").toBe(BED_FRAMES)
+  it("a multidão não tem grade — a reprovação de 01/08 foi de xadrez", () => {
+    const campo = compoe(320, 180)
+    const coluna = (x: number): string =>
+      Array.from({ length: campo.h }, (_, y) => campo.d[y * campo.w + x]!).join(",")
+    expect(coluna(40)).not.toEqual(coluna(120))
+    expect(coluna(40)).not.toEqual(coluna(200))
+  })
 
-    // A camada da frente existe para pôr a batalha ENTRE as células, e por isso
-    // é rala: densa demais na frente ela esconderia o jogo em vez de emoldurá-lo.
-    const frente = tissueFront(320, 180, 9, 0)
-    const cobre = frente.d.reduce((n, v) => n + (v === 0 ? 0 : 1), 0) / frente.d.length
-    expect(cobre, "frente vazia demais").toBeGreaterThan(0.03)
-    expect(cobre, "frente esconde o jogo").toBeLessThan(0.3)
+  it("cada célula tem halo escuro próprio — senão a densidade vira massa única", () => {
+    const f = crowdShape(0)
+    const cel = bloodCell(f.r, f.squash, f.tilt, 0)
+    // A borda da silhueta tem que ser mais escura que o miolo, ou as vizinhas
+    // se fundem numa mancha só na densidade em que elas de fato aparecem.
+    const c = Math.floor(cel.w / 2)
+    const miolo = cel.d[c * cel.w + c]!
+    const borda = cel.d[Math.floor((c - f.r + 0.5)) * cel.w + c]!
+    expect(borda, "sem halo: a célula não se separa da vizinha").toBeLessThan(miolo)
+  })
+
+  it("a necrose escurece, e NÃO apaga — doença multiplica, não subtrai", () => {
+    const ocupacao = (lv: number): number => {
+      const f = crowdShape(3)
+      const cel = bloodCell(f.r, f.squash, f.tilt, lv)
+      return cel.d.reduce((n: number, v: number) => n + (v === 0 ? 0 : 1), 0)
+    }
+    const soma = (lv: number): number => {
+      const f = crowdShape(3)
+      const cel = bloodCell(f.r, f.squash, f.tilt, lv)
+      return cel.d.reduce((n: number, v: number) => n + v, 0)
+    }
+    // Mesma silhueta em todos os níveis: a célula não some, ela apodrece.
+    for (let lv = 1; lv < CELL_LEVELS; lv++) {
+      expect(ocupacao(lv), `nível ${lv} mudou de tamanho`).toBe(ocupacao(0))
+      // E os índices caem, porque a paleta é ordenada do escuro para o claro.
+      expect(soma(lv), `nível ${lv} não escureceu`).toBeLessThan(soma(lv - 1))
+    }
+  })
+
+  it("o raio que empurra é o raio que se vê", () => {
+    /*
+     * Se a forma desenhada e o raio de colisão divergirem, o empurrão acontece
+     * onde não há célula e a multidão parece ter fantasmas. Este teste trava a
+     * ligação entre `crowdLayout` e `crowdShape`, que é fácil de quebrar porque
+     * as duas sorteiam do mesmo gerador.
+     */
+    for (const c of crowdLayout(320, 180, 4242).slice(0, 200)) {
+      expect(c.r).toBe(crowdShape(c.variant).r)
+    }
   })
 
   it("assar duas vezes dá exatamente a mesma arte", () => {

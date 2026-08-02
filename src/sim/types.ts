@@ -139,6 +139,12 @@ export interface Tuning {
     readonly winFraction: number
     /** Fração do campo totalmente infectada que encerra a run. */
     readonly loseFraction: number
+    /**
+     * Fração da velocidade máxima perdida em tecido 100% SÃO. O tecido resiste:
+     * tile sadio é tile lotado de hemácia, e atravessar corpo custa. Zero
+     * devolve o jogo de antes de 02/08.
+     */
+    readonly crowdDrag: number
   }
   readonly drops: {
     readonly chance: number

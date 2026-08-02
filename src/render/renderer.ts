@@ -3,6 +3,7 @@ import { activeStats, POWERS } from "../sim/powers.ts"
 import type { SimState, Tuning } from "../sim/types.ts"
 import { buildAtlas, frameOf, type Atlas } from "./atlas.ts"
 import { BASE_Y, BODY_H, GLYPH_W, textWidth } from "./font.ts"
+import { hashNoise } from "./pixelbuf.ts"
 import {
   COMBO_TIERS,
   DIM0,
@@ -150,7 +151,11 @@ class Pool {
   }
 }
 
-export async function createRenderer(mount: HTMLElement, tuning: Tuning): Promise<Renderer> {
+export async function createRenderer(
+  mount: HTMLElement,
+  tuning: Tuning,
+  crowdArea?: number,
+): Promise<Renderer> {
   const app = new Application()
   await app.init({
     width: tuning.arena.width,
@@ -167,7 +172,7 @@ export async function createRenderer(mount: HTMLElement, tuning: Tuning): Promis
   mount.appendChild(app.canvas)
 
   const t0 = performance.now()
-  const atlas = buildAtlas(tuning)
+  const atlas = buildAtlas(tuning, crowdArea)
   console.info(
     `arte assada em ${Math.round(performance.now() - t0)}ms · ` +
       `${atlas.player.frames.length} quadros de jogador, ` +
@@ -195,14 +200,13 @@ export async function createRenderer(mount: HTMLElement, tuning: Tuning): Promis
   const drift = LAYERS.flatMap((l) =>
     [0, 1].map((slot) => ({
       sprite: new Sprite(atlas.layers.get(l.kind)!),
+      kind: l.kind,
       speed: l.speed,
       slot,
     })),
   )
 
-  // O leito é estático e contínuo; só a colônia por cima muda de tile em tile.
-  const bedSprite = new Sprite(atlas.tissueBed[0]!)
-  const frontSprite = new Sprite(atlas.tissueFront[0]!)
+  const bloodLayer = new Container()
   const tissueLayer = new Container()
   const auraLayer = new Container()
   const enemyLayer = new Container()
@@ -213,9 +217,40 @@ export async function createRenderer(mount: HTMLElement, tuning: Tuning): Promis
   const fxLayer = new Container()
   const popLayer = new Container()
 
-  world.addChild(bgPlasma)
-  for (const d of drift) world.addChild(d.sprite)
-  world.addChild(bedSprite, tissueLayer, auraLayer, enemyLayer, ghostLayer, playerSprite, powerLayer, fxLayer, popLayer)
+  /*
+   * A FIBRINA volta para o fundo; só os DETRITOS ficam na frente.
+   *
+   * Eu tinha subido as duas em 02/08 e o H corrigiu: a malha de fibras é
+   * estrutura do vaso e pertence atrás, e por cima do tecido ela virava rede
+   * riscando o jogo. Detrito é partícula solta no plasma — esse sim passa na
+   * frente, e é o que dá profundidade sem virar grade.
+   */
+  const driftBack = new Container()
+  const driftFront = new Container()
+  for (const d of drift) (d.kind === "fibrina" ? driftBack : driftFront).addChild(d.sprite)
+  world.addChild(bgPlasma, driftBack)
+  /*
+   * A multidão entra ANTES da colônia e dos corpos, e isso não é "atrás".
+   *
+   * Duas tentativas erradas antecederam esta, as duas minhas, e as duas pela
+   * mesma confusão: eu lia "entre as hemácias" como ORDEM DE DESENHO e ele
+   * queria OCUPAÇÃO DE ESPAÇO. Uma camada por cima (02/08) não resolve nada,
+   * porque o problema nunca foi quem cobre quem — é que atravessar uma
+   * multidão empurra a multidão. Aqui o jogador fica visualmente por cima, que
+   * é o que a legibilidade exige, e o pertencimento ao mesmo plano vem do
+   * empurrão, não da profundidade.
+   */
+  /*
+   * `driftLayer` sobe para a FRENTE do tecido em 02/08.
+   *
+   * Ele estava logo acima do plasma, atrás de tudo — e com a multidão cobrindo
+   * quase a tela inteira, fibrina e detritos só apareciam pelas frestas. Era o
+   * diagnóstico do "parallax não preenche": não era velocidade nem densidade,
+   * era estar atrás de uma parede. Aqui eles cruzam por cima do tecido e da
+   * colônia, e param ABAIXO do jogador e dos patógenos — profundidade sem
+   * ocluir informação, que é a linha que o projeto já segue.
+   */
+  world.addChild(bloodLayer, tissueLayer, driftFront, auraLayer, enemyLayer, ghostLayer, playerSprite, powerLayer, fxLayer, popLayer)
 
   const flashVeil = new Sprite()
   flashVeil.visible = false
@@ -236,6 +271,78 @@ export async function createRenderer(mount: HTMLElement, tuning: Tuning): Promis
     tiles.push(sp)
     tissueLayer.addChild(sp)
   }
+  /*
+   * ------------------------------------------------------------- A MULTIDÃO
+   *
+   * Uma hemácia por sprite, com três movimentos somados e independentes:
+   *
+   * - **CORRENTE**, global, em tempo de mundo. O sangue corre e você nada nele.
+   *   É de onde vem o preenchimento: o parallax de fibrina e detritos não
+   *   enchia porque estava ATRÁS da multidão, e a multidão cobre a tela quase
+   *   inteira. Nenhum ajuste de velocidade consertava isso — quem tem que se
+   *   mexer é a camada que o olho alcança.
+   * - **RESPIRAÇÃO**, local, também em tempo de mundo. Cada célula oscila em
+   *   torno de si numa fase própria. Existia no leito assado (quatro quadros de
+   *   tremor), sumiu quando o leito virou multidão, e o H sentiu a falta na
+   *   hora: *"agora percebo comportamento de multidão, mas elas não respiram"*.
+   * - **EMPURRÃO**, de quem passa. É a mecânica de 02/08.
+   *
+   * As duas primeiras em tempo de MUNDO e não real, e isso não é detalhe: com o
+   * jogador parado o tecido quase congela junto com tudo, e a tese do projeto
+   * fica visível no organismo inteiro em vez de só numa barra de HUD.
+   *
+   * Custo: com corrente e respiração TODAS as células andam todo quadro, então
+   * a otimização anterior — só tocar os perturbados — deixou de existir. Foi
+   * troca consciente: ele varreu de 10 a 120 px² por célula na máquina dele e
+   * bateu 144fps em todas.
+   */
+  const crowd = atlas.crowd
+  const bloodSprites: Sprite[] = []
+  const offX = new Float32Array(crowd.length)
+  const offY = new Float32Array(crowd.length)
+  const cellLevel = new Int8Array(crowd.length).fill(-1)
+  /** Fase da respiração, em passos discretos, para virar consulta a tabela. */
+  const WOB_STEPS = 64
+  const cellPhase = new Uint8Array(crowd.length)
+  for (let i = 0; i < crowd.length; i++) {
+    const c = crowd[i]!
+    const sp = new Sprite(atlas.blood[0]![c.variant]!)
+    sp.anchor.set(0.5)
+    sp.position.set(Math.round(c.hx), Math.round(c.hy))
+    bloodSprites.push(sp)
+    bloodLayer.addChild(sp)
+    cellPhase[i] = Math.floor(hashNoise(i, 4242, 71) * WOB_STEPS) % WOB_STEPS
+  }
+
+  /*
+   * Grade de busca, TOROIDAL no eixo x.
+   *
+   * A corrente move a multidão inteira pelo mesmo tanto, então em vez de
+   * reindexar 2500 corpos por quadro, a grade fica em coordenada de CASA e a
+   * consulta é que anda para trás pelo deslocamento da corrente. O toro no x
+   * resolve a emenda: quem sai por um lado entra pelo outro, e o balde sabe.
+   */
+  const BUCKET = 32
+  /** Largura do ciclo da corrente. Casa com a margem que `crowdLayout` usa. */
+  const SPAN = tuning.arena.width + 16
+  const gridW = Math.ceil(SPAN / BUCKET)
+  const gridH = Math.ceil(tuning.arena.height / BUCKET) + 2
+  const buckets: number[][] = Array.from({ length: gridW * gridH }, () => [])
+  const wrapMod = (v: number, m: number): number => ((v % m) + m) % m
+  for (let i = 0; i < crowd.length; i++) {
+    const c = crowd[i]!
+    const bx = wrapMod(Math.floor((c.hx + 8) / BUCKET), gridW)
+    const by = Math.max(0, Math.min(gridH - 1, Math.floor(c.hy / BUCKET) + 1))
+    buckets[by * gridW + bx]!.push(i)
+  }
+
+  /** Deslocamento acumulado da corrente, em px de coordenada de casa. */
+  let flow = 0
+  /** Px por segundo de MUNDO. Lento: a corrente preenche, não arrasta. */
+  const FLOW_SPEED = 11
+  const wob = new Float32Array(WOB_STEPS)
+  const wobY = new Float32Array(WOB_STEPS)
+
   const LEVELS = atlas.colony.length
   const VARIANTS = atlas.colony[0]!.length
   const auraPool = new Pool(auraLayer)
@@ -452,6 +559,146 @@ export async function createRenderer(mount: HTMLElement, tuning: Tuning): Promis
     }
   }
 
+  // Acumuladores do empurrão. Fora do laço para não alocar 60 vezes por segundo.
+  const desX = new Float32Array(crowd.length)
+  const desY = new Float32Array(crowd.length)
+  const tocado = new Uint8Array(crowd.length)
+  let tocados: number[] = []
+
+  const tileWf = tuning.arena.width / tuning.field.cols
+  const tileHf = tuning.arena.height / tuning.field.rows
+
+  /**
+   * A multidão: corrente, respiração, empurrão e necrose num laço só.
+   *
+   * O empurrão resolve SOBREPOSIÇÃO — se um corpo está dentro de uma hemácia,
+   * ela sai pela normal até encostar. Não é força nem colisão elástica: é o
+   * mínimo que faz "eu ocupo este espaço, então você não pode".
+   *
+   * Sai rápido e volta devagar, e a assimetria é o que dá a leitura de estação
+   * de trem lotada: quem foi empurrado cede na hora e leva um tempo pra voltar.
+   */
+  const drawCrowd = (
+    cur: SimState,
+    px: number,
+    py: number,
+    dt: number,
+    wclock: number,
+    doente: number,
+  ): void => {
+    if (cur.phase === "run") flow += cur.worldScale * dt * FLOW_SPEED
+
+    /*
+     * Tabela de respiração: 64 senos por quadro em vez de um por célula.
+     *
+     * Ritmo e amplitude sobem com a infecção — pedido do H em 02/08, de que a
+     * respiração do organismo acompanhe a progressão da doença. Com o campo
+     * limpo é um tecido respirando; com o campo tomado é taquicardia, e o
+     * colapso passa a ser sentido antes de ser lido na barra de HUD.
+     */
+    const ritmo = 1.7 + doente * 3.4
+    const amp = 1.1 + doente * 1.3
+    for (let k = 0; k < WOB_STEPS; k++) {
+      const a = wclock * ritmo + (k / WOB_STEPS) * TAU
+      wob[k] = Math.sin(a) * amp
+      wobY[k] = Math.cos(a * 0.83) * amp
+    }
+
+    // ------------------------------------------------------------- empurrão
+    for (const i of tocados) {
+      desX[i] = 0
+      desY[i] = 0
+      tocado[i] = 0
+    }
+    tocados = []
+
+    const fx = wrapMod(flow, SPAN)
+    const corpo = (bx: number, by: number, br: number): void => {
+      const alcance = br + 14
+      // A consulta anda PARA TRÁS pelo deslocamento da corrente, e é isso que
+      // deixa a grade ficar em coordenada de casa e nunca ser reconstruída.
+      const qx = bx + 8 - fx
+      const g0 = Math.floor((qx - alcance) / BUCKET)
+      const g1 = Math.floor((qx + alcance) / BUCKET)
+      const r0 = Math.max(0, Math.floor((by - alcance) / BUCKET) + 1)
+      const r1 = Math.min(gridH - 1, Math.floor((by + alcance) / BUCKET) + 1)
+      for (let gy = r0; gy <= r1; gy++) {
+        for (let g = g0; g <= g1; g++) {
+          const gx = wrapMod(g, gridW)
+          for (const i of buckets[gy * gridW + gx]!) {
+            const c = crowd[i]!
+            // Posição de TELA da célula, com a corrente já aplicada e enrolada.
+            const ex = wrapMod(c.hx + 8 + fx, SPAN) - 8
+            const dx = ex + offX[i]! - bx
+            const dy = c.hy + offY[i]! - by
+            const min = br + c.r
+            const d2 = dx * dx + dy * dy
+            if (d2 >= min * min) continue
+            const d = Math.sqrt(d2)
+            // Corpo exatamente em cima do centro: empurra para um lado estável,
+            // e não para um aleatório, senão a célula vibra.
+            const nx = d > 0.001 ? dx / d : 1
+            const ny = d > 0.001 ? dy / d : 0
+            const need = min - d
+            if (tocado[i] === 0) {
+              tocado[i] = 1
+              tocados.push(i)
+            }
+            desX[i] = desX[i]! + nx * need
+            desY[i] = desY[i]! + ny * need
+          }
+        }
+      }
+    }
+
+    corpo(px, py, tuning.player.size / 2)
+    for (const e of cur.enemies) {
+      const scale = tuning.enemy.kinds[e.kind]?.sizeScale ?? 1
+      corpo(e.x, e.y, (tuning.enemy.size * scale) / 2)
+    }
+
+    // ------------------------------------------------ posição e necrose
+    const maxInf = tuning.field.maxInfection
+    for (let i = 0; i < crowd.length; i++) {
+      const c = crowd[i]!
+      const empurrada = tocado[i] === 1
+      // Teto de deslocamento: sem ele, um patógeno grande atravessando arremessa
+      // a célula para longe e a multidão vira explosão.
+      const teto = c.r + 4
+      let tx = desX[i]!
+      let ty = desY[i]!
+      const tl = Math.sqrt(tx * tx + ty * ty)
+      if (tl > teto) {
+        tx = (tx / tl) * teto
+        ty = (ty / tl) * teto
+      }
+      const taxa = empurrada ? 0.5 : 0.09
+      const ox = offX[i]! + (tx - offX[i]!) * taxa
+      const oy = offY[i]! + (ty - offY[i]!) * taxa
+      offX[i] = Math.abs(ox) < 0.02 ? 0 : ox
+      offY[i] = Math.abs(oy) < 0.02 ? 0 : oy
+
+      const ph = cellPhase[i]!
+      const ex = wrapMod(c.hx + 8 + fx, SPAN) - 8 + ox + wob[ph]!
+      const ey = c.hy + oy + wobY[ph]!
+      const sp = bloodSprites[i]!
+      sp.position.set(Math.round(ex), Math.round(ey))
+
+      /*
+       * A necrose segue o TILE, não a célula: a hemácia escurece ao entrar na
+       * região tomada e clareia ao sair. Com a corrente isso ganhou sentido
+       * sozinho — o sangue passa pela zona doente e adoece na passagem.
+       */
+      const tc = ex < 0 ? 0 : ex >= tuning.arena.width ? tuning.field.cols - 1 : Math.floor(ex / tileWf)
+      const tr = ey < 0 ? 0 : ey >= tuning.arena.height ? tuning.field.rows - 1 : Math.floor(ey / tileHf)
+      const inf = cur.field[tr * tuning.field.cols + tc]!
+      const lv = inf < maxInf * 0.34 ? 0 : inf < maxInf * 0.72 ? 1 : 2
+      if (cellLevel[i] === lv) continue
+      cellLevel[i] = lv
+      sp.texture = atlas.blood[lv]![c.variant]!
+    }
+  }
+
   const drawTissue = (cur: SimState): void => {
     const max = tuning.field.maxInfection
     for (let i = 0; i < tiles.length; i++) {
@@ -658,11 +905,25 @@ export async function createRenderer(mount: HTMLElement, tuning: Tuning): Promis
 
       // ------------------------------------------------------------- fundo
       // Ciclagem de paleta: a corrente escorre mesmo com tudo parado na tela.
-      bgPlasma.texture = atlas.plasma[Math.floor(worldClock * 5) % atlas.plasma.length]!
-      // O leito respira em tempo de MUNDO: parado ele quase para, junto com tudo.
-      const bedFrame = Math.floor(worldClock * 3.5) % atlas.tissueBed.length
-      bedSprite.texture = atlas.tissueBed[bedFrame]!
-      frontSprite.texture = atlas.tissueFront[bedFrame]!
+      /*
+       * O BATIMENTO do organismo.
+       *
+       * A ciclagem de paleta já existia — quatro variantes do plasma que giram
+       * a tabela de cor sem mover geometria. O que entra em 02/08, a pedido do
+       * H, é ela seguir a DOENÇA: com o campo limpo o pulso é lento e regular;
+       * com o campo tomado ele dispara. Um sistema entrando em colapso tem
+       * taquicardia, e o fundo é a única superfície grande o bastante para
+       * dizer isso sem competir com o jogo.
+       *
+       * E não é um giro uniforme: a sístole é curta e a diástole é longa, então
+       * o fundo BATE em vez de escorrer. Custo zero — é escolha de índice.
+       */
+      const teto = tuning.field.cols * tuning.field.rows * tuning.field.maxInfection
+      const doente = Math.min(1, cur.infection / (teto * tuning.field.loseFraction))
+      const bpm = 0.85 + doente * 2.6
+      const batida = (worldClock * bpm) % 1
+      const passo = batida < 0.14 ? 1 : batida < 0.26 ? 2 : batida < 0.38 ? 3 : 0
+      bgPlasma.texture = atlas.plasma[passo % atlas.plasma.length]!
       if (cur.phase === "run" && !frozen) driftX -= cur.worldScale * dt
       for (const d of drift) {
         /*
@@ -682,10 +943,15 @@ export async function createRenderer(mount: HTMLElement, tuning: Tuning): Promis
       }
 
       // ------------------------------------------------------------- corpos
+      const pxi = lerp(prev.player.x, cur.player.x, t)
+      const pyi = lerp(prev.player.y, cur.player.y, t)
+      // Posição INTERPOLADA, não a do tick: com a do tick a multidão abriria em
+      // degraus de 60Hz enquanto o corpo desliza suave.
+      if (!frozen) drawCrowd(cur, pxi, pyi, dt, worldClock, doente)
       drawTissue(cur)
       drawAuras(cur)
       drawEnemies(cur, prev, t, worldPhase)
-      drawPlayer(cur, lerp(prev.player.x, cur.player.x, t), lerp(prev.player.y, cur.player.y, t))
+      drawPlayer(cur, pxi, pyi)
       drawPowers(cur, worldPhase)
 
       // --------------------------------------------------------- partículas

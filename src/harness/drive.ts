@@ -85,7 +85,11 @@ function startVite(): Promise<ChildProcess> {
   })
 }
 
-export async function drive(seed: number): Promise<Driver & { errors: string[] }> {
+export async function drive(
+  seed: number,
+  /** Parâmetros extras de URL, para sondas — hoje só `palette`. */
+  query: Readonly<Record<string, string>> = {},
+): Promise<Driver & { errors: string[] }> {
   const vite = await startVite()
   let browser: Browser | null = null
   try {
@@ -99,7 +103,8 @@ export async function drive(seed: number): Promise<Driver & { errors: string[] }
     page.on("console", (m) => {
       if (m.type() === "error") errors.push(m.text())
     })
-    await page.goto(`http://localhost:${PORT}/?seed=${seed}`, { waitUntil: "networkidle" })
+    const qs = new URLSearchParams({ seed: String(seed), ...query })
+    await page.goto(`http://localhost:${PORT}/?${qs.toString()}`, { waitUntil: "networkidle" })
     // A arte é assada no boot; sem esperar, a primeira captura pega tela vazia.
     await page.waitForTimeout(1200)
 

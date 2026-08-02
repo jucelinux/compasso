@@ -9,7 +9,7 @@ existem porque a sessão de amanhã não lembra de nada disto.
 ## 1. Gosto do humano
 
 _Destilado do `DECISIONS.md`. Máximo ~15 linhas. Reescreva por inteiro quando destilar;
-não vá acumulando. **Redestilado em 01/08**, contra 133 linhas de log._
+não vá acumulando. **Redestilado em 02/08**, contra 171 linhas de log._
 
 - Dificuldade vem de **encolher a folga**, não de somar inimigos. Corolário medido em
   01/08: mais coisa na tela não virou mais dificuldade, e ele apontou isso sem ver o número.
@@ -22,6 +22,14 @@ não vá acumulando. **Redestilado em 01/08**, contra 133 linhas de log._
   dinâmica evoluindo, isso me ajuda a direcionar". Rodada sem incremento visível ele lê
   como rodada sem avanço, mesmo quando houve.
 - Tema não é decoração: sugere mecânica. Morfologia real do patógeno virou comportamento.
+- **Perda tem que ser visível como acúmulo, não como ausência.** Célula que some lê como
+  "nada ali", e nada ali parece seguro; a doença cresce POR CIMA do leito, que continua.
+- **O jogo acontece DENTRO do cenário, e "dentro" é OCUPAÇÃO DE ESPAÇO, não ordem de
+  desenho.** Ele pediu três vezes — "a batalha acontece acima", "parallax descolado",
+  "amontoado entre as hemácias" — e eu li camada as três. O que ele quer é atravessar
+  empurrando, como numa estação de trem lotada. Quando ele disser "entre", pergunte.
+- Elogia **decisão recorrente**, não feel. "Achei isso ouro" foi para a cura por região
+  forçar a escolha mover-ou-parar — a primeira mecânica que ele elogiou, e não era polimento.
 - Tolera cru, mas **não tolera estagnado**. "Cru e básico, mas funcional" não era queixa;
   "de tão pequeno esse incremento, não quis jogar de novo" era.
 - Dá feedback em design, não em sintoma: chega com proposta de mecanismo.
@@ -84,6 +92,7 @@ minha não vale, porque já errei a direção com confiança total._
 | ⛔ | **Não desenho.** Sem ferramenta de imagem. Arte à mão exige outra pessoa. | 31/07, `DECISIONS` |
 | ⛔ | **Não sou juiz confiável do meu próprio teto.** Registrei "o salto é shader WebGL" como fato; o salto era animação, que o jogo tinha em quantidade zero. | 01/08, `DECISIONS` |
 | ⛔ | **Não julgo o que acabei de produzir sem olhar.** 5 defeitos visuais passaram por revisão de código e 65 testes verdes. | 01/08, capturas |
+| ⛔ | **Olhar pega o que está ERRADO, não o que está AUSENTE.** Uma camada inteira foi assada, atualizada 60x por segundo e nunca posta em cena; ela não deixa rastro na captura, então a captura a aprovou. Contra ausência, a verificação é reler a lista de montagem — não a imagem. | 02/08, `frontSprite` |
 | ✅ | **Sistema visual regido por regra é onde meu teto é mais alto.** Paleta travada, grade inteira, dither ordenado, matriz de quadros, silhueta dentro da hitbox — converte desenho em satisfação de restrição. | 01/08, primeiro veredito de "qualidade de mercado" |
 | ✅ | **Construo a minha própria verificação bem.** Buffer indexado sem DOM fez a arte inteira rodar sob teste e pegou 3 defeitos que leitura não pegaria. | 01/08, `pixelart.test.ts` |
 | ✅ | **Instrumento derruba a minha própria hipótese sem dó.** Apontei o buraco dos i-frames como causa da dificuldade; escrevi o bot que o explora; ele morreu mais rápido. | 01/08, `bot.ts` |

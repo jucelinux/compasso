@@ -43,6 +43,45 @@ export function tileAt(spec: FieldSpec, x: number, y: number): number {
   return cy * spec.cols + cx
 }
 
+/**
+ * Quão CHEIO de tecido está o ponto, de 0 (tomado pela doença) a 1 (são).
+ *
+ * É a base do atrito do tecido, decidido em 02/08: tile sadio é tile lotado de
+ * hemácia, tile infectado é tile vazio, e atravessar coisa custa. Não existem
+ * corpos individuais na sim de propósito — o campo já É o modelo de "quanto tem
+ * aqui", e 80 colisões por quadro não acrescentariam nada que se perceba.
+ *
+ * Bilinear, não o tile debaixo do pé: com 20px de tile, amostrar um só faria a
+ * velocidade máxima pular em degraus na fronteira, e degrau em velocidade é
+ * exatamente o que se sente como travada.
+ */
+export function crowdAt(
+  spec: FieldSpec,
+  field: Uint8Array,
+  max: number,
+  x: number,
+  y: number,
+): number {
+  const fx = x / spec.tileW - 0.5
+  const fy = y / spec.tileH - 0.5
+  const x0 = Math.floor(fx)
+  const y0 = Math.floor(fy)
+  const tx = fx - x0
+  const ty = fy - y0
+  const cl = (v: number, hi: number): number => (v < 0 ? 0 : v > hi ? hi : v)
+  let sum = 0
+  for (let j = 0; j <= 1; j++) {
+    for (let i = 0; i <= 1; i++) {
+      const cx = cl(x0 + i, spec.cols - 1)
+      const cy = cl(y0 + j, spec.rows - 1)
+      const w = (i === 0 ? 1 - tx : tx) * (j === 0 ? 1 - ty : ty)
+      sum += w * (field[cy * spec.cols + cx]! / max)
+    }
+  }
+  // `sum` é quanta DOENÇA há aqui; o que resiste é o que sobrou de tecido.
+  return 1 - (sum < 0 ? 0 : sum > 1 ? 1 : sum)
+}
+
 export function tileCenterX(spec: FieldSpec, index: number): number {
   return (index % spec.cols) * spec.tileW + spec.tileW / 2
 }

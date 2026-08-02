@@ -16,8 +16,9 @@ import {
   COR0,
   HEM0,
   HEM1,
+
   PLASMA0,
-  PLASMA1,
+
   SAL0,
   SAL1,
   COR1,
@@ -542,92 +543,72 @@ export function auraBuf(r: number, idx: number, keep: number): Buf {
 export const TISSUE_LEVELS = 5
 export const TISSUE_VARIANTS = 6
 
-/**
- * O leito de hemácias: UMA textura de tela cheia, empacotada de forma irregular.
- *
- * A primeira versão desenhava 4 hemácias por tile em posições fixas de uma grade
- * de 32x18, e o humano reprovou na hora: saía um xadrez, não uma gota de sangue.
- * Sob microscópio as células se tocam, se sobrepõem e não têm alinhamento nenhum.
- *
- * A correção estrutural é desacoplar: o leito é uma imagem só, contínua e sem
- * grade; o estado da infecção vem por cima, em `colonyTile`. A grade continua
- * existindo na sim, mas some da tela.
- */
-export const BED_FRAMES = 4
 
 /**
- * Camada da frente: poucas hemácias, desenhadas POR CIMA dos corpos em jogo.
+ * UMA hemácia, isolada, para ser instanciada como corpo.
  *
- * Chamada do humano em 01/08: *"a batalha acontece acima das hemácias; se
- * acontecesse entre elas seria mais dramático"*. Um leito só, sempre atrás,
- * vira papel de parede — o jogo passa a acontecer numa camada e o cenário em
- * outra. Com um punhado de células na frente, o leucócito passa por baixo de
- * algumas e por cima de outras, e o campo deixa de ser fundo e vira MEIO.
+ * Reescrita de 02/08, e a razão é uma correção de leitura do H repetida três
+ * vezes até ele achar as palavras: *"quero o glóbulo branco AMONTOADO entre as
+ * hemácias"*, como atravessar uma estação de trem lotada. Não é ordem de
+ * desenho — é ocupação de espaço. Uma textura de tela cheia não pode ser
+ * empurrada, então o leito deixou de ser imagem e virou multidão. Foi isto que
+ * aposentou `tissueBed` e `tissueFront`.
  *
- * Esparsa de propósito: densa demais na frente e ela esconde o jogo.
+ * `necrose` escurece a célula onde a doença tomou o tile. Ela não SOME: sumir
+ * seria "nada ali", e nada ali parece seguro — a colônia cresce por cima, que é
+ * a regra de 01/08. Escurecer também torna visível o atrito do tecido: o
+ * caminho que a doença abriu é literalmente o caminho escuro.
  */
-export function tissueFront(w: number, h: number, seed: number, frame: number): Buf {
-  const b = makeBuf(w, h)
-  /*
-   * ESCURA de propósito. Com a mesma rampa do leito a camada sumia dentro dele e
-   * não lia como profundidade — só somava massa. Célula entre a luz e o campo é
-   * silhueta; escurecer é o sinal de "está na frente" e ainda impede que ela
-   * dispute atenção com o que importa.
-   */
-  const RAMP_FRONT: Ramp = [INK, INK2, INK2, PLASMA1]
-  const n = Math.round((w * h) / 2600)
-  const ph = (frame / BED_FRAMES) * TAU
-  for (let i = 0; i < n; i++) {
-    const drift = Math.sin(ph + i * 1.7) * 1.6
-    const cx = hashNoise(i, seed, 51) * (w + 24) - 12 + drift
-    const cy = hashNoise(i, seed, 53) * (h + 24) - 12 + Math.cos(ph + i * 2.3) * 1.2
-    // maiores que as do leito: tamanho é metade da leitura de profundidade
-    const r = 9 + hashNoise(i, seed, 57) * 4
-    const squash = 0.7 + hashNoise(i, seed, 59) * 0.26
-    const tilt = hashNoise(i, seed, 61) * Math.PI
-    const oval = (rr: number) => (th: number): number => {
-      const s2 = Math.sin(th - tilt)
-      return rr / Math.sqrt(1 + (1 / (squash * squash) - 1) * s2 * s2)
-    }
-    body(b, cx, cy, r + 1.4, [INK2], oval(r + 1.4))
-    body(b, cx, cy, r, RAMP_FRONT, oval(r))
-    body(b, cx, cy, r * 0.34, [HEM0], oval(r * 0.34))
-  }
-  return b
-}
+export const CELL_LEVELS = 3
 
-export function tissueBed(w: number, h: number, seed: number, frame = 0): Buf {
-  const b = makeBuf(w, h)
-  // Jostle: as células tremem no lugar, em tempo de MUNDO. O leito não ROLA
-  // porque a grade de infecção é fixa em coordenada de arena — se ele rolasse,
-  // a colônia descolaria do tecido que ela infecta.
-  const ph = (frame / BED_FRAMES) * TAU
-  /*
-   * A rampa para no HEM1, não no HEM2. O leito ocupa a tela inteira: se ele for
-   * ao tom mais claro do vermelho, vira uma parede saturada e o jogador — que é
-   * um ponto de 20px — some dentro dela. Fundo é fundo mesmo quando é o campo de
-   * jogo; quem tem que brilhar é quem você controla.
-   */
-  const RAMP_RBC: Ramp = [PLASMA1, HEM0, HEM0, HEM1]
-  const n = Math.round((w * h) / 135)
-  for (let i = 0; i < n; i++) {
-    const cx = hashNoise(i, seed, 11) * (w + 16) - 8 + Math.sin(ph + i * 0.9) * 0.9
-    const cy = hashNoise(i, seed, 13) * (h + 16) - 8 + Math.cos(ph + i * 1.3) * 0.9
-    const r = 5.5 + hashNoise(i, seed, 17) * 3.2
-    const squash = 0.74 + hashNoise(i, seed, 19) * 0.24
-    const tilt = hashNoise(i, seed, 23) * Math.PI
-    const oval = (rr: number) => (th: number): number => {
-      const s2 = Math.sin(th - tilt)
-      return rr / Math.sqrt(1 + (1 / (squash * squash) - 1) * s2 * s2)
-    }
-    // Halo escuro antes do corpo: é o que separa uma célula da vizinha. Sem ele
-    // a alta densidade vira massa única em vez de células empacotadas.
-    body(b, cx, cy, r + 1.2, [PLASMA0], oval(r + 1.2))
-    body(b, cx, cy, r, RAMP_RBC, oval(r))
-    // Depressão bicôncava CHAPADA e pequena. Com sombreamento próprio e raio
-    // grande ela desenhava um anel, e o leito inteiro lia como rosquinhas.
-    body(b, cx, cy, r * 0.34, [HEM0], oval(r * 0.34))
+export function bloodCell(r: number, squash: number, tilt: number, necrose: number): Buf {
+  const S = Math.ceil((r + 2) * 2 + PAD)
+  const b = makeBuf(S, S)
+  const c = S / 2
+  const oval = (rr: number) => (th: number): number => {
+    const s2 = Math.sin(th - tilt)
+    return rr / Math.sqrt(1 + (1 / (squash * squash) - 1) * s2 * s2)
   }
+  /*
+   * A rampa para no HEM1, não no HEM2 — mesma razão de sempre: a multidão ocupa
+   * a tela inteira e, se ela for ao tom mais claro, o jogador de 20px some
+   * dentro dela. Quem tem que brilhar é quem você controla.
+   */
+  /*
+   * As rampas NÃO usam mais os índices de plasma, e isso é o que destravou o
+   * fundo.
+   *
+   * O H pediu em 02/08 que a variação entre o vermelho e o preto no fundo fosse
+   * muito mais sutil. Enquanto o corpo e o halo da hemácia tomavam emprestados
+   * PLASMA0/PLASMA1, clarear o fundo clareava o halo junto e as células
+   * paravam de se separar. Agora o fundo é dono do próprio quarteirão: a
+   * hemácia se ancora em INK/INK2/HEM, e a rampa de plasma fica livre para
+   * subir.
+   */
+  /*
+   * O decaimento PARA no vermelho escuro; nunca chega ao preto.
+   *
+   * A primeira versão terminava em `[INK, INK, INK2, INK2]` e o H reprovou em
+   * 02/08: *"quando fica preto não fica legal"*. E ele tem razão em cima de uma
+   * regra que o projeto já tinha — preto lê como AUSÊNCIA, e ausência parece
+   * segura. A hemácia morta continua sendo hemácia; ela apaga de cor, não de
+   * existência. O tom mais fundo é `PLASMA0`, que é o próprio `HEM0` a 55%,
+   * então a morte fica dentro da mesma lógica de decaimento da célula viva.
+   */
+  const RAMPS: ReadonlyArray<Ramp> = [
+    [INK2, HEM0, HEM0, HEM1],
+    [PLASMA0, PLASMA0, HEM0, HEM0],
+    [PLASMA0, PLASMA0, PLASMA0, HEM0],
+  ]
+  const ramp = RAMPS[Math.min(RAMPS.length - 1, necrose)]!
+  // Halo escuro antes do corpo: é o que separa uma célula da vizinha. Sem ele a
+  // alta densidade vira massa única em vez de células empacotadas. Fino de
+  // propósito — cada pixel dele é escuro na tela, e escuro é o que sobra.
+  body(b, c, c, r + 1, [INK2], oval(r + 1))
+  body(b, c, c, r, ramp, oval(r))
+  // Depressão bicôncava CHAPADA e pequena. Com sombreamento próprio e raio
+  // grande ela desenhava um anel, e o leito inteiro lia como rosquinhas.
+  body(b, c, c, r * 0.34, [necrose >= 1 ? PLASMA0 : HEM0], oval(r * 0.34))
   return b
 }
 
@@ -645,12 +626,22 @@ export function colonyTile(w: number, h: number, level: number, variant: number)
   const b = makeBuf(w, h)
   if (level <= 0) return b
 
-  // A necrose: o leito escurece por baixo da colônia, sem sumir.
-  const escuro = [0, 0.18, 0.36, 0.56, 0.78][level] ?? 0
+  /*
+   * A necrose: o leito escurece por baixo da colônia, sem sumir e sem chegar ao
+   * preto.
+   *
+   * Duas correções de 02/08, pedidas pelo H. A densidade caía até 78% com o tom
+   * quase-preto `INK2` no último nível, e era daí que vinham as manchas pretas
+   * em volta das colônias — não das hemácias, como eu supunha. Agora o tom é
+   * sempre `PLASMA0`, que é vermelho (o `HEM0` da paleta a 55%), e a densidade
+   * para na metade: quem carrega a leitura de "tomado" é a colônia verde
+   * crescendo, não o chão sumindo.
+   */
+  const escuro = [0, 0.1, 0.22, 0.34, 0.46][level] ?? 0
   if (escuro > 0) {
     for (let y = 0; y < h; y++) {
       for (let x = 0; x < w; x++) {
-        if (bayer(x, y) < escuro) plot(b, x, y, level >= 4 ? INK2 : PLASMA0)
+        if (bayer(x, y) < escuro) plot(b, x, y, PLASMA0)
       }
     }
   }

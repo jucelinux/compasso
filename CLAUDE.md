@@ -5,9 +5,19 @@ Only this file changes between projects.
 
 ## Session start
 
-Read, in order: this file → `TASTE.md` → the last 20 lines of `DECISIONS.md`.
-Then `TASTE-LOOP.md` and `HARNESS.md` if the session involves running a round or building
-the rig. Do not write code before that.
+Read, in order: this file → `TASTE.md` → the last 20 lines of `DECISIONS.md` →
+`BACKLOG.md`. Then `TASTE-LOOP.md` and `HARNESS.md` if the session involves running a round
+or building the rig, and `TASTE-LOOP-LEARNING.md` if it involves the method itself. Do not
+write code before that.
+
+`BACKLOG.md` was added to this list on 02/08: the round being handed off lives there, and a
+session that skipped it would never read the work it was supposed to do.
+
+**The gate — the project's single direction metric.** Voluntary second-run rate; three
+consecutive "no" kill the thesis (`DECISIONS.md`, 31/07). Counter reset on 01/08 when the
+core changed. **Standing at 0 of 3 as of 02/08** — no reading taken against the tissue core.
+Current count is kept at the top of `BACKLOG.md`; update it there the same turn a reading
+comes in.
 
 ---
 

@@ -1,6 +1,7 @@
 import { Packer } from "./hash.ts"
 import { activeStats, INSTANT, POWERS, quotaFor, spawnIntervalFor } from "./powers.ts"
 import {
+  crowdAt,
   fieldSpec,
   healAround,
   healthiestTile,
@@ -312,8 +313,28 @@ export function createSim(seed: number, tuning: Tuning): Sim {
       p.vy = dir.dy * tuning.player.maxSpeed * tuning.dash.speedMultiplier
     }
 
+    /*
+     * --- O TECIDO RESISTE.
+     *
+     * Escolha do H em 02/08, contra a alternativa puramente visual. Hemácia é
+     * corpo, e atravessar corpo custa: onde o tecido está são, a sua velocidade
+     * máxima cai; onde a doença já tomou, o caminho está limpo.
+     *
+     * A consequência é grande e foi aceita com o custo nomeado: **a doença
+     * limpa o caminho.** Como velocidade é o relógio do mundo, curar passa a
+     * custar mobilidade e deixar apodrecer passa a comprá-la. É a primeira vez
+     * que o campo empurra de volta em vez de só ser pintado.
+     *
+     * Efeito colateral que cai bem: cinco dos seis `engulfSpeed` estão abaixo de
+     * 0.78, e em tecido são o teto passa a ficar perto disso. O contato volta a
+     * ser decisão, que é a reprovação medida de 01/08 — 0,1s de perigo numa run
+     * de 127s. Não foi projetado para isso; é o mesmo número resolvendo dois.
+     */
+    const crowd = crowdAt(FIELD, s.field, tuning.field.maxInfection, p.x, p.y)
+    const crowdCap = 1 - tuning.field.crowdDrag * crowd
+
     // --- movimento contínuo: aceleração e arrasto, sem passo discreto
-    const maxSpeed = tuning.player.maxSpeed * st.speedMultiplier
+    const maxSpeed = tuning.player.maxSpeed * st.speedMultiplier * crowdCap
     if (p.dashTicks > 0) {
       p.dashTicks--
     } else if (dir !== null) {

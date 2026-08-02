@@ -29,11 +29,85 @@ export function plasmaBuf(w: number, h: number): Buf {
       const flow =
         Math.sin(x * 0.021 + Math.sin(y * 0.017) * 1.6) * 0.5 +
         Math.sin(y * 0.033 - x * 0.008) * 0.3
-      const t = 0.5 + flow * 0.42
+      /*
+       * Faixa ESTREITA e ALTA da rampa, não a rampa inteira.
+       *
+       * Chamada do H em 02/08: *"lá no fundo a variação entre o vermelho e o
+       * preto pode ser muito mais sutil"* — e é o diagnóstico certo do
+       * "parallax não preenche". Varrendo os quatro tons, o fundo caía no
+       * quase-preto e lia como BURACO entre as células, não como fundo. Buraco
+       * não preenche por definição.
+       *
+       * Mexer aqui, e não nos valores da paleta, é o que faz a correção valer
+       * para as nove variantes de uma vez — cada uma tem os próprios PLASMA, e
+       * todas passam a usar só o terço de cima do que declararam.
+       */
+      const t = 0.68 + flow * 0.17
       plot(b, x, y, shadeAt(RAMP_PLASMA, t, x, y))
     }
   }
   return b
+}
+
+/**
+ * A MULTIDÃO: onde cada hemácia mora.
+ *
+ * Só posições e formas — nenhum pixel. O render instancia um corpo por entrada
+ * e empurra os que estiverem no caminho; é a diferença entre um leito que se
+ * olha e um leito que se atravessa.
+ *
+ * Determinístico por `hashNoise`, então a mesma seed dá o mesmo campo sempre, e
+ * as posições podem ser assadas numa grade de busca uma vez só no boot.
+ */
+export interface CrowdCell {
+  /** Onde ela mora. O deslocamento é sempre relativo a isto. */
+  readonly hx: number
+  readonly hy: number
+  readonly r: number
+  /** Índice da forma assada. */
+  readonly variant: number
+}
+
+/** Quantas formas distintas são assadas. Mais que isto ninguém distingue. */
+export const CROWD_VARIANTS = 16
+
+/**
+ * Densidade padrão: uma célula a cada 90 px².
+ *
+ * Começou em 135, que era a do leito assado, para a troca de técnica não trazer
+ * troca de densidade junto e a reação dele ficar atribuível. Com a multidão na
+ * tela ele varreu de 10 a 120 na própria máquina — todas a 144fps, o teto do
+ * monitor dele — e escolheu 90. É o primeiro número deste projeto ajustado por
+ * varredura do humano em vez de proposta minha.
+ */
+export const CROWD_AREA_PER_CELL = 90
+
+export function crowdLayout(w: number, h: number, seed: number, areaPer = CROWD_AREA_PER_CELL): CrowdCell[] {
+  const n = areaPer <= 0 ? 0 : Math.round((w * h) / areaPer)
+  const out: CrowdCell[] = []
+  for (let i = 0; i < n; i++) {
+    const variant = Math.floor(hashNoise(i, seed, 29) * CROWD_VARIANTS) % CROWD_VARIANTS
+    out.push({
+      // Margem para fora da arena: célula cortada na borda denuncia a moldura.
+      hx: hashNoise(i, seed, 11) * (w + 16) - 8,
+      hy: hashNoise(i, seed, 13) * (h + 16) - 8,
+      // O raio VEM da variante, e não de um sorteio próprio: se o corpo que
+      // empurra não tiver o tamanho do corpo que se vê, o empurrão acontece no
+      // lugar errado e a multidão parece ter fantasmas.
+      r: crowdShape(variant).r,
+      variant,
+    })
+  }
+  return out
+}
+
+/** Forma da variante `v`: raio, achatamento e inclinação. Assada uma vez. */
+export function crowdShape(v: number): { r: number; squash: number; tilt: number } {
+  return {
+    r: 5.5 + hashNoise(v, 777, 17) * 3.2,
+    squash: 0.74 + hashNoise(v, 777, 19) * 0.24,
+    tilt: hashNoise(v, 777, 23) * Math.PI,
+  }
 }
 
 export type LayerKind = "hemacias" | "fibrina" | "detritos"

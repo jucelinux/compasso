@@ -52,16 +52,49 @@ const virus = (x: number, y: number, kind = "influenza", tick = -1000) => ({
   bornTick: tick,
 })
 
-/** Leva a célula ao talo, com o campo limpo, e recentraliza sem frear. */
+/**
+ * Abre terreno em volta do centro — isto é, deixa a DOENÇA tomar aquele pedaço.
+ *
+ * Desde 02/08 o tecido resiste: tile são é tile lotado de hemácia e segura a
+ * velocidade máxima. Velocidade cheia só existe onde o tecido já se foi, e essa
+ * inversão é a mecânica, não um detalhe de fixture. Um bloco de 7x7 é 8,5% do
+ * campo, bem abaixo do `loseFraction`, então abrir caminho aqui não encerra a run.
+ */
+const clearGround = (sim: Sim): void => {
+  const f = mut(sim).field
+  const c0 = Math.floor(tuning.field.cols / 2)
+  const r0 = Math.floor(tuning.field.rows / 2)
+  for (let dy = -3; dy <= 3; dy++) {
+    for (let dx = -3; dx <= 3; dx++) {
+      const c = c0 + dx
+      const r = r0 + dy
+      if (c < 0 || r < 0 || c >= tuning.field.cols || r >= tuning.field.rows) continue
+      f[r * tuning.field.cols + c] = tuning.field.maxInfection
+    }
+  }
+}
+
+/** Leva a célula ao talo, em terreno aberto, e recentraliza sem frear. */
 const toFullSpeed = (sim: Sim): void => {
   mut(sim).enemies = []
+  mut(sim).player.x = tuning.arena.width / 2
+  mut(sim).player.y = tuning.arena.height / 2
+  clearGround(sim)
   let guard = 0
-  while (sim.state().player.speed < 0.99) {
+  while (sim.state().player.speed < 0.999) {
     sim.step(RIGHT)
     mut(sim).player.x = tuning.arena.width / 2
+    mut(sim).player.y = tuning.arena.height / 2
+    /*
+     * Reabre o terreno a cada passo, e a razão é uma consequência que só
+     * apareceu aqui: a célula CURA o chão onde está, e chão curado freia. Sem
+     * reabrir, a própria cura fechava o caminho durante a aceleração e a
+     * velocidade máxima nunca chegava. O jogo está certo; a fixture é que
+     * precisa segurar a condição que ela diz estar testando.
+     */
+    clearGround(sim)
     if (++guard > 400) throw new Error("não chegou à velocidade máxima")
   }
-  mut(sim).player.y = tuning.arena.height / 2
 }
 
 describe("o relógio é a velocidade", () => {
@@ -81,6 +114,15 @@ describe("o relógio é a velocidade", () => {
     for (let i = 0; i < 30; i++) {
       sim.step(RIGHT)
       mut(sim).player.x = tuning.arena.width / 2
+      mut(sim).player.y = tuning.arena.height / 2
+      /*
+       * Terreno CONSTANTE, de propósito. Desde 02/08 o tecido freia, então o
+       * relógio pode cair com a tecla apertada — atravessar tecido mais são é
+       * desacelerar. Isso não é degrau, é o campo agindo, e testar as duas
+       * coisas no mesmo teste não mediria nenhuma. Aqui se mede a continuidade
+       * da conversão velocidade→relógio; o atrito tem teste próprio abaixo.
+       */
+      clearGround(sim)
       scales.push(sim.state().worldScale)
     }
     // Cresce sem degrau enquanto acelera e satura no talo. O "soluço" que o
@@ -341,6 +383,74 @@ describe("progressão de onda", () => {
   it("a onda abre com patógenos em campo", () => {
     const sim = createSim(40, tuning)
     expect(sim.state().enemies.length).toBe(tuning.enemy.openingBase)
+  })
+})
+
+describe("o tecido resiste", () => {
+  /**
+   * Acelera `ticks` presa no centro, com o campo travado no estado dado.
+   *
+   * Só um bloco central, e não o campo inteiro: `field.fill(max)` passa do
+   * `loseFraction` e encerra a run, então a medida sairia zero e pareceria que
+   * o atrito matou o jogo. O erro é fácil de cometer e silencioso, que é
+   * exatamente por que ele fica escrito aqui.
+   */
+  const topSpeedIn = (infection: number, ticks = 200): number => {
+    const sim = createSim(11, tuning)
+    mut(sim).enemies = []
+    const c0 = Math.floor(tuning.field.cols / 2)
+    const r0 = Math.floor(tuning.field.rows / 2)
+    const paint = (): void => {
+      const f = mut(sim).field
+      f.fill(0)
+      for (let dy = -4; dy <= 4; dy++) {
+        for (let dx = -4; dx <= 4; dx++) {
+          const c = c0 + dx
+          const r = r0 + dy
+          if (c < 0 || r < 0 || c >= tuning.field.cols || r >= tuning.field.rows) continue
+          f[r * tuning.field.cols + c] = infection
+        }
+      }
+    }
+    for (let i = 0; i < ticks; i++) {
+      paint()
+      mut(sim).player.x = tuning.arena.width / 2
+      mut(sim).player.y = tuning.arena.height / 2
+      sim.step(RIGHT)
+    }
+    return sim.state().player.speed
+  }
+
+  it("tecido são freia; tecido tomado libera", () => {
+    const saudavel = topSpeedIn(0)
+    const tomado = topSpeedIn(tuning.field.maxInfection)
+    expect(tomado).toBeGreaterThan(saudavel)
+    // A perda em tecido cheio é exatamente o número declarado no tuning.
+    expect(saudavel).toBeCloseTo(tomado * (1 - tuning.field.crowdDrag), 2)
+  })
+
+  it("é gradiente, não interruptor", () => {
+    const meio = topSpeedIn(Math.round(tuning.field.maxInfection / 2))
+    expect(meio).toBeGreaterThan(topSpeedIn(0))
+    expect(meio).toBeLessThan(topSpeedIn(tuning.field.maxInfection))
+  })
+
+  it("o relógio do MUNDO herda o freio", () => {
+    const sim = createSim(12, tuning)
+    mut(sim).enemies = []
+    for (let i = 0; i < 200; i++) {
+      mut(sim).field.fill(0)
+      mut(sim).player.x = tuning.arena.width / 2
+      mut(sim).player.y = tuning.arena.height / 2
+      sim.step(RIGHT)
+    }
+    /*
+     * A consequência inteira em uma asserção: em tecido 100% são a célula não
+     * alcança o talo, então o MUNDO também não. Curar o campo compra tempo de
+     * mundo lento; deixar apodrecer o acelera. É o custo que o H aceitou
+     * nomeado em 02/08 ao escolher que o tecido resistisse.
+     */
+    expect(sim.state().worldScale).toBeLessThan(0.95)
   })
 })
 

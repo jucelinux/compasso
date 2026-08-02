@@ -201,6 +201,7 @@
     "healRadius": 2,
     "plaquetaHeal": 25,
     "loseFraction": 0.5,
+    "crowdDrag": 0.3,
     "spawnThreshold": 45,
     "spawnCalmSeconds": 2.5,
     "winFraction": 0.03,

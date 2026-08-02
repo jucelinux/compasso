@@ -11,29 +11,35 @@ todos superados. `DECISIONS.md` guarda o histórico; este arquivo guarda só o p
 
 ## Aberto agora
 
-- **Balanço do tecido é de primeira mão.** A sonda de 01/08 deu run de 157s (agressiva) a
-  266s (ritmo) contra alvo de ~120s, com 3-4 fases por run. Está jogável e na faixa certa,
-  mas não foi afinado com humano nenhum ainda.
-- **A camada de profundidade ficou fraca.** As hemácias na frente dos corpos
-  existem e funcionam, mas não gritam profundidade na captura. Provavelmente
-  precisa de células maiores, mais escuras, ou de leito menos denso para o
-  contraste aparecer. Não foi resolvido, foi entregue reconhecidamente fraco.
+**PORTÃO: 0 de 3, desde 01/08.** Zerado quando o core mudou; nenhuma leitura de segunda
+partida voluntária foi tomada contra o tecido. Atualizar esta linha na mesma vez que a
+leitura chegar — a definição está no `DECISIONS.md` (31/07), o contador mora aqui.
+
+- **Balanço do tecido é de primeira mão.** Baseline atual, medido em 02/08 com
+  `crowdDrag` em 0.3: agressiva 87s, ritmo 91s, contra alvo de ~120s, 4,4 a 5,0 fases por
+  run, 5 de 5 seeds morrem. Jogável e ainda curto; nunca foi afinado com humano.
+  _Os números de 157s/266s que este arquivo trazia eram de um tuning anterior e conviviam
+  com um segundo baseline contraditório (75-89s) no mesmo arquivo. Unificados em 02/08._
+- ~~A camada de profundidade ficou fraca~~ — **estava ausente, não fraca.** O
+  `frontSprite` era criado e tinha a textura trocada 60 vezes por segundo sem estar em
+  container nenhum. Corrigido em 02/08, junto com a reescrita da textura: corpo vazado em
+  dither com borda sólida acesa, para ocluir sem esconder o jogador. **A densidade dela
+  ainda não passou por você** — `FRONT_KEEP` e a contagem em `tissueFront` são os dois
+  números, e "ainda menos espaço vazio" é chamada de olho, não de teste.
 - **O balanço do campo nunca passou por humano.** Os números do `npm run pace`
   saem de um bot cru (heurística: cura se o chão está sujo e não há fonte a menos
-  de 90px). Runs de 75-89s contra alvo de ~120s podem estar certas para ele.
+  de 90px). As runs curtas podem estar certas para ele — só ele decide.
 - **A colônia não tem cor de doença.** Hoje toda infecção é verde. Com fase = doença, ela
   devia herdar a rampa do patógeno dominante — a máquina já existe (`KIND_RAMP`).
 - **O card de apresentação da fase ainda não existe.** Aprovado na conversa de 01/08 e não
   implementado: sprite animado grande, nome real, características. Os sprites e a fonte já
   estão prontos, é montagem.
-- ~~O jogo é lotado, mas não é perigoso~~ — atacado pelo tecido; a morte agora vem da
-  infecção tomar o campo, não de encostar. Remedir com humano.
-- **O jogo era lotado, mas não perigoso.** Medido em 01/08 com o bot: 55% da run tem um
-  patógeno a menos de 60px, e o tempo em posição de tomar dano é **0,1s numa run de 127s**.
-  A causa é direta — 82% da run é passada acima de 0.78 de velocidade, e cinco dos seis
-  `engulfSpeed` ficam abaixo disso. O limiar que deveria transformar contato em decisão
-  nunca chega a apertar. **É a articulação medida da reprovação de 01/08** ("não achei tão
-  desafiador") e o lugar mais provável para a próxima rodada de design.
+- ~~O jogo é lotado, mas não é perigoso~~ — **atacado e medido em 02/08.** A causa era 82%
+  da run acima de 0.78 de velocidade com cinco dos seis `engulfSpeed` abaixo disso. O
+  atrito do tecido derrubou o teto em tecido são para 0.7 e cruzou os limiares: o tempo em
+  posição de tomar dano foi de **0,0s para 9,5s (agressiva) e 14,4s (ritmo)**. Aparece em
+  DEGRAU, não em rampa — abaixo de `crowdDrag` 0.3 o teto não cruza nada e o perigo é zero.
+  **Falta a leitura humana**, que é a única que diz se virou desafiador ou só irritante.
 - **A morte vem do organismo, não das suas vidas.** 3 de 5 seeds do bot acabam em
   "organismo caiu". Se a intenção é que a pressão seja sobre o jogador, o número que manda
   hoje não é esse.
@@ -47,7 +53,28 @@ todos superados. `DECISIONS.md` guarda o histórico; este arquivo guarda só o p
   exploit, porque parada o mundo anda a 5% e a cota não enche; é limbo. Fica registrado
   porque "regra sem número" é preferência do H, e o preço dela é este.
 
-## PRÓXIMA RODADA — fases com identidade
+## EM CURSO — leva 2 do ciclo de 02/08
+
+Pedido dele, nesta ordem. A leva 1 (campo, paleta, atrito) está entregue.
+
+1. ~~O plano único, no render~~ — **entregue e fechado em 02/08.** Hemácias como corpos
+   empurráveis a 90 px² por célula (varredura dele, 144fps em toda a faixa), com
+   respiração local e corrente global em tempo de mundo. `tissueBed` e `tissueFront`
+   apagados. O fundo deixou de ser preto: o plasma agora deriva do `HEM0` da paleta em
+   vigor, então é hemácia fora de foco em vez de vazio. Fibrina atrás, detrito na frente.
+   O batimento do fundo e a respiração do tecido aceleram com a infecção, e o decaimento
+   da hemácia para no vermelho escuro em vez de chegar ao preto.
+   _Ainda não confirmado por ele, e nenhuma das duas coisas aparece em captura: se a
+   respiração LÊ como vida, e se o batimento acelerando LÊ como colapso. A medição por
+   diferença de pixels não isola nada — a ciclagem de paleta sozinha repinta 96,6% do fundo._
+2. **Card de apresentação da fase e UMA doença por fase.** Aprovado duas vezes por ele,
+   em 01/08 e 02/08. A doença escolhida para validar a tese é a **E. coli**, por fissão
+   binária ser a única dinâmica legível sem texto — você VÊ o foco dobrar.
+3. **As duas funcionalidades novas do core.** Parada: pulso que ATRAI patógeno. Em
+   movimento: abates encadeiam com o limiar de engolir subindo junto.
+4. **Draft de powerup reativo.** Escolher contra o que se observou da doença.
+
+## DESENHO DE REFERÊNCIA — fases com identidade
 
 _Aprovado por ele em 01/08 e desenhado nesta conversa. Está aqui inteiro de
 propósito: a sessão que pegar isto não precisa da conversa que o originou._
@@ -88,6 +115,13 @@ build dentro da run que sumiu com a tela de escolha, sem ressuscitá-la.
 
 ## Aberto com o humano
 
+- **Escolha da paleta.** Sonda de 02/08, quatro idiomas materialmente diferentes:
+  `arterial` (o de hoje), `campo-escuro` (turquesa fria de microscópio), `gram` (magenta
+  do corante real) e `ambar` (fósforo de CRT). Amostras em `shots/paleta-*.png`, e
+  jogáveis com `npm run dev` + `?palette=<nome>`. Só o AMBIENTE muda em cada uma —
+  jogador, patógeno e colônia ficam onde estão, senão a reação não é atribuível à cor.
+- **Densidade da camada da frente.** Ela existe desde 02/08 e nunca foi julgada por você.
+  Mais densa dramatiza e esconde; menos densa some. É chamada de olho.
 - **Bar do eixo "curva de tensão".** `TASTE-LOOP.md` §4 exige um padrão externo por eixo, e
   este — o que está falhando — não tem. Sem ele o loop degrada para "perguntar toda rodada".
   Os outros seis estão em `TASTE.md` §1b.
