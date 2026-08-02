@@ -225,6 +225,56 @@ virtue and which part is limitation. *"Only geometric primitives — the restric
 identity"* was both, and recording only the virtue half is what buried the question for
 three rounds. Both halves are true; only one was written down.
 
+### P6 — A stopping rule, at four different scopes
+
+The loop optimizes *per round* and never says when to stop. The human raised this on
+01/08: *"não considerei isso quando pensei no framework."* Four scopes are currently
+collapsed into one, and they need different rules.
+
+**The economic frame that ties them together:** the framework's own §1 says taste is the
+scarce input. Therefore **unjudged work is inventory**, and inventory is the waste this
+method exists to prevent. Tokens are not the cost; *work in flight that has not passed the
+human's judgment* is.
+
+| Scope | Proposed rule |
+|---|---|
+| **A round** | Ends when (a) there is an artifact the human can judge and (b) the next step needs a verdict that does not exist yet. Before (a) there is nothing to judge; after (b) you are stacking inventory. |
+| **A batch** | Stop when unjudged work exceeds what ONE review can *attribute*. Roughly: one playable build and 3–5 named changes. Past that the human's reaction cannot be traced to a change — which is exactly the 31/07 failure, where too much moved at once and *"mais inimigos não virou mais dificuldade"* could not be attributed. |
+| **An axis** | Retires when it clears its bar and the human's last two readings on it were positive and unprompted. A retired axis leaves the rotation. Graphics retired on 01/08. Without this rule the agent keeps polishing where returns already flattened, which is *operating below the frontier while spending*. |
+| **The project** | You are at the frontier when a round produces something the human cannot distinguish from the round before. |
+
+**Why the agent is the wrong party to hold this loosely.** The agent has no fatigue and no
+diminishing sense of productivity — every round feels worth doing. The human has both. So
+the stopping rule exists to protect *him*, and leaving it to the agent's discretion is
+leaving it to the party with the structural incentive to continue. On 01/08 the agent did
+stop before the phases system, and stopped correctly — but by judgement, not by rule, and
+judgement is not a criterion.
+
+### P7 — What the agent harness should and should not be used for
+
+Question from the human on 01/08: would multi-agent, goals or scheduled loops optimize the
+Taste Loop, or is the current setup the better cost-benefit?
+
+**The general answer follows from P6.** Multi-agent machinery increases *production*. The
+Taste Loop is bottlenecked on *validation*. Adding production to a validation-bottlenecked
+system produces inventory, not value. That is the whole analysis; everything below is where
+the general answer has exceptions.
+
+| Feature | Verdict | Why |
+|---|---|---|
+| **Parallel subagents for building** | **No** | §5: parallelize capability, serialize coherence. This project is almost entirely coherence-coupled — on 01/08 one change to the tissue moved the art, the parallax, the HUD, the balance and the tests. A subagent optimizing the tissue art in isolation would have fought the balance work. |
+| **Scheduled loops / cron** | **No, actively harmful** | They optimize unattended throughput. The loop's scarce input is attended judgment. Rounds that run while the human sleeps produce exactly the inventory P6 exists to prevent. |
+| **Parallel subagents for the FRONTIER PROBE (§3.0)** | **Yes** | The one genuinely fan-out-shaped step: 2–4 materially different idioms, each independent by construction, and §9 requires the critic not know which is which. Worktree isolation fits. |
+| **Blind critic as an agent (§9)** | **Not yet** | Already in the method and deliberately unbuilt. `HARNESS.md` §7 gates it on the human judging the same subjective axis more than twice a week. Building it for an axis that just retired would be apparatus without a subject. |
+
+**And the correction that matters most:** the bottleneck the agent actually hit on 01/08 was
+hand-tuning `tuning.json` against the bot — many turns of guess, run, read, guess. That is
+not an agent problem. `tuning.json` is data and the bot is headless and deterministic, so a
+**parameter sweep** — N configs, ranked by target metrics — solves it at rung 2/3 of the
+ladder, cheaper and more reliably than any fleet. Reaching for agents there would be
+climbing the ladder for a problem the rung below already catches, which is the single
+failure §2 exists to prevent.
+
 ---
 
 ## 6. Learning log
@@ -255,6 +305,18 @@ the measurement, not the reasoning. **Evidence that rung 2 pays.** No rule chang
 Case 01 above. **Adopted** — P1–P5 all graduated the same day. The concrete artifact is
 `TASTE.md` §2b, the capability surface, which did not exist before and is the half of the
 collaboration the framework had no slot for.
+
+### L6 · 01/08 · The loop has no stopping rule, at any scope
+
+Raised by the human. The method optimizes per round and never says when a round, a batch,
+an axis or the project is done. The agent has been deciding by discretion — correctly so
+far, and correctly is not the same as reliably. **Not yet adopted** — P6 is open.
+
+### L7 · 01/08 · More production does not help a validation-bottlenecked loop
+
+Raised by the human as a question about multi-agent tooling; the answer generalizes past
+tooling. Anything that raises output without raising the human's capacity to judge it makes
+the loop worse, not better. **Not yet adopted** — P7 is open.
 
 ### L5 · 01/08 · Distilling is a debt that accrues silently
 

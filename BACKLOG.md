@@ -14,6 +14,13 @@ todos superados. `DECISIONS.md` guarda o histórico; este arquivo guarda só o p
 - **Balanço do tecido é de primeira mão.** A sonda de 01/08 deu run de 157s (agressiva) a
   266s (ritmo) contra alvo de ~120s, com 3-4 fases por run. Está jogável e na faixa certa,
   mas não foi afinado com humano nenhum ainda.
+- **A camada de profundidade ficou fraca.** As hemácias na frente dos corpos
+  existem e funcionam, mas não gritam profundidade na captura. Provavelmente
+  precisa de células maiores, mais escuras, ou de leito menos denso para o
+  contraste aparecer. Não foi resolvido, foi entregue reconhecidamente fraco.
+- **O balanço do campo nunca passou por humano.** Os números do `npm run pace`
+  saem de um bot cru (heurística: cura se o chão está sujo e não há fonte a menos
+  de 90px). Runs de 75-89s contra alvo de ~120s podem estar certas para ele.
 - **A colônia não tem cor de doença.** Hoje toda infecção é verde. Com fase = doença, ela
   devia herdar a rampa do patógeno dominante — a máquina já existe (`KIND_RAMP`).
 - **O card de apresentação da fase ainda não existe.** Aprovado na conversa de 01/08 e não
@@ -39,6 +46,45 @@ todos superados. `DECISIONS.md` guarda o histórico; este arquivo guarda só o p
   numa captura — 30s parada, um toque tomado, influenza encostada e nada acontecendo. Não é
   exploit, porque parada o mundo anda a 5% e a cota não enche; é limbo. Fica registrado
   porque "regra sem número" é preferência do H, e o preço dela é este.
+
+## PRÓXIMA RODADA — fases com identidade
+
+_Aprovado por ele em 01/08 e desenhado nesta conversa. Está aqui inteiro de
+propósito: a sessão que pegar isto não precisa da conversa que o originou._
+
+A queixa exata: **"os inimigos memoráveis são aqueles que lembramos, que nos
+esforçamos para entender sua estratégia e que merece ser derrotado. Do jeito que
+está não tem memória, nem identidade — é mais um 'vai na direção dele que você
+mata'."**
+
+**1. Uma doença por fase.** A `spawnTable` que mistura 3-5 tipos por onda sai.
+A fase 4 É a Salmonella. Consequência dura: cada patógeno precisa ser interessante
+SOZINHO, e hoje nenhum é — eles se sustentam na mistura.
+
+**2. Card de apresentação.** Sprite animado grande, nome real, características,
+taxa de progressão. Os sprites e a fonte bitmap já existem; é montagem, não arte
+nova. Console fazia isso (bestiário, intro de chefe) e cabe na tese retro.
+
+**3. Dinâmica de campo própria por doença.** É isto que dá identidade — sem isso
+o card é enfeite e as cinco doenças viram reskin com números diferentes, que é
+exatamente o que ele reprovou.
+
+| doença | dinâmica no CAMPO | pressão que cria |
+|---|---|---|
+| Influenza | alastra rápido e raso | volume: não dá pra descansar, mas cada abate é barato |
+| E. coli | fissão binária, o foco DOBRA | prioridade: atrasar é catastrófico |
+| S. aureus | o tile dela resiste à cura | custo por unidade: conter vale mais que limpar |
+| Salmonella | vai ao tecido mais SADIO | posicional: defender, não caçar |
+| SARS-CoV-2 | imune a indireto, exige 0.92 | você tem que ir lá, pessoalmente |
+
+**4. Memória imunológica como conquista da fase.** JÁ DECIDIDO em 31/07
+(`DECISIONS.md`: *"powerup = aprender um patógeno"*), com a condição
+*"não implementar antes do movimento orgânico entrar"* — satisfeita em 01/08.
+Vencer a fase da Influenza baixa permanentemente o `engulfSpeed` dela pelo resto
+da run. Você não fica mais forte em geral; fica imune ÀQUILO. Isso devolve a
+build dentro da run que sumiu com a tela de escolha, sem ressuscitá-la.
+
+**Custo declarado:** o gate zera de novo, porque a estrutura da fase muda.
 
 ## Aberto com o humano
 
