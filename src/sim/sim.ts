@@ -532,15 +532,29 @@ export function createSim(seed: number, tuning: Tuning): Sim {
      * REAL e cai com a sua velocidade. Correr até o outro lado apaga um foco e
      * acende três atrás; ficar parado limpa fundo e não cobre chão nenhum.
      */
+    /*
+     * A doença tem RELÓGIO PRÓPRIO, com piso.
+     *
+     * Antes ela andava só em tempo de mundo, e parado o mundo corre a 5% — então
+     * ficar parado era quase de graça, e o humano apontou: "precisa me punir
+     * quando fico parado, e também quando fico só me movimentando". Doença
+     * progride quer você se mexa ou não; é o patógeno que anda no seu relógio,
+     * não a infecção. Com piso, nenhum dos dois extremos é jogável e o ótimo
+     * passa a ser oscilar.
+     */
     const fonte = tuning.field.sourceRate * (1 + (s.wave - 1) * tuning.field.sourcePerWave)
-    s.infectAcc += fonte * world
+    const passo = Math.max(tuning.field.idleProgress, s.worldScale) * dt
+    s.infectAcc += fonte * passo
     if (s.infectAcc >= 1) {
       const n = Math.floor(s.infectAcc)
       s.infectAcc -= n
       for (const e of s.enemies) infectAt(s.field, tileAt(FIELD, e.x, e.y), n, MAXINF)
     }
 
-    s.spreadTimer += world
+    // O mesmo piso da fonte. Sem ele o ALASTRAMENTO congelava com o jogador
+    // parado, e ficar parado continuava sendo refúgio mesmo com a fonte no piso
+    // — é o alastramento que toma terreno, não a fonte.
+    s.spreadTimer += passo
     if (s.spreadTimer >= tuning.field.spreadSeconds) {
       s.spreadTimer -= tuning.field.spreadSeconds
       spreadStep(

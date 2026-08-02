@@ -182,8 +182,13 @@ export async function createRenderer(mount: HTMLElement, tuning: Tuning): Promis
   // --------------------------------------------------------------- camadas
   const bgPlasma = new Sprite(atlas.plasma[0]!)
 
+  /*
+   * A camada de hemácias do parallax saiu: o LEITO ocupa esse papel agora, e
+   * manter as duas deixava o parallax "descolado dos elementos novos", que foi a
+   * crítica do humano. Sobram fibrina e detritos, que correm ENTRE as células e
+   * amarram o fundo ao campo em vez de competir com ele.
+   */
   const LAYERS = [
-    { kind: "hemacias" as const, speed: 14 },
     { kind: "fibrina" as const, speed: 46 },
     { kind: "detritos" as const, speed: 118 },
   ]
@@ -196,7 +201,8 @@ export async function createRenderer(mount: HTMLElement, tuning: Tuning): Promis
   )
 
   // O leito é estático e contínuo; só a colônia por cima muda de tile em tile.
-  const bedSprite = new Sprite(atlas.tissueBed)
+  const bedSprite = new Sprite(atlas.tissueBed[0]!)
+  const frontSprite = new Sprite(atlas.tissueFront[0]!)
   const tissueLayer = new Container()
   const auraLayer = new Container()
   const enemyLayer = new Container()
@@ -653,6 +659,10 @@ export async function createRenderer(mount: HTMLElement, tuning: Tuning): Promis
       // ------------------------------------------------------------- fundo
       // Ciclagem de paleta: a corrente escorre mesmo com tudo parado na tela.
       bgPlasma.texture = atlas.plasma[Math.floor(worldClock * 5) % atlas.plasma.length]!
+      // O leito respira em tempo de MUNDO: parado ele quase para, junto com tudo.
+      const bedFrame = Math.floor(worldClock * 3.5) % atlas.tissueBed.length
+      bedSprite.texture = atlas.tissueBed[bedFrame]!
+      frontSprite.texture = atlas.tissueFront[bedFrame]!
       if (cur.phase === "run" && !frozen) driftX -= cur.worldScale * dt
       for (const d of drift) {
         /*

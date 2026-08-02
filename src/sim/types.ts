@@ -107,6 +107,11 @@ export interface Tuning {
     readonly maxInfection: number
     /** Focos iniciais da doença por fase. */
     readonly seeds: number
+    /**
+     * Piso do relógio da INFECÇÃO, independente da sua velocidade. Abaixo dele a
+     * doença não desacelera mais, então parar deixa de ser refúgio.
+     */
+    readonly idleProgress: number
     /** Focos a mais por fase. É a escalada da doença. */
     readonly seedsPerWave: number
     /** Quanto cada patógeno infecta o próprio tile, por segundo de MUNDO. */

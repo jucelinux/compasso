@@ -553,8 +553,55 @@ export const TISSUE_VARIANTS = 6
  * grade; o estado da infecção vem por cima, em `colonyTile`. A grade continua
  * existindo na sim, mas some da tela.
  */
-export function tissueBed(w: number, h: number, seed: number): Buf {
+export const BED_FRAMES = 4
+
+/**
+ * Camada da frente: poucas hemácias, desenhadas POR CIMA dos corpos em jogo.
+ *
+ * Chamada do humano em 01/08: *"a batalha acontece acima das hemácias; se
+ * acontecesse entre elas seria mais dramático"*. Um leito só, sempre atrás,
+ * vira papel de parede — o jogo passa a acontecer numa camada e o cenário em
+ * outra. Com um punhado de células na frente, o leucócito passa por baixo de
+ * algumas e por cima de outras, e o campo deixa de ser fundo e vira MEIO.
+ *
+ * Esparsa de propósito: densa demais na frente e ela esconde o jogo.
+ */
+export function tissueFront(w: number, h: number, seed: number, frame: number): Buf {
   const b = makeBuf(w, h)
+  /*
+   * ESCURA de propósito. Com a mesma rampa do leito a camada sumia dentro dele e
+   * não lia como profundidade — só somava massa. Célula entre a luz e o campo é
+   * silhueta; escurecer é o sinal de "está na frente" e ainda impede que ela
+   * dispute atenção com o que importa.
+   */
+  const RAMP_FRONT: Ramp = [INK, INK2, INK2, PLASMA1]
+  const n = Math.round((w * h) / 2600)
+  const ph = (frame / BED_FRAMES) * TAU
+  for (let i = 0; i < n; i++) {
+    const drift = Math.sin(ph + i * 1.7) * 1.6
+    const cx = hashNoise(i, seed, 51) * (w + 24) - 12 + drift
+    const cy = hashNoise(i, seed, 53) * (h + 24) - 12 + Math.cos(ph + i * 2.3) * 1.2
+    // maiores que as do leito: tamanho é metade da leitura de profundidade
+    const r = 9 + hashNoise(i, seed, 57) * 4
+    const squash = 0.7 + hashNoise(i, seed, 59) * 0.26
+    const tilt = hashNoise(i, seed, 61) * Math.PI
+    const oval = (rr: number) => (th: number): number => {
+      const s2 = Math.sin(th - tilt)
+      return rr / Math.sqrt(1 + (1 / (squash * squash) - 1) * s2 * s2)
+    }
+    body(b, cx, cy, r + 1.4, [INK2], oval(r + 1.4))
+    body(b, cx, cy, r, RAMP_FRONT, oval(r))
+    body(b, cx, cy, r * 0.34, [HEM0], oval(r * 0.34))
+  }
+  return b
+}
+
+export function tissueBed(w: number, h: number, seed: number, frame = 0): Buf {
+  const b = makeBuf(w, h)
+  // Jostle: as células tremem no lugar, em tempo de MUNDO. O leito não ROLA
+  // porque a grade de infecção é fixa em coordenada de arena — se ele rolasse,
+  // a colônia descolaria do tecido que ela infecta.
+  const ph = (frame / BED_FRAMES) * TAU
   /*
    * A rampa para no HEM1, não no HEM2. O leito ocupa a tela inteira: se ele for
    * ao tom mais claro do vermelho, vira uma parede saturada e o jogador — que é
@@ -564,8 +611,8 @@ export function tissueBed(w: number, h: number, seed: number): Buf {
   const RAMP_RBC: Ramp = [PLASMA1, HEM0, HEM0, HEM1]
   const n = Math.round((w * h) / 135)
   for (let i = 0; i < n; i++) {
-    const cx = hashNoise(i, seed, 11) * (w + 16) - 8
-    const cy = hashNoise(i, seed, 13) * (h + 16) - 8
+    const cx = hashNoise(i, seed, 11) * (w + 16) - 8 + Math.sin(ph + i * 0.9) * 0.9
+    const cy = hashNoise(i, seed, 13) * (h + 16) - 8 + Math.cos(ph + i * 1.3) * 0.9
     const r = 5.5 + hashNoise(i, seed, 17) * 3.2
     const squash = 0.74 + hashNoise(i, seed, 19) * 0.24
     const tilt = hashNoise(i, seed, 23) * Math.PI

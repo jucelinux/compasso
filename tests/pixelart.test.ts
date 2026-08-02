@@ -10,8 +10,10 @@ import {
   PLAYER_TIERS,
   pathogenSheet,
   playerSheet,
+  BED_FRAMES,
   colonyTile,
   tissueBed,
+  tissueFront,
   TISSUE_LEVELS,
   type Sheet,
 } from "../src/render/sprites.ts"
@@ -245,6 +247,21 @@ describe("quadros de animação", () => {
       Array.from({ length: bed.h }, (_, y) => bed.d[y * bed.w + x]!).join(",")
     expect(coluna(20)).not.toEqual(coluna(60))
     expect(coluna(20)).not.toEqual(coluna(100))
+  })
+
+  it("o leito treme, e a camada da frente é esparsa o bastante para não esconder o jogo", () => {
+    // Tremor: sem isto o leito é papel de parede. O humano pediu vida em 01/08.
+    const quadros = new Set(
+      Array.from({ length: BED_FRAMES }, (_, f) => tissueBed(120, 90, 7, f).d.join(",")),
+    )
+    expect(quadros.size, "quadros do leito são cópia").toBe(BED_FRAMES)
+
+    // A camada da frente existe para pôr a batalha ENTRE as células, e por isso
+    // é rala: densa demais na frente ela esconderia o jogo em vez de emoldurá-lo.
+    const frente = tissueFront(320, 180, 9, 0)
+    const cobre = frente.d.reduce((n, v) => n + (v === 0 ? 0 : 1), 0) / frente.d.length
+    expect(cobre, "frente vazia demais").toBeGreaterThan(0.03)
+    expect(cobre, "frente esconde o jogo").toBeLessThan(0.3)
   })
 
   it("assar duas vezes dá exatamente a mesma arte", () => {

@@ -11,7 +11,7 @@ import type { Tuning } from "../src/sim/types.ts"
  */
 
 const SMOKE = resolve(projectRoot, "replays", "smoke.json")
-const BASELINE_HASH = "8a12aad4"
+const BASELINE_HASH = "4dc9b422"
 
 /**
  * Run real do humano, 7,6 min de input de verdade, do core do dash (`7c952a6`).
@@ -21,7 +21,7 @@ const BASELINE_HASH = "8a12aad4"
  * leitura de ritmo, e não como cobertura de morte.
  */
 const RUN_01 = resolve(projectRoot, "replays", "run-01.json")
-const RUN_01_HASH = "efd56964"
+const RUN_01_HASH = "5f3fe168"
 
 /**
  * Segunda run real: 5 min, 10 ondas, uma morte. Gravada antes da tecla de
@@ -29,7 +29,7 @@ const RUN_01_HASH = "efd56964"
  * Vale como determinismo sobre input humano longo.
  */
 const RUN_02 = resolve(projectRoot, "replays", "run-02.json")
-const RUN_02_HASH = "0fec29ae"
+const RUN_02_HASH = "db7a925c"
 
 /**
  * Terceira run real: 5,7 min de input humano, gravada quando os modificadores
@@ -38,7 +38,7 @@ const RUN_02_HASH = "0fec29ae"
  * Com os patógenos reais este input voltou a morrer, na onda 6.
  */
 const RUN_03 = resolve(projectRoot, "replays", "run-03.json")
-const RUN_03_HASH = "40751b02"
+const RUN_03_HASH = "65d6eb88"
 
 /**
  * Primeira fixture do core contínuo, gravada por `npm run rec` em 01/08 no
@@ -47,7 +47,7 @@ const RUN_03_HASH = "40751b02"
  * o gate mede — as quatro anteriores são todas do `7c952a6`, anterior ao pivô.
  */
 const CORE_ATUAL = resolve(projectRoot, "replays", "core-atual.json")
-const CORE_ATUAL_HASH = "d33f4c86"
+const CORE_ATUAL_HASH = "2f7c2baf"
 
 const smoke = () => loadReplay(SMOKE)
 const tuning = () => loadTuning()
@@ -57,7 +57,8 @@ const tuning = () => loadTuning()
  *
  * 1. os i-frames passaram a cair no primeiro abate por contato, e o campo morto
  *    `invulnSkipCurrent` saiu do hash junto;
- * 2. o TECIDO entrou. A arena deixou de ser vazio: 576 tiles de infecção agora
+ * 2. o TECIDO entrou, e depois a doença ganhou RELÓGIO PRÓPRIO com piso — parar
+ *    deixou de congelar o alastramento junto com o resto do mundo. A arena deixou de ser vazio: 576 tiles de infecção agora
  *    fazem parte do estado e do hash, as três células discretas do organismo
  *    saíram, e a fase acaba por contenção em vez de por cota.
  */

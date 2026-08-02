@@ -153,3 +153,8 @@ Sem prosa. Se precisar de parágrafo, é decisão de arquitetura e vai pro `CLAU
 - 01/08 · ARTE · doença MULTIPLICA, não subtrai · chamada do H: célula sumindo lê como "nada ali", e nada ali parece seguro; agora o leito continua e a colônia cresce por cima. O leito virou UMA textura contínua de tela cheia, sem grade
 - 01/08 · defeito · o piso `max(1,…)` da cura anulava a penalidade de velocidade · dose mínima curava os 13 tiles do raio por igual; correndo curava 53% do que parada quando o tuning pedia 28%
 - 01/08 · propriedade emergente · parada, a cura é funda mas satura em segundos · o alcance é minúsculo, então profundidade não substitui cobertura. Achado por um teste que empatava em 520
+- 01/08 · APROVADO · a cura por região forçando a decisão mover-x-parar · H: "achei isso ouro"; é a primeira mecânica do projeto que ele elogiou como decisão recorrente e não como feel
+- 01/08 · doença ganha RELÓGIO PRÓPRIO com piso · H pediu punição para ficar parado; doença progride quer você se mexa ou não, e é o patógeno que anda no seu relógio, não a infecção
+- 01/08 · defeito · o piso ficou só na fonte e o ALASTRAMENTO continuou congelando parado · é o alastramento que toma terreno; parar seguia sendo refúgio até o piso valer para os dois
+- 01/08 · ARTE · a batalha acontecia ACIMA das hemácias, não entre elas · chamada do H; leito único sempre atrás vira papel de parede. Camada da frente escura por cima dos corpos, e tremor do leito em tempo de mundo
+- 01/08 · parallax · a camada de hemácias sai; o LEITO ocupa esse papel · manter as duas deixava o parallax "descolado dos elementos novos", que foi a crítica dele. Sobram fibrina e detritos, que correm ENTRE as células
