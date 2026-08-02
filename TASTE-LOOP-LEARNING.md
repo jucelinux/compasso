@@ -275,6 +275,95 @@ ladder, cheaper and more reliably than any fleet. Reaching for agents there woul
 climbing the ladder for a problem the rung below already catches, which is the single
 failure §2 exists to prevent.
 
+## 5b. Proposals raised after 01/08
+
+### P8 — A reconciliation pass at the open of every cycle · ADOPTED 02/08 → §3b
+
+Raised by the human on 02/08, mid-session, while watching the agent do it by hand.
+
+**The case.** 01/08 ended with a deliberate handoff: the whole next round was written into
+`BACKLOG.md` precisely so the next session would not need the conversation that produced it.
+The content survived — a cold session reconstructed the pivot, the seven axes, the capability
+surface and the full round design without asking anything. **Four navigation defects did not:**
+
+| Defect | Why it survived |
+|---|---|
+| The session ordering in `CLAUDE.md` did not include `BACKLOG.md` | The handoff wrote the round into a file nobody was told to read |
+| "Crowded but not dangerous" appeared struck out *and* reopened | Two edits, different turns, neither read the other |
+| Two different "next rounds" declared, 14 lines apart | Same file, same day, no pass ever compares a file to itself |
+| The gate counter existed only in the append-only log | Recording that it changed is not the same as recording what it is |
+
+**The pattern.** All four are the same failure at a different layer than L1. L1 was a verdict
+that superseded a declaration; this is state that is internally inconsistent, or unreachable,
+or has no owner. None of them are caught by the round-close questions, because a round closes
+against *what it did* and these are defects in *what was already there*.
+
+**Why it is cheap.** A cold session has total recall of files it just read and no memory of
+the conversation that produced them — the exact inverse of the human. Comparing files against
+each other is the one task where that inversion is an advantage, and it costs zero human
+attention. Rungs 1–3, by construction.
+
+**It also closes L5.** The distillation-debt check is item 6 of the pass. §8 said to distill
+past ~30 lines and nothing ever checked; the cycle open is the trigger that check never had.
+
+### P9 — A devolutiva antes da construção · ABERTA, precisa do veredito dele
+
+**The case.** On 02/08 the human asked for the white cell to be *"entre as hemácias"*. That
+phrase had a cheap reading — draw order — and an expensive one — bodies occupying space. The
+agent took the cheap one. Twice. The human had to reformulate three times, ending with an
+analogy (*"a crowded train station"*) before the right reading landed. The expensive reading
+was the one with a mechanic inside it, and that is not a coincidence: cheap readings are
+cheap precisely because they change nothing structural.
+
+Two levas were spent. Both shipped working code. Neither was what he wanted.
+
+**What the framework lacks.** §3.0 is a frontier probe: *where can we go* — samples of the
+agent's reachable set, on the agent's axis of uncertainty. Nothing covers *did I understand
+what you said* — samples of the agent's **interpretation**, on the human's axis of
+uncertainty. They look similar and solve opposite problems.
+
+**Proposal.** When a request admits two implementations whose cost differs by more than the
+cost of mocking both, produce the cheapest possible artifact of each reading — a still, a
+sketch, five lines of pseudo-code — and let the human point. Never a paragraph asking "did
+you mean A or B", because the whole failure is that the agent's paraphrase of A and B is
+generated from the same misreading that produced the wrong build.
+
+**Trigger, so it does not fire on everything:** only when the two readings differ in *what
+kind of thing gets built* (data vs behaviour, render vs sim, one file vs a subsystem). Two
+variants of one idea are not two readings; they are §3.0's business.
+
+### P10 — Instrumento novo passa pelo caso nulo antes de ser usado · ADOTADA → §2
+
+On 02/08 the agent built a pixel-difference measurement to prove the crowd of red cells was
+breathing. It reported ~50% of pixels changing. The number meant nothing: run with the crowd
+switched **off** and 96.6% of pixels still change, because palette cycling repaints the
+background by itself. The instrument was measuring the plasma.
+
+The oracle ladder (§2) says never to climb a rung the one below already covers. It says
+nothing about whether a rung *works*. A broken instrument is worse than no instrument,
+because its output is a number and numbers get believed — including by the agent that
+built it.
+
+**Rule: run a new instrument on a case where the answer is known — usually the null case,
+with the thing being measured turned off. If it cannot tell the null case from the real one,
+it is not an instrument.** Cost: one extra run.
+
+### P11 — Baseline sem o comando que a reproduz é boato · ADOTADA → §3b
+
+`BACKLOG.md` carried two different baselines for the same bot measurement — *157s/266s* in
+one bullet and *75-89s* in another, fourteen lines apart. On 02/08 the agent quoted the stale
+one to conclude that a change had made the game far too hard. The parameter sweep contradicted
+it: the change had made runs *longer*, not shorter.
+
+The cycle-open pass (§3b) checks for contradictions, and it had already run that morning —
+and missed this, because it was looking for contradictory *claims*, not contradictory
+*numbers*. Numbers rot faster than prose: prose about a dead constraint reads odd, a stale
+number reads fine.
+
+**Rule: any measured baseline written into a state file carries the command that regenerates
+it and the date it was taken.** Then a suspicious number is one command away from being
+checked, instead of an argument between two lines of the same file.
+
 ---
 
 ## 6. Learning log
@@ -324,8 +413,42 @@ the loop worse, not better. **Not yet adopted** — P7 is open.
 `DECISIONS.md` grew to 133 lines. §8 says to distill past ~30 lines; nothing *checks*.
 Same class as L1 — a state file with no maintenance trigger — but a different mechanism:
 L1 was a verdict that superseded a declaration, this is slow accumulation with no single
-moment where it becomes wrong. **Open:** the round-close questions catch supersession, not
-drift. No proposal yet.
+moment where it becomes wrong. **Closed 02/08** by P8: the round-close questions catch
+supersession, not drift, so the check moved to the *cycle open* instead — §3b, item 6.
+
+### L9 · 02/08 · The reconciliation pass paid off, and the human is the one who confirmed it
+
+He ended a session, opened a clean context, and the work continued without him re-explaining
+anything: *"você conseguiu dar continuidade no trabalho"*. That is the first positive evidence
+for §3b, adopted the same day, and it is worth as much as the four defects that motivated it —
+a method change that is never observed working is indistinguishable from ceremony.
+
+Worth naming precisely, because the credit is shared: §3b did not make the files correct, it
+made the agent *check* them, and three of the four defects were fixed in the first ten minutes
+of the session. The handoff worked because the pass ran, not because the handoff was good.
+
+### L10 · 02/08 · The human found two causes the agent had reasoned past
+
+Twice in one cycle, one sentence each. *"The fibrin can go to the back"* and *"in the
+background the variation between red and black can be much subtler."* Both times the agent
+had been reasoning about **structure** — which layer sits where — and both times the answer
+was **value** — which colour is on the pixel. The agent had already rendered and looked at the
+output; looking was not enough, because it looked to check whether the change worked rather
+than to trace where a colour came from.
+
+Same family as §10's *"confident about work it cannot see"*, but a distinct mechanism:
+confident about **causes it has not traced**. When the symptom is perceptual — "it doesn't
+fill", "it has no life" — enumerate where those pixels are actually drawn before changing
+architecture. No proposal yet; P9 and P10 already cover the neighbouring ground and the
+framework does not need a third rule the same day.
+
+### L8 · 02/08 · A handoff that passed on content still failed on navigation
+
+The 01/08 handoff was deliberate and written for a cold reader, and the cold reader did
+reconstruct the project from files alone. It still shipped four defects, all of them about
+finding the state rather than about the state itself — including a session ordering that
+omitted the file holding the round to be run. **Adopted** as `TASTE-LOOP.md` §3b, the
+reconciliation pass. Evidence: this session, `DECISIONS.md` 02/08.
 
 ---
 

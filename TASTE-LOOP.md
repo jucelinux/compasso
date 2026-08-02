@@ -38,6 +38,15 @@ mechanical error is the most expensive waste available.
 Rung 2 holds most of the value and is the rung almost nobody builds. Whatever the domain,
 ask: what property of the artifact can be asserted mechanically and re-checked forever?
 
+**A new instrument passes the null case before its output is trusted.** The ladder says which
+rung to use; it said nothing about whether a rung *works*, and on 02/08 that cost a measurement
+that looked convincing and measured nothing — a pixel-difference test built to detect whether
+a crowd of cells was animating, on a screen where palette cycling already repaints 96.6% of
+pixels with the crowd switched off. Run any new instrument on a case whose answer is known,
+usually with the thing being measured turned off. If it cannot separate that from the real
+case, it is not an instrument, and its number is worse than no number — because numbers get
+believed, including by whoever built them.
+
 ---
 
 ## 3. One round
@@ -61,6 +70,42 @@ ask: what property of the artifact can be asserted mechanically and re-checked f
    *Did this round produce a gate reading, or not?* · *What did the loop itself get wrong?*
    · ***Did this round operate below a ceiling either side knows about but did not name?*** ·
    *Does anything in this file need to change?* See section 12.
+
+---
+
+## 3b. Cycle open — the reconciliation pass
+
+A round has a close (§3.9). A **cycle** — a fresh session, a new sitting, anything that
+starts from cold context — needs an open, and until 02/08 it did not have one. The agent
+read the state files and believed them. Nothing checked them against each other.
+
+Runs before any work, costs no human attention, and lives entirely on rungs 1–3:
+
+1. **Rungs 1–3 first.** Build, typecheck, tests. Reconstruct against a working tree, not a
+   broken one, and report the numbers.
+2. **Reconstruct out loud.** State where the project is using *only* what the files say.
+   Whatever you know and cannot point to a file for is a hole in the files — fix the file.
+3. **Is the reading order complete?** Every state file must be reachable from the session
+   ordering in `CLAUDE.md`. A file nobody is told to read is a file that does not exist.
+4. **Contradictions inside state files.** The same item declared both settled and open. Two
+   different "next" declared. A list called binding with no *as of* date. **And the same
+   measurement quoted with two different values** — numbers rot faster than prose, because
+   prose about a dead constraint reads odd while a stale number reads fine. Every measured
+   baseline in a state file carries the command that regenerates it and the date it was
+   taken; a baseline without that is a rumour, and on 02/08 one was quoted into a conclusion
+   that a parameter sweep then contradicted.
+5. **State living in a log.** Any number that changes — a gate count, a strike counter —
+   needs an owner in a state file. `DECISIONS.md` records that it changed, never what it is.
+6. **Distillation debt.** Has `DECISIONS.md` grown past ~30 lines since `TASTE.md` §1 was
+   last distilled? §8 says to distill and nothing ever checked.
+
+**Output:** every defect either fixed in the same turn — most are mechanical — or named as
+an open item. Each one gets a line in `DECISIONS.md` on the `LOOP` axis. What cannot be
+resolved without a direction call goes to the human, batched, with the round's opening ask.
+
+The pass is cheap by construction. It is the one place in the method where the agent's total
+recall of files it just read is worth more than the human's memory of a session he had
+yesterday, and that asymmetry is the whole reason it works.
 
 ---
 
@@ -298,6 +343,7 @@ Two rules keep this honest:
 | Backlog describes a game that no longer exists | Same cause; a pivot invalidates a batch and nothing sweeps for it |
 | Rounds improve the thing, the loop never improves | No round-close step; the method is never itself under review |
 | Agent is confident about work it cannot see | Axis has no artifact the agent can actually inspect — see section 12 |
+| A fresh session picks up the wrong work, or cannot find the current state | No cycle-open reconciliation — see section 3b |
 
 ---
 
@@ -357,3 +403,6 @@ is the same log-versus-state split as section 8, applied to the method itself.
 | 01/08 | `TASTE.md` §2 splits into biases and capability surface (§8) | §2 collected tendencies but never boundaries or maxima, so nothing ever asked where the ceiling was highest |
 | 01/08 | Fourth round-close question: did we operate below a named ceiling? (§3.9) | Nothing in the loop detected three rounds spent below the frontier |
 | 01/08 | Constraints proposed as virtues must be split (§8) | "Only geometric primitives — the restriction becomes identity" was virtue and limitation; only the virtue half was recorded |
+| 02/08 | A new instrument passes the null case (§2) | A pixel-difference test built to prove a crowd was animating reported ~50% of pixels changing; with the crowd switched off, 96.6% still changed. The instrument measured the background, and its number was convincing |
+| 02/08 | Baselines in state files carry their reproducing command (§3b) | `BACKLOG.md` held two contradictory baselines for the same bot measurement, fourteen lines apart; the stale one was quoted into a wrong conclusion that a sweep later contradicted |
+| 02/08 | Cycle open: the reconciliation pass (§3b) | A deliberate handoff to a clean session still shipped four state defects — the session ordering did not include the file holding the round, one item was both struck out and reopened, two different "next rounds" were declared, and the gate counter existed only inside the append-only log. Rounds had a close and cycles had no open |
