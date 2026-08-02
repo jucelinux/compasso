@@ -14,6 +14,12 @@ import {
   RAMP_SHI,
   RAMP_SPECULAR,
   COR0,
+  HEM0,
+  HEM1,
+  PLASMA0,
+  PLASMA1,
+  SAL0,
+  SAL1,
   COR1,
   ECO0,
   EST0,
@@ -27,12 +33,14 @@ import {
   type Ramp,
 } from "./palette.ts"
 import {
+  bayer,
   blit,
   body,
   capsule,
   disc,
   line,
   makeBuf,
+  hashNoise,
   outline,
   plot,
   ring,
@@ -519,6 +527,96 @@ export function auraBuf(r: number, idx: number, keep: number): Buf {
   const b = makeBuf(S, S)
   ring(b, S / 2, S / 2, r, r, idx, keep)
   ring(b, S / 2, S / 2, r, 1, idx, 1)
+  return b
+}
+
+/**
+ * Tecido: um tile de hemácias, em cinco estados de infecção.
+ *
+ * O estado 0 é a gota de sangue cheia — hemácia encostando em hemácia. Conforme
+ * a infecção sobe, as células escurecem e somem, até o tile virar plasma vazio.
+ *
+ * A leitura é imediata e não gasta cor nova: **a arena vazia que o jogo tinha
+ * até agora é, literalmente, o estado totalmente infectado.** Curar repovoa.
+ */
+export const TISSUE_LEVELS = 5
+export const TISSUE_VARIANTS = 6
+
+/**
+ * O leito de hemácias: UMA textura de tela cheia, empacotada de forma irregular.
+ *
+ * A primeira versão desenhava 4 hemácias por tile em posições fixas de uma grade
+ * de 32x18, e o humano reprovou na hora: saía um xadrez, não uma gota de sangue.
+ * Sob microscópio as células se tocam, se sobrepõem e não têm alinhamento nenhum.
+ *
+ * A correção estrutural é desacoplar: o leito é uma imagem só, contínua e sem
+ * grade; o estado da infecção vem por cima, em `colonyTile`. A grade continua
+ * existindo na sim, mas some da tela.
+ */
+export function tissueBed(w: number, h: number, seed: number): Buf {
+  const b = makeBuf(w, h)
+  /*
+   * A rampa para no HEM1, não no HEM2. O leito ocupa a tela inteira: se ele for
+   * ao tom mais claro do vermelho, vira uma parede saturada e o jogador — que é
+   * um ponto de 20px — some dentro dela. Fundo é fundo mesmo quando é o campo de
+   * jogo; quem tem que brilhar é quem você controla.
+   */
+  const RAMP_RBC: Ramp = [PLASMA1, HEM0, HEM0, HEM1]
+  const n = Math.round((w * h) / 135)
+  for (let i = 0; i < n; i++) {
+    const cx = hashNoise(i, seed, 11) * (w + 16) - 8
+    const cy = hashNoise(i, seed, 13) * (h + 16) - 8
+    const r = 5.5 + hashNoise(i, seed, 17) * 3.2
+    const squash = 0.74 + hashNoise(i, seed, 19) * 0.24
+    const tilt = hashNoise(i, seed, 23) * Math.PI
+    const oval = (rr: number) => (th: number): number => {
+      const s2 = Math.sin(th - tilt)
+      return rr / Math.sqrt(1 + (1 / (squash * squash) - 1) * s2 * s2)
+    }
+    // Halo escuro antes do corpo: é o que separa uma célula da vizinha. Sem ele
+    // a alta densidade vira massa única em vez de células empacotadas.
+    body(b, cx, cy, r + 1.2, [PLASMA0], oval(r + 1.2))
+    body(b, cx, cy, r, RAMP_RBC, oval(r))
+    // Depressão bicôncava CHAPADA e pequena. Com sombreamento próprio e raio
+    // grande ela desenhava um anel, e o leito inteiro lia como rosquinhas.
+    body(b, cx, cy, r * 0.34, [HEM0], oval(r * 0.34))
+  }
+  return b
+}
+
+/**
+ * A doença, por cima do leito.
+ *
+ * Correção de desenho pedida pelo humano: **doença se manifesta, não subtrai.**
+ * A versão anterior apagava hemácias conforme a infecção subia, e o campo tomado
+ * virava vazio — que é justamente como o jogo parecia ANTES do tecido existir, e
+ * que lê como "seguro". Aqui o tecido continua lá; o que cresce é a colônia.
+ *
+ * Nível 0 é transparente por completo: tecido sadio não desenha nada.
+ */
+export function colonyTile(w: number, h: number, level: number, variant: number): Buf {
+  const b = makeBuf(w, h)
+  if (level <= 0) return b
+
+  // A necrose: o leito escurece por baixo da colônia, sem sumir.
+  const escuro = [0, 0.18, 0.36, 0.56, 0.78][level] ?? 0
+  if (escuro > 0) {
+    for (let y = 0; y < h; y++) {
+      for (let x = 0; x < w; x++) {
+        if (bayer(x, y) < escuro) plot(b, x, y, level >= 4 ? INK2 : PLASMA0)
+      }
+    }
+  }
+
+  // A colônia, que MULTIPLICA. É a leitura de ameaça que faltava.
+  const colonias = [0, 2, 5, 10, 17][level] ?? 0
+  const RAMP_PUS: Ramp = [SAL0, SAL0, SAL1, SAL2]
+  for (let i = 0; i < colonias; i++) {
+    const cx = hashNoise(i, variant, 31) * w
+    const cy = hashNoise(i, variant, 37) * h
+    const r = 1.2 + hashNoise(i, variant, 41) * (0.8 + level * 0.35)
+    body(b, cx, cy, r, RAMP_PUS, () => r)
+  }
   return b
 }
 

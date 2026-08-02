@@ -11,7 +11,17 @@ todos superados. `DECISIONS.md` guarda o histórico; este arquivo guarda só o p
 
 ## Aberto agora
 
-- **O jogo é lotado, mas não é perigoso.** Medido em 01/08 com o bot: 55% da run tem um
+- **Balanço do tecido é de primeira mão.** A sonda de 01/08 deu run de 157s (agressiva) a
+  266s (ritmo) contra alvo de ~120s, com 3-4 fases por run. Está jogável e na faixa certa,
+  mas não foi afinado com humano nenhum ainda.
+- **A colônia não tem cor de doença.** Hoje toda infecção é verde. Com fase = doença, ela
+  devia herdar a rampa do patógeno dominante — a máquina já existe (`KIND_RAMP`).
+- **O card de apresentação da fase ainda não existe.** Aprovado na conversa de 01/08 e não
+  implementado: sprite animado grande, nome real, características. Os sprites e a fonte já
+  estão prontos, é montagem.
+- ~~O jogo é lotado, mas não é perigoso~~ — atacado pelo tecido; a morte agora vem da
+  infecção tomar o campo, não de encostar. Remedir com humano.
+- **O jogo era lotado, mas não perigoso.** Medido em 01/08 com o bot: 55% da run tem um
   patógeno a menos de 60px, e o tempo em posição de tomar dano é **0,1s numa run de 127s**.
   A causa é direta — 82% da run é passada acima de 0.78 de velocidade, e cinco dos seis
   `engulfSpeed` ficam abaixo disso. O limiar que deveria transformar contato em decisão

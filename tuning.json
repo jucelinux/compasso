@@ -155,12 +155,6 @@
     "splitOffset": 30,
     "spawnGraceTicks": 8
   },
-  "cells": {
-    "count": 3,
-    "fromWave": 3,
-    "size": 22,
-    "hp": 3
-  },
   "harness": {
     "recordSeconds": 30
   },
@@ -192,5 +186,25 @@
     "magnetSpeed": 130,
     "durationTicks": 480,
     "maxOnField": 6
+  },
+  "field": {
+    "cols": 32,
+    "rows": 18,
+    "maxInfection": 100,
+    "seeds": 4,
+    "sourceRate": 30,
+    "spreadSeconds": 0.62,
+    "spreadThreshold": 62,
+    "spreadAmount": 6,
+    "healRate": 150,
+    "healSpeedPenalty": 0.72,
+    "healRadius": 2,
+    "plaquetaHeal": 25,
+    "loseFraction": 0.5,
+    "spawnThreshold": 45,
+    "spawnCalmSeconds": 2.5,
+    "winFraction": 0.03,
+    "seedsPerWave": 0.7,
+    "sourcePerWave": 0.1
   }
 }

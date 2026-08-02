@@ -11,7 +11,7 @@ import type { Tuning } from "../src/sim/types.ts"
  */
 
 const SMOKE = resolve(projectRoot, "replays", "smoke.json")
-const BASELINE_HASH = "b8f8c33d"
+const BASELINE_HASH = "8a12aad4"
 
 /**
  * Run real do humano, 7,6 min de input de verdade, do core do dash (`7c952a6`).
@@ -21,7 +21,7 @@ const BASELINE_HASH = "b8f8c33d"
  * leitura de ritmo, e não como cobertura de morte.
  */
 const RUN_01 = resolve(projectRoot, "replays", "run-01.json")
-const RUN_01_HASH = "2511f194"
+const RUN_01_HASH = "efd56964"
 
 /**
  * Segunda run real: 5 min, 10 ondas, uma morte. Gravada antes da tecla de
@@ -29,7 +29,7 @@ const RUN_01_HASH = "2511f194"
  * Vale como determinismo sobre input humano longo.
  */
 const RUN_02 = resolve(projectRoot, "replays", "run-02.json")
-const RUN_02_HASH = "9a6a64d8"
+const RUN_02_HASH = "0fec29ae"
 
 /**
  * Terceira run real: 5,7 min de input humano, gravada quando os modificadores
@@ -38,7 +38,7 @@ const RUN_02_HASH = "9a6a64d8"
  * Com os patógenos reais este input voltou a morrer, na onda 6.
  */
 const RUN_03 = resolve(projectRoot, "replays", "run-03.json")
-const RUN_03_HASH = "e8ccf977"
+const RUN_03_HASH = "40751b02"
 
 /**
  * Primeira fixture do core contínuo, gravada por `npm run rec` em 01/08 no
@@ -47,15 +47,19 @@ const RUN_03_HASH = "e8ccf977"
  * o gate mede — as quatro anteriores são todas do `7c952a6`, anterior ao pivô.
  */
 const CORE_ATUAL = resolve(projectRoot, "replays", "core-atual.json")
-const CORE_ATUAL_HASH = "ecbe2b79"
+const CORE_ATUAL_HASH = "d33f4c86"
 
 const smoke = () => loadReplay(SMOKE)
 const tuning = () => loadTuning()
 
 /*
- * Os quatro baselines foram REBASEADOS em 01/08, ato consciente: os i-frames
- * passaram a cair no primeiro abate por contato em vez de ao atingir 85% da
- * velocidade, e o campo morto `invulnSkipCurrent` saiu do hash junto.
+ * Baselines REBASEADOS duas vezes em 01/08, as duas conscientes:
+ *
+ * 1. os i-frames passaram a cair no primeiro abate por contato, e o campo morto
+ *    `invulnSkipCurrent` saiu do hash junto;
+ * 2. o TECIDO entrou. A arena deixou de ser vazio: 576 tiles de infecção agora
+ *    fazem parte do estado e do hash, as três células discretas do organismo
+ *    saíram, e a fase acaba por contenção em vez de por cota.
  */
 describe("determinismo", () => {
   it("mesma seed + mesmos inputs = mesmo hash", () => {

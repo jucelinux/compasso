@@ -8,7 +8,6 @@ import {
   DIM0,
   FAST1,
   DIM1,
-  GLD1,
   GLD2,
   HURT1,
   INK,
@@ -196,7 +195,9 @@ export async function createRenderer(mount: HTMLElement, tuning: Tuning): Promis
     })),
   )
 
-  const organLayer = new Container()
+  // O leito é estático e contínuo; só a colônia por cima muda de tile em tile.
+  const bedSprite = new Sprite(atlas.tissueBed)
+  const tissueLayer = new Container()
   const auraLayer = new Container()
   const enemyLayer = new Container()
   const ghostLayer = new Container()
@@ -208,13 +209,29 @@ export async function createRenderer(mount: HTMLElement, tuning: Tuning): Promis
 
   world.addChild(bgPlasma)
   for (const d of drift) world.addChild(d.sprite)
-  world.addChild(organLayer, auraLayer, enemyLayer, ghostLayer, playerSprite, powerLayer, fxLayer, popLayer)
+  world.addChild(bedSprite, tissueLayer, auraLayer, enemyLayer, ghostLayer, playerSprite, powerLayer, fxLayer, popLayer)
 
   const flashVeil = new Sprite()
   flashVeil.visible = false
   world.addChild(flashVeil)
 
-  const organPool = new Pool(organLayer)
+  /*
+   * O tecido: um sprite por tile, posicionado uma vez e com a textura trocada
+   * só quando o nível de infecção do tile muda. 576 sprites parados custam
+   * quase nada; 576 reposicionados por quadro custariam.
+   */
+  const tileW = tuning.arena.width / tuning.field.cols
+  const tileH = tuning.arena.height / tuning.field.rows
+  const tiles: Sprite[] = []
+  const tileLevel = new Int8Array(tuning.field.cols * tuning.field.rows).fill(-1)
+  for (let i = 0; i < tileLevel.length; i++) {
+    const sp = new Sprite()
+    sp.position.set((i % tuning.field.cols) * tileW, Math.floor(i / tuning.field.cols) * tileH)
+    tiles.push(sp)
+    tissueLayer.addChild(sp)
+  }
+  const LEVELS = atlas.colony.length
+  const VARIANTS = atlas.colony[0]!.length
   const auraPool = new Pool(auraLayer)
   const enemyPool = new Pool(enemyLayer)
   const ghostPool = new Pool(ghostLayer)
@@ -238,7 +255,6 @@ export async function createRenderer(mount: HTMLElement, tuning: Tuning): Promis
   const heading = new Map<number, number>()
   let seenIds = new Set<number>()
   let prevLives = -1
-  let prevCellsLost = 0
   let prevCombo = 0
   let prevWave = 1
   let flash = 0
@@ -430,14 +446,17 @@ export async function createRenderer(mount: HTMLElement, tuning: Tuning): Promis
     }
   }
 
-  const drawOrgans = (cur: SimState, phase: number): void => {
-    organPool.begin()
-    for (let i = 0; i < cur.cells.length; i++) {
-      const c = cur.cells[i]!
-      const sp = organPool.next(frameOf(atlas.organ, c.hp - 1, 0, phase + i * 2))
-      sp.position.set(Math.round(c.x), Math.round(c.y))
+  const drawTissue = (cur: SimState): void => {
+    const max = tuning.field.maxInfection
+    for (let i = 0; i < tiles.length; i++) {
+      // 0 = sadio e cheio de hemácias; o último nível = plasma vazio. A arena
+      // vazia que o jogo tinha até 01/08 é, literalmente, o estado infectado.
+      const inf = cur.field[i]!
+      const lv = inf === 0 ? 0 : Math.min(LEVELS - 1, 1 + Math.floor((inf * (LEVELS - 1)) / (max + 1)))
+      if (tileLevel[i] === lv) continue
+      tileLevel[i] = lv
+      tiles[i]!.texture = atlas.colony[lv]![(i * 7 + Math.floor(i / 32) * 3) % VARIANTS]!
     }
-    organPool.end()
   }
 
   /** Barra de N segmentos. Segmento discreto lê melhor que barra contínua. */
@@ -461,11 +480,6 @@ export async function createRenderer(mount: HTMLElement, tuning: Tuning): Promis
   const drawHud = (cur: SimState): void => {
     hudBars.clear()
 
-    // esquerda: tecido restante · direita: suas vidas e escudos
-    for (let i = 0; i < cur.cells.length; i++) {
-      const frac = cur.cells[i]!.hp / tuning.cells.hp
-      hudBars.rect(6 + i * 7, 6, 5, 5).fill(col(frac > 0.5 ? ORG2 : DIM0))
-    }
     for (let i = 0; i < Math.max(0, cur.lives); i++) {
       hudBars.rect(tuning.arena.width - 11 - i * 7, 6, 5, 5).fill(col(WHITE))
     }
@@ -475,11 +489,13 @@ export async function createRenderer(mount: HTMLElement, tuning: Tuning): Promis
         .fill(col(SHI1))
     }
 
-    // onda e cota
+    const max = tuning.field.maxInfection
+    const teto = tuning.field.cols * tuning.field.rows * max
+    const infFrac = cur.infection / teto
     waveLabel.set(
-      `ONDA ${cur.wave}   ${cur.waveKills}/${cur.quota}` +
+      `FASE ${cur.wave}   INFECÇÃO ${Math.ceil(infFrac * 100)}%` +
         (cur.bestWave > 1 ? `   MELHOR ${cur.bestWave}` : ""),
-      WHITE,
+      infFrac > tuning.field.loseFraction * 0.7 ? HURT1 : WHITE,
       tuning.arena.width / 2,
       4,
       1,
@@ -492,7 +508,21 @@ export async function createRenderer(mount: HTMLElement, tuning: Tuning): Promis
      * tela, acima do jogador e dos patógenos. Barra de ponta a ponta é reservada
      * para o relógio, lá embaixo — é a única informação que merece esse peso.
      */
-    segBar(tuning.arena.width / 2 - 100, 16, 200, 2, cur.waveKills / cur.quota, 20, GLD1, DIM1)
+    /*
+     * A barra da infecção enche para a ESQUERDA a partir do centro conforme você
+     * cura, e para a direita conforme a doença ganha. Zero é vitória da fase; o
+     * limite de perda está marcado, para o jogador ver de quanto é a folga.
+     */
+    segBar(
+      tuning.arena.width / 2 - 100,
+      16,
+      200,
+      2,
+      infFrac / tuning.field.loseFraction,
+      20,
+      infFrac > tuning.field.loseFraction * 0.7 ? HURT1 : ORG2,
+      DIM1,
+    )
 
     /*
      * A barra do relógio. Não é decoração: é o único lugar onde o jogador vê
@@ -542,7 +572,7 @@ export async function createRenderer(mount: HTMLElement, tuning: Tuning): Promis
     if (!on) return
     const cy = tuning.arena.height / 2
     const cx = tuning.arena.width / 2
-    deadLines[0]!.set(cur.lostByCells ? "O ORGANISMO CAIU" : "A INFECÇÃO VENCEU", HURT1, cx, cy - 40, 2, true)
+    deadLines[0]!.set(cur.lostByTissue ? "O TECIDO MORREU" : "A INFECÇÃO VENCEU", HURT1, cx, cy - 40, 2, true)
     deadLines[1]!.set(`ONDA ${cur.wave} · ${cur.kills} PATÓGENOS`, WHITE, cx, cy - 4, 1, true)
     deadLines[2]!.set(
       cur.comboBest > 1 ? `MELHOR SEQUÊNCIA ${cur.comboBest}×` : "",
@@ -579,14 +609,6 @@ export async function createRenderer(mount: HTMLElement, tuning: Tuning): Promis
       }
       seenIds = live
 
-      if (cur.cellsLost > prevCellsLost) {
-        const gone = prev.cells.find((c) => !cur.cells.some((k) => k.id === c.id))
-        if (gone) burst(gone.x, gone.y, ORG2, 24, 3.2)
-        flash = 1
-        shake = 9
-      }
-      prevCellsLost = cur.cellsLost
-
       if (prevLives >= 0 && cur.lives < prevLives) {
         flash = 1
         shake = 7
@@ -621,7 +643,7 @@ export async function createRenderer(mount: HTMLElement, tuning: Tuning): Promis
           x: tuning.arena.width / 2,
           y: tuning.arena.height / 2 - 50,
           life: 1,
-          text: `ONDA ${prevWave} CONTIDA`,
+          text: `FASE ${prevWave} CONTIDA`,
           scale: 2,
           idx: SHI1,
         })
@@ -650,7 +672,7 @@ export async function createRenderer(mount: HTMLElement, tuning: Tuning): Promis
       }
 
       // ------------------------------------------------------------- corpos
-      drawOrgans(cur, worldPhase)
+      drawTissue(cur)
       drawAuras(cur)
       drawEnemies(cur, prev, t, worldPhase)
       drawPlayer(cur, lerp(prev.player.x, cur.player.x, t), lerp(prev.player.y, cur.player.y, t))

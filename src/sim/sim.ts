@@ -1,5 +1,17 @@
 import { Packer } from "./hash.ts"
 import { activeStats, INSTANT, POWERS, quotaFor, spawnIntervalFor } from "./powers.ts"
+import {
+  fieldSpec,
+  healAround,
+  healthiestTile,
+  infectAt,
+  makeField,
+  spreadStep,
+  tileAt,
+  tileCenterX,
+  tileCenterY,
+  totalInfection,
+} from "./field.ts"
 import { createRng } from "./rng.ts"
 import type { Enemy, InputFrame, KindSpec, Sim, SimSnapshot, SimState, Tuning } from "./types.ts"
 
@@ -65,6 +77,11 @@ export function createSim(seed: number, tuning: Tuning): Sim {
   const dt = 1 / tuning.sim.hz
   const { width, height } = tuning.arena
   const packer = new Packer(8192)
+  const FIELD = fieldSpec(width, height, tuning.field.cols, tuning.field.rows)
+  const MAXINF = tuning.field.maxInfection
+  const LOSE = Math.round(FIELD.cols * FIELD.rows * MAXINF * tuning.field.loseFraction)
+  const WIN = Math.round(FIELD.cols * FIELD.rows * MAXINF * tuning.field.winFraction)
+  const scratch = new Int16Array(FIELD.cols * FIELD.rows)
 
   let nextId = 0
   const kindOf = (name: string): KindSpec => tuning.enemy.kinds[name]!
@@ -93,9 +110,12 @@ export function createSim(seed: number, tuning: Tuning): Sim {
       invulnerable: false,
     },
     enemies: [],
-    cells: [],
-    cellsLost: 0,
-    lostByCells: false,
+    field: makeField(FIELD),
+    infection: 0,
+    spreadTimer: 0,
+    infectAcc: 0,
+    healAcc: 0,
+    lostByTissue: false,
     drops: [],
     active: POWERS.map(() => 0),
     trails: [],
@@ -151,28 +171,48 @@ export function createSim(seed: number, tuning: Tuning): Sim {
     })
   }
 
-  const spawnEnemy = (): void => {
-    const along = rng.nextFloat()
-    const edge = rng.nextInt(0, 4)
-    const x = edge === 0 ? 0 : edge === 1 ? width : along * width
-    const y = edge === 2 ? 0 : edge === 3 ? height : along * height
-    pushEnemy(rollKind(), x, y)
+  /**
+   * O patógeno nasce DO TECIDO INFECTADO, não da borda da tela.
+   *
+   * Esta é a peça que faz a fase convergir. Com spawn de borda em intervalo
+   * fixo, a infecção nunca podia chegar a zero — a sonda de 01/08 mostrou cinco
+   * seeds e zero fases limpas, porque a condição de vitória era inalcançável por
+   * construção.
+   *
+   * Nascendo do tecido, o sistema vira realimentação nos DOIS sentidos: matar
+   * fonte reduz infecção, que reduz spawn, que reduz infecção. Deixar crescer faz
+   * o contrário. O trabalho do jogador é inverter o sinal — e isso É a curva de
+   * tensão, porque a mesma alavanca acelera os dois lados.
+   */
+  const spawnFromTissue = (): boolean => {
+    let candidatos = 0
+    for (let i = 0; i < s.field.length; i++) {
+      if (s.field[i]! >= tuning.field.spawnThreshold) candidatos++
+    }
+    if (candidatos === 0) return false
+    let pick = rng.nextInt(0, candidatos)
+    for (let i = 0; i < s.field.length; i++) {
+      if (s.field[i]! < tuning.field.spawnThreshold) continue
+      if (pick-- > 0) continue
+      pushEnemy(rollKind(), tileCenterX(FIELD, i), tileCenterY(FIELD, i))
+      return true
+    }
+    return false
   }
 
-  const placeCells = (): void => {
-    const m = 74
-    const spots: ReadonlyArray<readonly [number, number]> = [
-      [m, m],
-      [width - m, height - m],
-      [width - m, m],
-      [m, height - m],
-      [width / 2, m],
-    ]
-    s.cells = []
-    for (let i = 0; i < Math.min(tuning.cells.count, spots.length); i++) {
-      const spot = spots[i]!
-      s.cells.push({ id: i, x: spot[0], y: spot[1], hp: tuning.cells.hp })
+  /** Semeia os focos iniciais da doença, longe do centro onde a célula nasce. */
+  const seedInfection = (): void => {
+    s.field.fill(0)
+    // A doença escala por fase: mais focos iniciais e fonte mais forte. Sem
+    // isto a fase 20 é idêntica à fase 1, que é a queixa de 01/08 com outra
+    // roupa ("a quantidade de kills era a mesma de acordo com o nível").
+    const focos = tuning.field.seeds + Math.floor((s.wave - 1) * tuning.field.seedsPerWave)
+    for (let i = 0; i < focos; i++) {
+      const col = rng.nextInt(0, FIELD.cols)
+      const row = rng.nextInt(0, FIELD.rows)
+      infectAt(s.field, row * FIELD.cols + col, MAXINF, MAXINF)
     }
+    s.infection = totalInfection(s.field)
   }
 
   const startWave = (): void => {
@@ -184,23 +224,22 @@ export function createSim(seed: number, tuning: Tuning): Sim {
     s.frozen = 0
     if (s.wave > s.bestWave) s.bestWave = s.wave
 
-    if (s.wave >= tuning.cells.fromWave && s.cells.length === 0 && s.cellsLost === 0) {
-      placeCells()
-    }
+    seedInfection()
+    s.spreadTimer = 0
 
-    const opening = Math.min(
-      s.quota,
-      tuning.enemy.openingBase + (s.wave - 1) * tuning.enemy.openingPerWave,
-    )
-    for (let i = 0; i < opening; i++) spawnEnemy()
+    const opening = tuning.enemy.openingBase + (s.wave - 1) * tuning.enemy.openingPerWave
+    for (let i = 0; i < opening; i++) spawnFromTissue()
   }
 
   const startRun = (): void => {
     s.wave = 1
     s.kills = 0
-    s.cells = []
-    s.cellsLost = 0
-    s.lostByCells = false
+    s.field.fill(0)
+    s.infection = 0
+    s.spreadTimer = 0
+    s.infectAcc = 0
+    s.healAcc = 0
+    s.lostByTissue = false
     s.lives = tuning.run.lives
     s.shields = 0
     s.drops = []
@@ -224,9 +263,9 @@ export function createSim(seed: number, tuning: Tuning): Sim {
     startWave()
   }
 
-  const endRun = (byCells: boolean): void => {
+  const endRun = (byTissue: boolean): void => {
     if (s.kills > s.bestKills) s.bestKills = s.kills
-    s.lostByCells = byCells
+    s.lostByTissue = byTissue
     s.phase = "dead"
     s.deadLock = tuning.run.deadLockTicks
     s.frozen = 0
@@ -235,7 +274,11 @@ export function createSim(seed: number, tuning: Tuning): Sim {
   /** Liga um poder. Instantâneos agem na hora e não ficam ativos. */
   const grant = (power: number): void => {
     if (INSTANT.has(power)) {
-      for (const c of s.cells) c.hp = tuning.cells.hp
+      for (let i = 0; i < s.field.length; i++) {
+        const v = s.field[i]! - tuning.field.plaquetaHeal
+        s.field[i] = v < 0 ? 0 : v
+      }
+      s.infection = totalInfection(s.field)
       return
     }
     if (power === 8) {
@@ -381,15 +424,10 @@ export function createSim(seed: number, tuning: Tuning): Sim {
       let tx = p.x
       let ty = p.y
       if (spec.hunts === "cell") {
-        let bd = Infinity
-        for (const c of s.cells) {
-          const d = (c.x - e.x) * (c.x - e.x) + (c.y - e.y) * (c.y - e.y)
-          if (d < bd) {
-            bd = d
-            tx = c.x
-            ty = c.y
-          }
-        }
+        // Vai atrás do tecido mais SADIO: ele quer terreno novo, não você.
+        const target = healthiestTile(s.field, MAXINF)
+        tx = tileCenterX(FIELD, target)
+        ty = tileCenterY(FIELD, target)
       }
       const ex = tx - e.x
       const ey = ty - e.y
@@ -407,10 +445,16 @@ export function createSim(seed: number, tuning: Tuning): Sim {
       }
     }
 
+    /*
+     * O intervalo de spawn escala com a INFECÇÃO, não com o relógio da onda.
+     * Campo limpo não produz patógeno nenhum; campo tomado produz sem parar.
+     */
     s.spawnTimer -= world
     if (s.spawnTimer <= 0) {
-      spawnEnemy()
-      s.spawnTimer += spawnIntervalFor(tuning, s.wave)
+      spawnFromTissue()
+      const frac = Math.min(1, s.infection / (FIELD.cols * FIELD.rows * MAXINF))
+      const base = spawnIntervalFor(tuning, s.wave)
+      s.spawnTimer += base + (tuning.field.spawnCalmSeconds - base) * (1 - Math.min(1, frac * 4))
     }
 
     // --- cápsulas: atraídas de perto, coletadas por contato
@@ -479,6 +523,46 @@ export function createSim(seed: number, tuning: Tuning): Sim {
         })
       }
     }
+
+    /*
+     * --- O TECIDO
+     *
+     * Três relógios diferentes de propósito, e a briga entre eles é o jogo:
+     * a fonte e o alastramento andam em tempo de MUNDO, a cura anda em tempo
+     * REAL e cai com a sua velocidade. Correr até o outro lado apaga um foco e
+     * acende três atrás; ficar parado limpa fundo e não cobre chão nenhum.
+     */
+    const fonte = tuning.field.sourceRate * (1 + (s.wave - 1) * tuning.field.sourcePerWave)
+    s.infectAcc += fonte * world
+    if (s.infectAcc >= 1) {
+      const n = Math.floor(s.infectAcc)
+      s.infectAcc -= n
+      for (const e of s.enemies) infectAt(s.field, tileAt(FIELD, e.x, e.y), n, MAXINF)
+    }
+
+    s.spreadTimer += world
+    if (s.spreadTimer >= tuning.field.spreadSeconds) {
+      s.spreadTimer -= tuning.field.spreadSeconds
+      spreadStep(
+        s.field,
+        scratch,
+        FIELD,
+        tuning.field.spreadThreshold,
+        tuning.field.spreadAmount,
+        MAXINF,
+      )
+    }
+
+    const healRate =
+      tuning.field.healRate * Math.max(0, 1 - p.speed * tuning.field.healSpeedPenalty)
+    s.healAcc += healRate * dt
+    if (s.healAcc >= 1) {
+      const n = Math.floor(s.healAcc)
+      s.healAcc -= n
+      healAround(s.field, FIELD, p.x, p.y, tuning.field.healRadius, n)
+    }
+
+    s.infection = totalInfection(s.field)
 
     // --- resolução: fagocitose por velocidade
     let hit = false
@@ -563,28 +647,10 @@ export function createSim(seed: number, tuning: Tuning): Sim {
         continue
       }
 
-      // --- o organismo: só o invasor come célula
-      let consumed = false
-      if (kindOf(e.kind).hunts === "cell") {
-        for (const c of s.cells) {
-          if (c.hp <= 0) continue
-          const cx = c.x - e.x
-          const cy = c.y - e.y
-          if (Math.sqrt(cx * cx + cy * cy) <= tuning.cells.size / 2 + eh) {
-            c.hp--
-            if (c.hp <= 0) s.cellsLost++
-            consumed = true
-            break
-          }
-        }
-      }
-      if (consumed) continue
-
       survivors.push(e)
     }
     s.enemies = survivors
     for (const sp2 of spawned) pushEnemy(sp2.kind, sp2.x, sp2.y)
-    s.cells = s.cells.filter((c) => c.hp > 0)
 
     // --- pulso mata no tick em que nasce
     const fresh = s.shocks.filter((sh) => sh.life === tuning.powers.shockLifeTicks)
@@ -647,12 +713,18 @@ export function createSim(seed: number, tuning: Tuning): Sim {
       p.invulnerable = false
     }
 
-    if (s.cellsLost > 0 && s.cells.length === 0) {
+    if (s.infection >= LOSE) {
       endRun(true)
       return
     }
 
-    if (s.waveKills >= s.quota) {
+    /*
+     * A fase acaba CONTIDA, não esterilizada: infecção abaixo do limiar E nenhum
+     * patógeno vivo. Exigir zero absoluto transformava o fim de fase numa
+     * varredura de 576 tiles atrás dos últimos sujos — a sonda mediu 10 minutos
+     * por fase. Conter e depois caçar os últimos é o fim divertido; varrer não é.
+     */
+    if (s.infection <= WIN && s.enemies.length === 0) {
       s.wave++
       startWave()
     }
@@ -703,12 +775,15 @@ export function createSim(seed: number, tuning: Tuning): Sim {
       .f64(s.worldScale)
       .u32(s.frozen)
       .u32(s.deadLock)
-      .u32(s.cellsLost)
-      .bool(s.lostByCells)
+      .u32(s.infection)
+      .f64(s.spreadTimer)
+      .f64(s.infectAcc)
+      .f64(s.healAcc)
+      .bool(s.lostByTissue)
       .u32(s.combo)
       .u32(s.comboTicks)
       .u32(s.enemies.length)
-      .u32(s.cells.length)
+
       .u32(s.drops.length)
       .u32(s.trails.length)
       .u32(s.shocks.length)
@@ -722,7 +797,7 @@ export function createSim(seed: number, tuning: Tuning): Sim {
       packer.u32(e.id).f64(e.x).f64(e.y).u32(e.hp).u32(e.bornTick)
       for (let i = 0; i < e.kind.length; i++) packer.u8(e.kind.charCodeAt(i))
     }
-    for (const c of s.cells) packer.u32(c.id).f64(c.x).f64(c.y).u32(c.hp)
+    for (let i = 0; i < s.field.length; i++) packer.u8(s.field[i]!)
     for (const d of s.drops) packer.u32(d.id).u32(d.power).f64(d.x).f64(d.y).u32(d.life)
     for (const n of s.active) packer.u32(n)
     for (const tr of s.trails) packer.f64(tr.x).f64(tr.y).u32(tr.life)

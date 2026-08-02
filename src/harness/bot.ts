@@ -10,6 +10,7 @@
  * dia ele influenciar o jogo, algo está no lugar errado.
  */
 import { createSim } from "../sim/sim.ts"
+import { fieldSpec, tileAt } from "../sim/field.ts"
 import type { Enemy, InputFrame, SimState, Tuning } from "../sim/types.ts"
 import { loadTuning } from "./loadTuning.ts"
 
@@ -44,8 +45,6 @@ function dist2(ax: number, ay: number, bx: number, by: number): number {
  * só mede a burrice do bot.
  */
 function chooseTarget(s: Readonly<SimState>): Enemy | null {
-  let urgent: Enemy | null = null
-  let urgentD = Infinity
   let nearest: Enemy | null = null
   let nearestD = Infinity
 
@@ -55,16 +54,8 @@ function chooseTarget(s: Readonly<SimState>): Enemy | null {
       nearestD = dp
       nearest = e
     }
-    for (const c of s.cells) {
-      const dc = dist2(e.x, e.y, c.x, c.y)
-      if (dc < urgentD) {
-        urgentD = dc
-        urgent = e
-      }
-    }
   }
-  // 120px do organismo é perto o bastante para largar o que estava fazendo.
-  return urgent !== null && urgentD < 120 * 120 ? urgent : nearest
+  return nearest
 }
 
 export interface WaveRow {
@@ -92,6 +83,12 @@ export interface Folga {
   invulneravel: number
   /** Segundos em cada escalão de velocidade: parado, lento, médio, a toda. */
   escaloes: [number, number, number, number]
+  /** Infecção média do campo ao longo da run, em fração do teto de derrota. */
+  infMedia: number
+  /** Pico de infecção atingido. Perto de 1 significa que passou perto de perder. */
+  infPico: number
+  /** Fases limpas até o fim: infecção levada a zero. */
+  fases: number
 }
 
 export interface RunReport {
@@ -99,7 +96,7 @@ export interface RunReport {
   waves: WaveRow[]
   diedAtWave: number | null
   diedAtSeconds: number | null
-  lostByCells: boolean
+  lostByTissue: boolean
   kills: number
   folga: Folga
 }
@@ -121,8 +118,13 @@ export interface RunReport {
  * limiar para nunca romper a proteção. É a única forma de medir o tamanho do
  * problema — a `cautelosa` sozinha quase nunca chega ao estado invulnerável,
  * porque este bot raramente apanha.
+ *
+ * `ritmo` e `curandeira` existem para o campo com estado, de 01/08. A hipótese
+ * é que com a infecção alastrando em tempo de MUNDO, "sempre no talo" deixe de
+ * ser dominante — e a única forma de saber é comparar com quem alterna e com
+ * quem só cura. Se `agressiva` continuar ganhando, a hipótese caiu.
  */
-export type Policy = "agressiva" | "cautelosa" | "exploradora"
+export type Policy = "agressiva" | "cautelosa" | "exploradora" | "ritmo" | "curandeira"
 
 /** Escalão de velocidade, os mesmos quatro que o render usa para escolher o sprite. */
 const tierOf = (speed: number): 0 | 1 | 2 | 3 =>
@@ -135,6 +137,7 @@ export function playRun(
   policy: Policy = "agressiva",
 ): RunReport {
   const sim = createSim(seed, tuning)
+  const FIELD = fieldSpec(tuning.arena.width, tuning.arena.height, tuning.field.cols, tuning.field.rows)
   const waves: WaveRow[] = []
   let waveStart = 0
   let lastWave = 1
@@ -145,13 +148,18 @@ export function playRun(
   let perigoTicks = 0
   let invulnTicks = 0
   const tierTicks: [number, number, number, number] = [0, 0, 0, 0]
+  const TETO = tuning.field.cols * tuning.field.rows * tuning.field.maxInfection
+  const PERDE = TETO * tuning.field.loseFraction
+  let infSum = 0
+  let infPico = 0
+  let fases = 0
 
   const report = (tick: number, done: Readonly<SimState>, died: boolean): RunReport => ({
     seed,
     waves,
     diedAtWave: died ? done.wave : null,
     diedAtSeconds: died ? tick / 60 : null,
-    lostByCells: died ? done.lostByCells : false,
+    lostByTissue: died ? done.lostByTissue : false,
     kills: done.kills,
     folga: {
       media: distTicks === 0 ? 0 : distSum / distTicks,
@@ -159,6 +167,9 @@ export function playRun(
       perigo: perigoTicks / 60,
       invulneravel: invulnTicks / 60,
       escaloes: [tierTicks[0] / 60, tierTicks[1] / 60, tierTicks[2] / 60, tierTicks[3] / 60],
+      infMedia: tick === 0 ? 0 : infSum / tick / PERDE,
+      infPico: infPico / PERDE,
+      fases,
     },
   })
 
@@ -167,15 +178,21 @@ export function playRun(
     if (s.phase === "dead") return report(tick, s, true)
 
     // --- medição, antes de decidir o input
+    infSum += s.infection
+    if (s.infection > infPico) infPico = s.infection
     tierTicks[tierOf(s.player.speed)]++
     if (s.player.invulnerable) invulnTicks++
     let nearest = Infinity
+    // Um tick em perigo é UM tick, não um por inimigo. Contando por inimigo, a
+    // curandeira parada numa multidão marcava 1538s numa run de 360s.
+    let emPerigo = false
     for (const e of s.enemies) {
       const d = Math.sqrt(dist2(e.x, e.y, s.player.x, s.player.y))
       if (d < nearest) nearest = d
       const alcance = (tuning.player.size + tuning.enemy.size * kindScale(tuning, e.kind)) / 2
-      if (d <= alcance && s.player.speed < tuning.enemy.kinds[e.kind]!.engulfSpeed) perigoTicks++
+      if (d <= alcance && s.player.speed < tuning.enemy.kinds[e.kind]!.engulfSpeed) emPerigo = true
     }
+    if (emPerigo) perigoTicks++
     if (nearest < Infinity) {
       distSum += nearest
       distTicks++
@@ -192,12 +209,23 @@ export function playRun(
      * - ainda não invulnerável, na `exploradora`: fica lento demais para engolir
      *   qualquer coisa, o que garante tomar o toque que liga a proteção
      */
+    /*
+     * `ritmo`: caça quando há fonte perto, cura quando o chão embaixo está sujo.
+     * É a política que testa a hipótese — se ela ganhar da `agressiva`, a
+     * velocidade máxima deixou de ser jogada dominante.
+     */
+    const tileAqui = tileAt(FIELD, s.player.x, s.player.y)
+    const sujeiraAqui = s.field[tileAqui]! / tuning.field.maxInfection
+    const fonteLonge = target === null || Math.sqrt(dist2(target.x, target.y, s.player.x, s.player.y)) > 90
+    const curar =
+      policy === "curandeira" || (policy === "ritmo" && sujeiraAqui > 0.25 && fonteLonge)
+
     const protegido = s.player.invulnerable
     const segurar =
       (policy === "cautelosa" || policy === "exploradora") && protegido && s.player.speed > 0.8
     const buscarToque =
       policy === "exploradora" && !protegido && s.lives > 1 && s.player.speed > 0.18
-    if (target !== null && !segurar && !buscarToque) {
+    if (target !== null && !segurar && !buscarToque && !curar) {
       const ax = target.x - s.player.x
       const ay = target.y - s.player.y
       const n = Math.sqrt(ax * ax + ay * ay) || 1
@@ -216,6 +244,7 @@ export function playRun(
     sim.step(input)
     const now = sim.state()
     if (now.wave > lastWave) {
+      fases++
       waves.push({ wave: lastWave, seconds: (tick - waveStart) / 60, quota: now.quota })
       waveStart = tick
       lastWave = now.wave
@@ -240,7 +269,7 @@ if (import.meta.url === `file://${process.argv[1]}`) {
     const folgas: Folga[] = []
     for (const seed of seeds) {
       const r = playRun(seed, tuning, MAX, policy)
-      const how = r.diedAtSeconds === null ? "SOBREVIVEU" : r.lostByCells ? "organismo caiu" : "três toques"
+      const how = r.diedAtSeconds === null ? "SOBREVIVEU" : r.lostByTissue ? "tecido morreu" : "três toques"
       const when = r.diedAtSeconds === null ? ">6min" : `${r.diedAtSeconds.toFixed(0)}s`
       if (r.diedAtSeconds !== null) lengths.push(r.diedAtSeconds)
       folgas.push(r.folga)
@@ -250,8 +279,8 @@ if (import.meta.url === `file://${process.argv[1]}`) {
       )
       const tot = r.folga.escaloes.reduce((a, b) => a + b, 0) || 1
       console.log(
-        `  folga ${r.folga.media.toFixed(0)}px · aperto ${r.folga.aperto.toFixed(0)}s · ` +
-          `perigo ${r.folga.perigo.toFixed(1)}s · invulnerável ${r.folga.invulneravel.toFixed(0)}s · ` +
+        `  fases ${r.folga.fases} · infecção méd ${(r.folga.infMedia * 100).toFixed(0)}% ` +
+          `pico ${(r.folga.infPico * 100).toFixed(0)}% · perigo ${r.folga.perigo.toFixed(1)}s · ` +
           `escalões ${r.folga.escaloes.map((v) => `${((v / tot) * 100).toFixed(0)}%`).join("/")}`,
       )
     }
@@ -266,12 +295,15 @@ if (import.meta.url === `file://${process.argv[1]}`) {
       console.log(`média: NENHUMA das ${seeds.length} seeds morreu em 6 min`)
     }
     console.log(
-      `       folga ${media((f) => f.media)}px · aperto ${media((f) => f.aperto)}s · ` +
-        `perigo ${media((f) => f.perigo)}s · invulnerável ${media((f) => f.invulneravel)}s`,
+      `       fases ${media((f) => f.fases)} · infecção méd ${media((f) => f.infMedia * 100)}% ` +
+        `pico ${media((f) => f.infPico * 100)}% · perigo ${media((f) => f.perigo)}s · ` +
+        `folga ${media((f) => f.media)}px`,
     )
   }
 
+  // `cautelosa` e `exploradora` seguem no arquivo como regressão do buraco de
+  // i-frames; a sonda do campo com estado compara estas três.
   suite("agressiva")
-  suite("cautelosa")
-  suite("exploradora")
+  suite("ritmo")
+  suite("curandeira")
 }

@@ -33,6 +33,14 @@ const advance = (sim: Sim, ticks: number, input: InputFrame = NONE): void => {
 
 const mut = (sim: Sim): SimState => sim.state() as SimState
 
+/** Soma da infecção do campo. O organismo É o campo desde 01/08. */
+const totalOf = (sim: Sim): number => {
+  let sum = 0
+  const f = sim.state().field
+  for (let i = 0; i < f.length; i++) sum += f[i]!
+  return sum
+}
+
 let nextId = 100000
 const id = (): number => nextId++
 const virus = (x: number, y: number, kind = "influenza", tick = -1000) => ({
@@ -336,50 +344,120 @@ describe("progressão de onda", () => {
   })
 })
 
-describe("o organismo e o fim da run", () => {
-  const reachCells = (sim: Sim): void => {
-    let guard = 0
-    while (sim.state().cells.length === 0) {
-      const s = mut(sim)
-      s.waveKills = s.quota
-      s.enemies = []
-      sim.step(NONE)
-      if (++guard > 20) throw new Error("não chegou nas células")
-    }
-    mut(sim).player.x = tuning.arena.width / 2
-    mut(sim).player.y = tuning.arena.height / 2
-  }
+describe("o tecido: conter e retomar", () => {
+  const teto = (): number =>
+    tuning.field.cols * tuning.field.rows * tuning.field.maxInfection
 
-  it("as células aparecem na onda marcada e só o invasor as come", () => {
+  it("a fase abre com focos de infecção, e eles crescem por fase", () => {
     const sim = createSim(50, tuning)
-    reachCells(sim)
-    expect(sim.state().wave).toBeGreaterThanOrEqual(tuning.cells.fromWave)
-
-    const cell = mut(sim).cells[0]!
-    const hp = cell.hp
-    mut(sim).enemies = [virus(cell.x, cell.y, "influenza")]
+    expect(sim.state().infection).toBeGreaterThan(0)
+    const fase1 = sim.state().infection
+    mut(sim).wave = 8
+    mut(sim).infection = 0
+    mut(sim).enemies = []
+    // força o fim de fase para a 9 semear
     sim.step(NONE)
-    expect(sim.state().cells[0]!.hp, "influenza não come tecido").toBe(hp)
-
-    mut(sim).enemies = [virus(cell.x, cell.y, "salmonela")]
-    sim.step(NONE)
-    expect(sim.state().cells[0]!.hp).toBe(hp - 1)
+    expect(sim.state().wave).toBe(9)
+    expect(sim.state().infection, "a fase 9 tem que abrir pior que a 1").toBeGreaterThan(fase1)
   })
 
-  it("perder o organismo encerra a run mesmo com vidas sobrando", () => {
-    const sim = createSim(51, tuning)
-    reachCells(sim)
-
-    let guard = 0
-    while (sim.state().cells.length > 0 && sim.state().phase === "run") {
-      const cell = mut(sim).cells[0]!
-      mut(sim).enemies = [virus(cell.x, cell.y, "salmonela")]
-      sim.step(NONE)
-      if (++guard > 60) break
+  it("o patógeno infecta o tile em que está, em tempo de MUNDO", () => {
+    /*
+     * O tecido é zerado ABAIXO do limiar de spawn mas ACIMA do de vitória: com o
+     * campo limpo e sem patógeno a fase termina e o `startWave` ressemeia, o que
+     * na primeira versão deste teste apareceu como "400 de infecção do nada".
+     * O defeito era do teste, não da sim.
+     */
+    const piso = 30
+    const cena = (correndo: boolean): number => {
+      const sim = createSim(51, tuning)
+      mut(sim).field.fill(piso)
+      const base = totalOf(sim)
+      for (let i = 0; i < 180; i++) {
+        // longe do jogador, para a cura não interferir na medição
+        mut(sim).enemies = [virus(600, 40)]
+        sim.step(correndo ? RIGHT : NONE)
+        mut(sim).player.x = 40
+        mut(sim).player.y = 320
+      }
+      return totalOf(sim) - base
     }
+    const parada = cena(false)
+    const rapida = cena(true)
+    expect(rapida, "correndo, a infecção avança").toBeGreaterThan(parada * 3)
+  })
+
+  it("a cura é em tempo REAL e cai com a velocidade", () => {
+    const cena = (correndo: boolean): number => {
+      const sim = createSim(52, tuning)
+      if (correndo) toFullSpeed(sim)
+      mut(sim).enemies = []
+      // Abaixo do limiar de derrota: cheio de propósito a run morria no
+      // primeiro tick e o teste media um tick de cura em vez de sessenta.
+      mut(sim).field.fill(Math.floor(tuning.field.maxInfection * 0.4))
+      const base = totalOf(sim)
+      /*
+       * Janela CURTA de propósito. Com 60 ticks os dois casos zeravam os 13
+       * tiles ao alcance e empatavam em 520 — a medição saturava e escondia a
+       * diferença de taxa. Isso expôs uma propriedade real do desenho: parada, a
+       * cura é funda mas satura rápido, porque o alcance é minúsculo. É a troca
+       * profundidade-por-cobertura que o campo existe para criar.
+       */
+      for (let i = 0; i < 12; i++) {
+        mut(sim).enemies = []
+        sim.step(correndo ? RIGHT : NONE)
+        // preso no mesmo ponto: a diferença medida é só a velocidade
+        mut(sim).player.x = 320
+        mut(sim).player.y = 180
+      }
+      return base - totalOf(sim)
+    }
+    const curouParada = cena(false)
+    const curouCorrendo = cena(true)
+    expect(curouParada, "parada cura fundo").toBeGreaterThan(0)
+    expect(curouCorrendo, "a toda quase não cura").toBeLessThan(curouParada / 2)
+  })
+
+  it("o patógeno nasce DO TECIDO, não da borda — é o que faz a fase convergir", () => {
+    // Tecido sujo, mas todo ABAIXO do limiar de parto: nada pode nascer, e a
+    // fase também não termina. Com spawn de borda isto seria impossível, e era
+    // por isso que a infecção nunca podia chegar a zero.
+    const sim = createSim(53, tuning)
+    mut(sim).enemies = []
+    mut(sim).field.fill(tuning.field.spawnThreshold - 5)
+    mut(sim).spawnTimer = 0
+    advance(sim, 300, RIGHT)
+    expect(sim.state().enemies.length, "campo abaixo do limiar não pare").toBe(0)
+
+    // e um único tile acima do limiar volta a parir
+    const vivo = createSim(53, tuning)
+    mut(vivo).enemies = []
+    mut(vivo).field.fill(tuning.field.spawnThreshold - 5)
+    mut(vivo).field[0] = tuning.field.maxInfection
+    mut(vivo).spawnTimer = 0
+    advance(vivo, 300, RIGHT)
+    expect(vivo.state().enemies.length, "tecido tomado pare").toBeGreaterThan(0)
+  })
+
+  it("contida e sem patógeno vivo, a fase acaba", () => {
+    const sim = createSim(54, tuning)
+    const antes = sim.state().wave
+    mut(sim).field.fill(0)
+    mut(sim).infection = 0
+    mut(sim).enemies = []
+    sim.step(NONE)
+    expect(sim.state().wave).toBe(antes + 1)
+  })
+
+  it("o tecido tomado encerra a run mesmo com vidas sobrando", () => {
+    const sim = createSim(55, tuning)
+    expect(sim.state().lives).toBe(tuning.run.lives)
+    mut(sim).field.fill(tuning.field.maxInfection)
+    mut(sim).infection = teto()
+    sim.step(NONE)
     expect(sim.state().phase).toBe("dead")
-    expect(sim.state().lostByCells).toBe(true)
-    expect(sim.state().lives).toBeGreaterThan(0)
+    expect(sim.state().lostByTissue).toBe(true)
+    expect(sim.state().lives, "morreu de infecção, não de toque").toBe(tuning.run.lives)
   })
 })
 

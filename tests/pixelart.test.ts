@@ -8,9 +8,11 @@ import {
   PLAYER_DIRS,
   PLAYER_PHASES,
   PLAYER_TIERS,
-  organSheet,
   pathogenSheet,
   playerSheet,
+  colonyTile,
+  tissueBed,
+  TISSUE_LEVELS,
   type Sheet,
 } from "../src/render/sprites.ts"
 import { layerBuf, plasmaBuf } from "../src/render/backdrop.ts"
@@ -29,7 +31,6 @@ const distinct = (b: Buf): Set<number> => new Set(b.d)
 
 const allSheets = (): ReadonlyArray<readonly [string, Sheet]> => [
   ["player", playerSheet(tuning.player.size)],
-  ["organ", organSheet(tuning.cells.size, tuning.cells.hp)],
   ...Object.entries(tuning.enemy.kinds).map(
     ([kind, spec]) =>
       [kind, pathogenSheet(spec.form, tuning.enemy.size * spec.sizeScale)] as const,
@@ -209,10 +210,41 @@ describe("quadros de animação", () => {
     }
   })
 
-  it("a célula do organismo tem um estado por ponto de vida", () => {
-    const sh = organSheet(tuning.cells.size, tuning.cells.hp)
-    expect(sh.tiers).toBe(tuning.cells.hp)
-    expect(sh.frames[0]!.d).not.toEqual(sh.frames[sh.phases]!.d)
+  it("a doença MULTIPLICA em vez de subtrair o tecido", () => {
+    /*
+     * Correção pedida pelo humano em 01/08. A primeira versão apagava hemácias
+     * conforme a infecção subia, e campo tomado virava vazio — que lê como
+     * seguro, e é exatamente como o jogo parecia antes de o tecido existir.
+     */
+    const w = Math.ceil(tuning.arena.width / tuning.field.cols)
+    const h = Math.ceil(tuning.arena.height / tuning.field.rows)
+    expect(colonyTile(w, h, 0, 0).d.every((v) => v === 0), "tecido sadio não desenha").toBe(true)
+
+    const ocupado = (lv: number): number =>
+      colonyTile(w, h, lv, 0).d.reduce((n, v) => n + (v === 0 ? 0 : 1), 0)
+    for (let lv = 1; lv < TISSUE_LEVELS; lv++) {
+      expect(ocupado(lv), `nível ${lv} tem que cobrir mais que o ${lv - 1}`).toBeGreaterThan(
+        ocupado(lv - 1),
+      )
+    }
+  })
+
+  it("o leito de hemácias não tem grade — a reprovação foi de xadrez", () => {
+    const bed = tissueBed(160, 120, 7)
+    /*
+     * Densa, mas não sólida. O microscópio mostra célula encostando em célula;
+     * aqui fica em torno de dois terços de propósito, porque o leito ocupa a
+     * tela inteira e precisa deixar plasma aparecer entre as células — sem isso
+     * vira massa única e o jogador, que tem 20px, some dentro dela.
+     */
+    const cheio = bed.d.reduce((n, v) => n + (v === 0 ? 0 : 1), 0) / bed.d.length
+    expect(cheio, "leito ralo demais").toBeGreaterThan(0.6)
+    expect(cheio, "leito sólido demais — sem plasma entre células").toBeLessThan(0.92)
+    // E sem repetição: se houvesse grade, colunas distantes seriam iguais.
+    const coluna = (x: number): string =>
+      Array.from({ length: bed.h }, (_, y) => bed.d[y * bed.w + x]!).join(",")
+    expect(coluna(20)).not.toEqual(coluna(60))
+    expect(coluna(20)).not.toEqual(coluna(100))
   })
 
   it("assar duas vezes dá exatamente a mesma arte", () => {

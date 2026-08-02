@@ -97,11 +97,43 @@ export interface Tuning {
       readonly weights: Readonly<Record<string, number>>
     }>
   }
-  readonly cells: {
-    readonly count: number
-    readonly fromWave: number
-    readonly size: number
-    readonly hp: number
+  /**
+   * O tecido. A arena deixou de ser vazio em 01/08: cada tile tem um nível de
+   * infecção que se alastra em tempo de MUNDO e é curado em tempo REAL.
+   */
+  readonly field: {
+    readonly cols: number
+    readonly rows: number
+    readonly maxInfection: number
+    /** Focos iniciais da doença por fase. */
+    readonly seeds: number
+    /** Focos a mais por fase. É a escalada da doença. */
+    readonly seedsPerWave: number
+    /** Quanto cada patógeno infecta o próprio tile, por segundo de MUNDO. */
+    readonly sourceRate: number
+    /** Fração a mais de fonte por fase. */
+    readonly sourcePerWave: number
+    /** Segundos de MUNDO entre passos de alastramento. */
+    readonly spreadSeconds: number
+    /** Infecção mínima do tile para ele contaminar o vizinho. */
+    readonly spreadThreshold: number
+    /** Quanto vaza para cada vizinho a cada passo. */
+    readonly spreadAmount: number
+    /** Cura por segundo REAL com a célula parada. */
+    readonly healRate: number
+    /** Fração da cura perdida na velocidade máxima. 1 = a toda não cura nada. */
+    readonly healSpeedPenalty: number
+    readonly healRadius: number
+    /** Quanto a PLAQUETA tira de infecção do campo inteiro, de uma vez. */
+    readonly plaquetaHeal: number
+    /** Infecção mínima de um tile para ele parir patógeno. */
+    readonly spawnThreshold: number
+    /** Intervalo de spawn com o campo quase limpo, em segundos de MUNDO. */
+    readonly spawnCalmSeconds: number
+    /** Abaixo desta fração, e sem patógeno vivo, a fase está contida. */
+    readonly winFraction: number
+    /** Fração do campo totalmente infectada que encerra a run. */
+    readonly loseFraction: number
   }
   readonly drops: {
     readonly chance: number
@@ -144,13 +176,6 @@ export interface Enemy {
   y: number
   hp: number
   bornTick: number
-}
-
-export interface Cell {
-  id: number
-  x: number
-  y: number
-  hp: number
 }
 
 /** Cápsula largada por um patógeno. Encostar liga o poder. */
@@ -223,9 +248,14 @@ export interface SimState {
   bestWave: number
   player: Player
   enemies: Enemy[]
-  cells: Cell[]
-  cellsLost: number
-  lostByCells: boolean
+  /** Infecção por tile, 0..`field.maxInfection`. O organismo É o campo. */
+  field: Uint8Array
+  /** Soma de `field`, cacheada. Zero encerra a fase; o teto encerra a run. */
+  infection: number
+  spreadTimer: number
+  infectAcc: number
+  healAcc: number
+  lostByTissue: boolean
   drops: Drop[]
   /** Ticks restantes de cada poder. Índice = id do poder. */
   active: number[]

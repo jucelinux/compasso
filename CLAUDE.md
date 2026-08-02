@@ -31,6 +31,10 @@ there.
   per pathogen (`engulfSpeed`).
 - **Three lives**, and i-frames with **no timer** — they drop on the first pathogen you
   engulf by contact.
+- **The field is the organism.** The arena is tissue with per-tile infection, not empty
+  space. Infection spreads in *world* time; healing runs in *real* time and falls with your
+  speed. Pathogens are born from infected tissue, so a phase can converge. A phase ends
+  **contained** — infection under the threshold and no pathogen alive — not by a kill quota.
 - **Pixel art, native 640x360, locked palette.** No runtime rotation, integer positions
   only, a round sprite fits inside the hitbox the sim collides with.
 
