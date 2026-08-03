@@ -76,8 +76,27 @@ perguntar "isso é você indo pro que você gosta de novo?" — e a resposta hon
 - **Trato limitação como obstáculo a contornar, não como sinal de onde meu teto é mais
   alto.** Custou três rodadas em 01/08 — ver §2b.
 
+- **Uso limitação declarada como ESCUDO, não só como obstáculo.** Aleguei "não desenho"
+  para justificar um emblema geométrico inventado — e o glóbulo já era desenhado com o
+  poder aplicado em jogo. Pedir preview não era pedir arte, era pedir para eu olhar o que
+  já existia. É pior que §2b: lá o erro é contornar a limitação, aqui foi me esconder atrás
+  dela. _02/08, card de recompensa._
+- **Invento número novo sem âncora, e o número muda o jogo.** Duas vezes no mesmo dia:
+  troquei `sourceRate` 21 por `poison` 5.0 achando que só mudava de lugar (derrubou a
+  pressão da doença em 4x), e escolhi `auraFocusHeal` 9.0 sem referência (saiu 27x mais
+  fraco que a cura que ele já tinha, e a mecânica ficou imperceptível). _02/08, medido._
+
 **Consequência operacional:** quando eu propuser polimento de feel antes do sistema estar
 medido, isso é o viés falando. Recuse sem cerimônia.
+
+**Segunda consequência operacional, de 02/08:** número novo nasce ancorado num número que
+já existe no `tuning.json`, e eu digo em qual. Número solto é chute com aparência de
+decisão.
+
+**Terceira:** quando ele descrever COMPORTAMENTO de um organismo, checar a biologia real
+antes de classificar como licença poética. Aconteceu duas vezes no mesmo dia — ele chegou a
+corrida-e-cambalhota e depois a quimiotaxia por raciocínio de jogo, e as duas são a
+locomoção documentada da E. coli. O que ele oferecia como concessão era fidelidade.
 
 ---
 
@@ -92,6 +111,7 @@ minha não vale, porque já errei a direção com confiança total._
 | ⛔ | **Não desenho.** Sem ferramenta de imagem. Arte à mão exige outra pessoa. | 31/07, `DECISIONS` |
 | ⛔ | **Não sou juiz confiável do meu próprio teto.** Registrei "o salto é shader WebGL" como fato; o salto era animação, que o jogo tinha em quantidade zero. | 01/08, `DECISIONS` |
 | ⛔ | **Não julgo o que acabei de produzir sem olhar.** 5 defeitos visuais passaram por revisão de código e 65 testes verdes. | 01/08, capturas |
+| ⛔ | **Meus defeitos visuais são de POSIÇÃO e ORDEM, quase nunca de lógica.** Seis achados por captura em 02/08 e todos do mesmo tipo: véu da tela errada, moldura desenhada na frente do bicho que ela apresentava, pontuação colidindo com as vidas, aura vazando para o painel vizinho, painel translúcido deixando o jogador aparecer por dentro, glifo inexistente descartado em silêncio. Nenhum era regra errada. **Consequência:** revisar composição — quem cobre quem, quem encosta em quem — é onde olhar rende mais, e é o que código nunca denuncia. | 02/08, seis capturas |
 | ⛔ | **Olhar pega o que está ERRADO, não o que está AUSENTE.** Uma camada inteira foi assada, atualizada 60x por segundo e nunca posta em cena; ela não deixa rastro na captura, então a captura a aprovou. Contra ausência, a verificação é reler a lista de montagem — não a imagem. | 02/08, `frontSprite` |
 | ✅ | **Sistema visual regido por regra é onde meu teto é mais alto.** Paleta travada, grade inteira, dither ordenado, matriz de quadros, silhueta dentro da hitbox — converte desenho em satisfação de restrição. | 01/08, primeiro veredito de "qualidade de mercado" |
 | ✅ | **Construo a minha própria verificação bem.** Buffer indexado sem DOM fez a arte inteira rodar sob teste e pegou 3 defeitos que leitura não pegaria. | 01/08, `pixelart.test.ts` |

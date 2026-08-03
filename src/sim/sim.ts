@@ -5,6 +5,7 @@ import {
   fieldSpec,
   healAround,
   healthiestTile,
+  frontierTile,
   infectAt,
   makeField,
   spreadStep,
@@ -14,7 +15,17 @@ import {
   totalInfection,
 } from "./field.ts"
 import { createRng } from "./rng.ts"
-import type { Enemy, InputFrame, KindSpec, Sim, SimSnapshot, SimState, Tuning } from "./types.ts"
+import type {
+  Enemy,
+  InputFrame,
+  KindSpec,
+  PhaseSpec,
+  Pulse,
+  Sim,
+  SimSnapshot,
+  SimState,
+  Tuning,
+} from "./types.ts"
 
 /**
  * COMPASSO — o tempo só anda quando você anda.
@@ -93,11 +104,15 @@ export function createSim(seed: number, tuning: Tuning): Sim {
     phase: "run",
     runIndex: 0,
     wave: 1,
+    phaseIndex: 0,
+    round: 1,
     waveKills: 0,
     quota: quotaFor(tuning, 1),
     lives: tuning.run.lives,
     shields: 0,
     kills: 0,
+    score: 0,
+    bestMult: 1,
     bestKills: 0,
     bestWave: 1,
     player: {
@@ -119,15 +134,25 @@ export function createSim(seed: number, tuning: Tuning): Sim {
     lostByTissue: false,
     drops: [],
     active: POWERS.map(() => 0),
+    owned: POWERS.map(() => 0),
+    buildOrder: [],
+    offer: [],
+    pick: 0,
     trails: [],
     shocks: [],
     orbiters: [],
     macrophages: [],
     clouds: [],
+    pulses: [],
+    pulseAcc: 0,
     killsSincePulse: 0,
     spawnTimer: spawnIntervalFor(tuning, 1),
     frozen: 0,
     deadLock: 0,
+    cardLock: 0,
+    auraTicks: 0,
+    instantAcc: 0,
+    fissionAcc: 0,
     combo: 0,
     comboTicks: 0,
     comboBest: 0,
@@ -139,24 +164,39 @@ export function createSim(seed: number, tuning: Tuning): Sim {
     rngState: rng.state(),
   }
 
-  const weightsFor = (waveNumber: number): ReadonlyArray<[string, number]> => {
-    let chosen = tuning.enemy.spawnTable[0]!
-    for (const row of tuning.enemy.spawnTable) {
-      if (waveNumber >= row.fromWave) chosen = row
-    }
-    return Object.entries(chosen.weights).filter(([, w]) => w > 0)
+  /**
+   * A fase é UMA doença. Passar do fim da lista repete a última.
+   *
+   * A `spawnTable` que misturava 3-5 tipos por onda morreu em 02/08: com
+   * mistura, cada patógeno se sustentava no conjunto e nenhum precisava ser
+   * interessante sozinho. A queixa era "não tem memória nem identidade, é mais
+   * um vai na direção dele que você mata".
+   */
+  const phaseSpec = (): PhaseSpec => {
+    const list = tuning.phases
+    return list[Math.min(s.phaseIndex, list.length - 1)]!
   }
 
-  const rollKind = (): string => {
-    const entries = weightsFor(s.wave)
-    let total = 0
-    for (const [, w] of entries) total += w
-    let pick = rng.nextInt(0, total)
-    for (const [name, w] of entries) {
-      pick -= w
-      if (pick < 0) return name
+  const rollKind = (): string => phaseSpec().disease
+
+  /**
+   * Vetor unitário aleatório SEM trigonometria.
+   *
+   * Sorteia dentro do quadrado, rejeita fora do círculo, normaliza com `sqrt`.
+   * Rejeitar é o que mantém a distribuição uniforme em ângulo; normalizar o
+   * quadrado direto concentraria nas diagonais. `sqrt` é exata entre engines,
+   * `sin`/`cos` não são — e existe teste travando isso.
+   */
+  const randomUnit = (): { dx: number; dy: number } => {
+    for (let i = 0; i < 16; i++) {
+      const x = rng.nextFloat() * 2 - 1
+      const y = rng.nextFloat() * 2 - 1
+      const q = x * x + y * y
+      if (q > 1 || q < 0.0001) continue
+      const len = Math.sqrt(q)
+      return { dx: x / len, dy: y / len }
     }
-    return entries[0]![0]!
+    return { dx: 1, dy: 0 }
   }
 
   const pushEnemy = (kind: string, x: number, y: number): void => {
@@ -169,7 +209,22 @@ export function createSim(seed: number, tuning: Tuning): Sim {
       y: clamp(y, half, height - half),
       hp: kindOf(kind).hp,
       bornTick: s.tick,
+      ...randomUnit(),
+      tumble: tumbleFor(kind),
+      poisonAcc: 0,
     })
+  }
+
+  /**
+   * Quanto tempo a bactéria corre reto antes de sortear outra direção.
+   *
+   * Faixa, não valor fixo: cambalhota sincronizada faria a colônia inteira
+   * virar junto, e isso lê como cardume, não como bactéria.
+   */
+  const tumbleFor = (kind: string): number => {
+    const own = kindOf(kind).tumbleSeconds
+    const base = own > 0 ? own : tuning.enemy.tumbleSeconds
+    return base * (0.5 + rng.nextFloat())
   }
 
   /**
@@ -216,8 +271,46 @@ export function createSim(seed: number, tuning: Tuning): Sim {
     s.infection = totalInfection(s.field)
   }
 
+  /**
+   * Sorteia TRÊS poderes distintos para o card, ignorando os que você já tem.
+   *
+   * Três e não dez: escolha entre dez é catálogo, escolha entre três é
+   * decisão. E sem repetir o que já é seu, senão a oferta desperdiça slot.
+   */
+  const rollOffer = (): number[] => {
+    /*
+     * INSTANTÂNEO fora da oferta: PLAQUETA cura o tecido na hora, e escolher no
+     * card algo que dispara imediatamente não é build, é botão. O card é onde
+     * se monta a run.
+     */
+    /*
+     * O que você JÁ TEM continua na oferta desde 02/08.
+     *
+     * Com teto de build, tirar o que é seu forçaria rodízio: toda recompensa
+     * obrigaria a trocar. Deixando na mesa, "ficar como está" vira uma das
+     * escolhas possíveis — e escolha que inclui não mudar é a única que
+     * transforma o teto em decisão em vez de imposto.
+     */
+    const pool = POWERS.map((_, i) => i).filter((i) => !INSTANT.has(i))
+    const out: number[] = []
+    for (let n = 0; n < 3 && pool.length > 0; n++) {
+      out.push(pool.splice(rng.nextInt(0, pool.length), 1)[0]!)
+    }
+    return out
+  }
+
   const startWave = (): void => {
-    s.phase = "run"
+    /*
+     * O CARD só aparece quando a DOENÇA muda.
+     *
+     * Ele dá identidade — nome, forma, o bicho na tela — e apresentar a mesma
+     * bactéria cinco vezes seguidas transformaria apresentação em pedágio. Onda
+     * seguinte da mesma doença entra direto no jogo.
+     */
+    const apresentar = s.round === 1
+    s.phase = apresentar ? "card" : "run"
+    s.cardLock = apresentar ? tuning.cardLockTicks : 0
+    s.fissionAcc = 0
     s.waveKills = 0
     s.quota = quotaFor(tuning, s.wave)
     s.enemies = []
@@ -234,17 +327,25 @@ export function createSim(seed: number, tuning: Tuning): Sim {
 
   const startRun = (): void => {
     s.wave = 1
+    s.phaseIndex = 0
+    s.round = 1
     s.kills = 0
+    s.score = 0
+    s.bestMult = 1
     s.field.fill(0)
     s.infection = 0
     s.spreadTimer = 0
     s.infectAcc = 0
     s.healAcc = 0
+    s.pulses = []
+    s.pulseAcc = 0
     s.lostByTissue = false
     s.lives = tuning.run.lives
     s.shields = 0
     s.drops = []
     s.active = POWERS.map(() => 0)
+    s.owned = POWERS.map(() => 0)
+    s.buildOrder = []
     s.trails = []
     s.shocks = []
     s.orbiters = []
@@ -301,17 +402,52 @@ export function createSim(seed: number, tuning: Tuning): Sim {
     for (let i = 0; i < s.active.length; i++) {
       if ((s.active[i] ?? 0) > 0) s.active[i] = (s.active[i] ?? 0) - 1
     }
-    const st = activeStats(tuning, s.active)
+    const st = activeStats(tuning, s.active, s.owned)
 
     // --- impulso: agora é habilidade com recarga, não o verbo
     if (p.dashCooldown > 0) p.dashCooldown--
     const dir = direction(bits)
-    if ((bits & ~s.prevBits & BIT_ACTION) !== 0 && p.dashCooldown === 0 && dir !== null) {
-      p.dashTicks = tuning.dash.durationTicks
-      p.dashCooldown = tuning.dash.cooldownTicks
-      p.vx = dir.dx * tuning.player.maxSpeed * tuning.dash.speedMultiplier
-      p.vy = dir.dy * tuning.player.maxSpeed * tuning.dash.speedMultiplier
+    /*
+     * UM BOTÃO, DOIS VERBOS, decididos pelo CONTEXTO.
+     *
+     * Em movimento é arranco: alcance, e foi assim que o H achou a função do
+     * impulso sozinho (caçar as filhas, que têm passeio previsível).
+     *
+     * Parado é AURA: cura acelerada em volta, com invulnerabilidade pelo prazo
+     * dela. É a resposta para "o que se faz no tempo devagar" — até 02/08 parar
+     * só tinha preço e nenhum verbo.
+     *
+     * A recarga é a mesma para os dois, e é ela que impede o retorno do limbo
+     * de 31/07: parar continua caro FORA da janela da aura, então a quimiotaxia
+     * não perde a função de ensinar.
+     */
+    if ((bits & ~s.prevBits & BIT_ACTION) !== 0 && p.dashCooldown === 0) {
+      if (p.speed < tuning.dash.auraBelowSpeed) {
+        s.auraTicks = tuning.dash.auraTicks
+        p.dashCooldown = tuning.dash.cooldownTicks
+        /*
+         * PLANTA um foco. Cheio, o mais antigo cede o lugar.
+         *
+         * A aura deixou de multiplicar a SUA cura de propósito: multiplicar a
+         * presença deixaria o vínculo intacto — você continuaria preso ao
+         * lugar, só que curando mais rápido. Plantar é o que desfaz o empate,
+         * porque o trabalho passa a acontecer sem você.
+         */
+        if (s.pulses.length >= tuning.dash.auraFociMax) s.pulses.shift()
+        s.pulses.push({
+          id: nextId++,
+          x: p.x,
+          y: p.y,
+          life: tuning.dash.auraFocusTicks,
+        })
+      } else if (dir !== null) {
+        p.dashTicks = tuning.dash.durationTicks
+        p.dashCooldown = tuning.dash.cooldownTicks
+        p.vx = dir.dx * tuning.player.maxSpeed * tuning.dash.speedMultiplier
+        p.vy = dir.dy * tuning.player.maxSpeed * tuning.dash.speedMultiplier
+      }
     }
+    if (s.auraTicks > 0) s.auraTicks--
 
     /*
      * --- O TECIDO RESISTE.
@@ -439,9 +575,22 @@ export function createSim(seed: number, tuning: Tuning): Sim {
       }
     }
 
-    // --- patógenos: em tempo de MUNDO
+    /*
+     * --- patógenos: em tempo de MUNDO, exceto quem tem `timeImmunity`.
+     *
+     * Este laço é o que ENSINA a dilatação. Com um relógio único, parar
+     * congelava a cena inteira e o jogador não tinha contra o que comparar —
+     * o primeiro jogador externo passou 83s sem sacar o core (02/08). A filha
+     * da E. coli anda em tempo real: você para, o mundo trava, e UMA COISA
+     * continua vindo. Isso não se explica, se vê.
+     *
+     * De quebra mata o limbo: parado deixou de ser seguro para sempre, e sem
+     * inventar timer nenhum.
+     */
     for (const e of s.enemies) {
       const spec = kindOf(e.kind)
+      // Mistura entre o relógio do mundo e o real, por espécie.
+      const clock = world + (dt - world) * spec.timeImmunity
       let tx = p.x
       let ty = p.y
       if (spec.hunts === "cell") {
@@ -449,6 +598,87 @@ export function createSim(seed: number, tuning: Tuning): Sim {
         const target = healthiestTile(s.field, MAXINF)
         tx = tileCenterX(FIELD, target)
         ty = tileCenterY(FIELD, target)
+      } else if (spec.hunts === "tumble") {
+        /*
+         * CORRIDA E CAMBALHOTA — a locomoção real da E. coli.
+         *
+         * Ela nada reto por alguns segundos, sorteia direção nova, e repete.
+         * Não persegue você e não persegue objetivo nenhum: o espalhamento da
+         * doença é CONSEQUÊNCIA do passeio, não intenção. Foi essa a correção
+         * do H em 02/08 — o `colony` que eu tinha escrito dava um objetivo à
+         * bactéria, e ela ficava parada saturando a borda mais próxima.
+         *
+         * O relógio da cambalhota é o do MUNDO, como o resto dela.
+         */
+        e.tumble -= clock
+        if (e.tumble <= 0) {
+          /*
+           * QUIMIOTAXIA: com você devagar, a cambalhota deixa de ser sorteio e
+           * passa a apontar para você. É o mesmo mecanismo — o que muda é o
+           * viés, exatamente como a bactéria real sobe um gradiente.
+           *
+           * Existe porque na run de 02/08 o H atravessou a fase inteira sem
+           * nunca parar, e o core do projeto não se manifestou uma vez. Parar
+           * era grátis; agora custa, e o custo é o próprio bicho pequeno que já
+           * anda no tempo parado.
+           */
+          const u = randomUnit()
+          let nx = u.dx
+          let ny = u.dy
+          const raio = spec.chemotaxis
+          if (raio > 0 && p.speed < spec.chemoBelowSpeed) {
+            const gx = p.x - e.x
+            const gy = p.y - e.y
+            const g = Math.sqrt(gx * gx + gy * gy)
+            if (g > 0.0001 && g <= raio) {
+              /*
+               * O gradiente ENVIESA o sorteio; não o substitui.
+               *
+               * Apontar direto para o jogador produzia perseguição em linha
+               * reta — que é o que o H viu e reclamou, e também é biologia
+               * errada: a bactéria não sabe onde você está, ela só cambalhota
+               * menos quando a direção estava dando certo. Somar o gradiente ao
+               * sorteio e renormalizar dá caminho torto que converge, que é o
+               * que quimiotaxia parece de verdade.
+               */
+              const w = tuning.enemy.chemoBias
+              nx += (gx / g) * w
+              ny += (gy / g) * w
+              const len = Math.sqrt(nx * nx + ny * ny)
+              if (len > 0.0001) {
+                nx /= len
+                ny /= len
+              }
+            }
+          }
+          e.dx = nx
+          e.dy = ny
+          e.tumble = tumbleFor(e.kind)
+        }
+        tx = e.x + e.dx * 64
+        ty = e.y + e.dy * 64
+      } else if (spec.hunts === "colony") {
+        /*
+         * Bactéria NÃO caça leucócito — quem caça é você.
+         *
+         * Ela vai à borda da colônia mais próxima e engrossa até saturar. O
+         * jogo da fase deixa de ser desviar e passa a ser CONTER: o perigo não
+         * vem dela ir atrás de você, vem de ela vencer o campo enquanto você
+         * corre atrás dela. Encostar ainda machuca se você estiver devagar —
+         * a regra de contato não muda —, mas agora é você quem escolhe o
+         * encontro.
+         *
+         * Sem fronteira (campo limpo, ou tudo no talo) ela fica onde está:
+         * parar é o comportamento certo de quem já saturou o que tinha.
+         */
+        const target = frontierTile(s.field, FIELD, e.x, e.y, MAXINF)
+        if (target < 0) {
+          tx = e.x
+          ty = e.y
+        } else {
+          tx = tileCenterX(FIELD, target)
+          ty = tileCenterY(FIELD, target)
+        }
       }
       const ex = tx - e.x
       const ey = ty - e.y
@@ -461,15 +691,50 @@ export function createSim(seed: number, tuning: Tuning): Sim {
           if (Math.sqrt(px2 * px2 + py2 * py2) <= st.interferonRadius) speed *= st.interferonSlow
         }
         const eh = sizeOf(e) / 2
-        e.x = clamp(e.x + (ex / dist) * speed * world, eh, width - eh)
-        e.y = clamp(e.y + (ey / dist) * speed * world, eh, height - eh)
+        e.x = clamp(e.x + (ex / dist) * speed * clock, eh, width - eh)
+        e.y = clamp(e.y + (ey / dist) * speed * clock, eh, height - eh)
+        // Bateu na parede: cambalhota na hora. Sem isto ela fica raspando a
+        // borda até o relógio virar, e raspar borda não lê como nadar.
+        if (e.x <= eh || e.x >= width - eh || e.y <= eh || e.y >= height - eh) {
+          e.tumble = 0
+        }
       }
+
     }
 
     /*
      * O intervalo de spawn escala com a INFECÇÃO, não com o relógio da onda.
      * Campo limpo não produz patógeno nenhum; campo tomado produz sem parar.
      */
+    /*
+     * Cápsula INSTANTÂNEA no relógio do mundo.
+     *
+     * A ajuda chega porque o tempo passou, não porque você farmou — foi o
+     * sorteio por abate que criou o laço que premiava ficar parado (02/08).
+     */
+    const cada = tuning.drops.instantEverySeconds
+    if (cada > 0) {
+      // Mesmo piso da doença: a ajuda não pode congelar junto com o mundo,
+      // senão ela some justamente quando você está parado apanhando.
+      s.instantAcc += Math.max(tuning.field.idleProgress, s.worldScale) * dt
+      if (s.instantAcc >= cada) {
+        s.instantAcc -= cada
+        if (s.drops.length < tuning.drops.maxOnField) {
+          const quais = [...INSTANT]
+          const qual = quais[rng.nextInt(0, quais.length)]
+          if (qual !== undefined) {
+            s.drops.push({
+              id: nextId++,
+              power: qual,
+              x: rng.nextInt(24, width - 24),
+              y: rng.nextInt(24, height - 24),
+              life: tuning.drops.lifeTicks,
+            })
+          }
+        }
+      }
+    }
+
     s.spawnTimer -= world
     if (s.spawnTimer <= 0) {
       spawnFromTissue()
@@ -500,9 +765,28 @@ export function createSim(seed: number, tuning: Tuning): Sim {
     const spawned: Array<{ kind: string; x: number; y: number }> = []
 
     const killed = (e: Enemy): void => {
+      /*
+       * FAGOCITOSE LIMPA. O glóbulo branco não só mata: ele remove.
+       *
+       * Sem isto o verbo único do jogo jogava contra o jogador — abate gera
+       * filha, filha envenena, e matar acelerava a doença. Com a limpeza, usar
+       * o verbo passa a ser o que contém, que é o mínimo que se espera dele.
+       */
+      const limpa = tuning.field.engulfCleans
+      if (limpa > 0) {
+        const i = tileAt(FIELD, e.x, e.y)
+        s.field[i] = Math.max(0, s.field[i]! - limpa)
+      }
       s.kills++
       s.waveKills++
       s.combo++
+      // Multiplicador por SEQUÊNCIA: 1× até 3 seguidos, depois um degrau a
+      // cada 3. É o mesmo escalão que o render já usa para colorir o combo, e
+      // reaproveitá-lo garante que o número na tela e a cor contem a mesma
+      // história.
+      const mult = 1 + Math.floor(s.combo / 3)
+      if (mult > s.bestMult) s.bestMult = mult
+      s.score += tuning.powers.scorePerKill * mult
       s.comboTicks = tuning.powers.comboWindowTicks
       if (s.combo > s.comboBest) s.comboBest = s.combo
       s.lastKillX = e.x
@@ -534,6 +818,17 @@ export function createSim(seed: number, tuning: Tuning): Sim {
           })
         }
       }
+      /*
+       * SORTEIO POR ABATE, morto em 02/08 (`drops.chance` = 0).
+       *
+       * O F9 do H mostrou o laço: ele ficou parado de propósito, a fissão
+       * multiplicou os bacilos, e quando voltou a atacar emendou 475 abates
+       * numa fase só — que viraram enxurrada de poder. O sistema PREMIAVA
+       * ficar parado, que é o oposto do jogo. A escolha agora mora no card.
+       *
+       * O código fica porque `chance` é número de tuning e pode voltar por
+       * fase, se alguma doença quiser largar cápsula como identidade.
+       */
       if (s.drops.length < tuning.drops.maxOnField && rng.nextFloat() < tuning.drops.chance) {
         s.drops.push({
           id: nextId++,
@@ -563,20 +858,43 @@ export function createSim(seed: number, tuning: Tuning): Sim {
      * não a infecção. Com piso, nenhum dos dois extremos é jogável e o ótimo
      * passa a ser oscilar.
      */
-    const fonte = tuning.field.sourceRate * (1 + (s.wave - 1) * tuning.field.sourcePerWave)
+    /*
+     * O quanto a doença envenena o tecido é número DELA, não do jogo.
+     *
+     * Isto é "a bactéria come a célula", e sai daqui inteiro: as hemácias são
+     * corpos de RENDER e já necrosam seguindo a infecção do tile, então
+     * envenenar desenha a célula morrendo sem a sim conhecer célula nenhuma.
+     * E é a versão biologicamente correta — E. coli é extracelular, adere e
+     * envenena por toxina; quem invade a célula e a converte em fábrica é
+     * VÍRUS, e isso fica guardado para a fase de um.
+     *
+     * Com UMA doença por fase, isto é number de fase e não de bicho — a
+     * primeira economia que o formato de fases pagou sozinho.
+     */
+    const escala = 1 + (s.wave - 1) * tuning.field.sourcePerWave
     const passo = Math.max(tuning.field.idleProgress, s.worldScale) * dt
-    s.infectAcc += fonte * passo
-    if (s.infectAcc >= 1) {
-      const n = Math.floor(s.infectAcc)
-      s.infectAcc -= n
-      for (const e of s.enemies) infectAt(s.field, tileAt(FIELD, e.x, e.y), n, MAXINF)
+    /*
+     * Cada corpo envenena na taxa DELE, e não na da fase.
+     *
+     * Era global até 02/08, e isso quebrava o jogo: matar uma mãe produzia
+     * duas filhas que passavam a envenenar na taxa cheia da mãe, então ABATER
+     * ACELERAVA a doença. O F9 do H mostrou o resultado — 229 abates em 43,8s,
+     * três vidas intactas, e o tecido caiu mesmo assim.
+     */
+    for (const e of s.enemies) {
+      e.poisonAcc += kindOf(e.kind).poison * escala * passo
+      if (e.poisonAcc >= 1) {
+        const n = Math.floor(e.poisonAcc)
+        e.poisonAcc -= n
+        infectAt(s.field, tileAt(FIELD, e.x, e.y), n, MAXINF)
+      }
     }
 
     // O mesmo piso da fonte. Sem ele o ALASTRAMENTO congelava com o jogador
     // parado, e ficar parado continuava sendo refúgio mesmo com a fonte no piso
     // — é o alastramento que toma terreno, não a fonte.
-    s.spreadTimer += passo
-    if (s.spreadTimer >= tuning.field.spreadSeconds) {
+    s.spreadTimer += passo * phaseSpec().tissueSpread
+    if (phaseSpec().tissueSpread > 0 && s.spreadTimer >= tuning.field.spreadSeconds) {
       s.spreadTimer -= tuning.field.spreadSeconds
       spreadStep(
         s.field,
@@ -586,6 +904,75 @@ export function createSim(seed: number, tuning: Tuning): Sim {
         tuning.field.spreadAmount,
         MAXINF,
       )
+    }
+
+    /*
+     * FISSÃO BINÁRIA — a colônia DOBRA sozinha, no relógio do mundo.
+     *
+     * Não confundir com o `splits` da espécie, que divide quando ela MORRE.
+     * São opostos de propósito e não brigam: `splits` pune abate apressado,
+     * esta pune DEMORA. É esta que dá meta à fase — "atrasar é catastrófico" —
+     * e é ela que o jogador lê sem texto: você vê dois focos onde havia um.
+     *
+     * A E. coli real dobra em ~20 minutos. Comprimir isso é ESCALA, e a regra
+     * de fidelidade de 02/08 permite; o que ela proíbe é o jogo AFIRMAR um
+     * número que não é verdade.
+     */
+    const fission = phaseSpec().fissionSeconds
+    if (fission > 0) {
+      s.fissionAcc += passo
+      if (s.fissionAcc >= fission) {
+        s.fissionAcc -= fission
+        /*
+         * A BACTÉRIA se divide — uma vira duas, ali, na sua frente.
+         *
+         * Até 02/08 isto dobrava FOCOS DE CAMPO, o que é abstrato: a infecção
+         * aparecia em outro lugar e ninguém ligava uma coisa à outra. Dividir o
+         * corpo é o que o desenho sempre pediu — "você VÊ o foco dobrar" — e é
+         * o que faz o efeito dominó ser legível: duas viram quatro, quatro
+         * viram oito, e cada uma continua envenenando por onde passa.
+         *
+         * Só divide quem é da doença da fase. Filha não divide: senão a
+         * progressão é exponencial em cima de exponencial e nenhuma fase é
+         * jogável.
+         */
+        const mães = s.enemies.filter((e) => e.kind === phaseSpec().disease)
+        // Logístico, não exponencial: acima do teto o meio está esgotado.
+        if (mães.length >= phaseSpec().fissionCap) {
+          s.fissionAcc = 0
+        } else
+        for (const m of mães) {
+          if (s.enemies.length >= tuning.enemy.maxAlive) break
+          const u = randomUnit()
+          const off = tuning.enemy.splitOffset
+          pushEnemy(m.kind, m.x + u.dx * off, m.y + u.dy * off)
+        }
+      }
+    }
+
+    /*
+     * Os FOCOS plantados curam em tempo REAL, onde foram deixados.
+     *
+     * Independentes da sua velocidade e da sua posição — é exatamente isso que
+     * os torna a resposta ao ponto fixo. Plantar em tecido tomado rende;
+     * plantar em chão limpo é desperdício, e é aí que mora a decisão.
+     */
+    if (s.pulses.length > 0) {
+      s.pulseAcc += tuning.dash.auraFocusHeal * s.pulses.length * dt
+      if (s.pulseAcc >= 1) {
+        const n = Math.floor(s.pulseAcc)
+        s.pulseAcc -= n
+        for (const pu of s.pulses) {
+          healAround(s.field, FIELD, pu.x, pu.y, tuning.dash.auraFocusRadius, n)
+        }
+        s.infection = totalInfection(s.field)
+      }
+      const vivos: Pulse[] = []
+      for (const pu of s.pulses) {
+        pu.life--
+        if (pu.life > 0) vivos.push(pu)
+      }
+      s.pulses = vivos
     }
 
     const healRate =
@@ -666,7 +1053,14 @@ export function createSim(seed: number, tuning: Tuning): Sim {
         if (st.enzyme || p.speed >= kindOf(e.kind).engulfSpeed) {
           eaten = true
           contactKill = true
-        } else if (!newborn && !p.invulnerable && !hit) {
+        } else if (!newborn && !p.invulnerable && s.auraTicks === 0 && !hit) {
+          /*
+           * A AURA protege, e SÓ pelo prazo dela.
+           *
+           * É estado com fim, não condição — o limbo de 31/07 nasceu de uma
+           * proteção sem prazo, e a lição foi que invulnerabilidade sem relógio
+           * vira refúgio. Aqui a janela é curta e paga recarga.
+           */
           hit = true
           continue
         }
@@ -760,8 +1154,19 @@ export function createSim(seed: number, tuning: Tuning): Sim {
      * por fase. Conter e depois caçar os últimos é o fim divertido; varrer não é.
      */
     if (s.infection <= WIN && s.enemies.length === 0) {
-      s.wave++
-      startWave()
+      /*
+       * Última onda da doença FECHA a fase; as outras pagam recompensa.
+       *
+       * Chamada do H em 02/08: "quando finalizo a última onda não deveria
+       * selecionar powerup, a fase foi concluída — deveria ver um card de
+       * fechamento com as informações do encerramento". Recompensa é combustível
+       * para a próxima onda; na última não há próxima onda desta doença.
+       */
+      const ultima = s.round >= phaseSpec().waves
+      s.phase = ultima ? "closed" : "reward"
+      s.cardLock = tuning.cardLockTicks
+      s.offer = ultima ? [] : rollOffer()
+      s.pick = 0
     }
   }
 
@@ -776,9 +1181,85 @@ export function createSim(seed: number, tuning: Tuning): Sim {
     }
   }
 
+  /**
+   * O card fica parado até alguém dispensar.
+   *
+   * A trava é a lição de 31/07 outra vez: sem ela, a tecla que o jogador já
+   * estava segurando quando a fase virou dispensaria o card no mesmo quadro, e
+   * ninguém leria nome nenhum. Vale ainda mais aqui do que na morte, porque a
+   * transição de fase chega no meio do gesto.
+   */
+  const stepCard = (bits: number): void => {
+    if (s.cardLock > 0) {
+      s.cardLock--
+      return
+    }
+    if (((bits & ~s.prevBits) & (BIT_ACTION | BIT_RESTART)) !== 0) s.phase = "run"
+  }
+
+  /**
+   * A tela de RECOMPENSA, depois de conter a fase.
+   *
+   * Três poderes, escolhidos com as setas, valendo a run inteira. Não é a tela
+   * de escolha de 31/07 ressuscitada: aquela vinha entre ondas de um jogo sem
+   * fim e sem contexto. Esta é PAGAMENTO por ter contido uma doença inteira, e
+   * vem depois de você já saber com o que lidou.
+   */
+  /** O fechamento da fase. Só informa; a próxima doença vem quando você confirma. */
+  const stepClosed = (bits: number): void => {
+    if (s.cardLock > 0) {
+      s.cardLock--
+      return
+    }
+    if (((bits & ~s.prevBits) & (BIT_ACTION | BIT_RESTART)) !== 0) {
+      s.wave++
+      s.phaseIndex++
+      s.round = 1
+      startWave()
+    }
+  }
+
+  const stepReward = (bits: number): void => {
+    if (s.cardLock > 0) {
+      s.cardLock--
+      return
+    }
+    const novo = bits & ~s.prevBits
+    if (s.offer.length > 0) {
+      if ((novo & BIT_LEFT) !== 0) s.pick = (s.pick + s.offer.length - 1) % s.offer.length
+      if ((novo & BIT_RIGHT) !== 0) s.pick = (s.pick + 1) % s.offer.length
+    }
+    if ((novo & (BIT_ACTION | BIT_RESTART)) !== 0) {
+      const escolhido = s.offer[s.pick]
+      if (escolhido !== undefined) {
+        // Build cheio: o novo ENTRA e o mais antigo SAI. É o que devolve custo
+        // à escolha — sem isso acumular era sempre certo, e a fase 4 virava
+        // passeio longo em vez de fase 4.
+        if (s.owned[escolhido] === 1) {
+          // Já é seu: reconfirmar apenas renova a posição na fila.
+          s.buildOrder = s.buildOrder.filter((p) => p !== escolhido)
+          s.buildOrder.push(escolhido)
+        } else {
+        if (s.buildOrder.length >= tuning.run.buildSlots) {
+          const saiu = s.buildOrder.shift()
+          if (saiu !== undefined) s.owned[saiu] = 0
+        }
+        s.owned[escolhido] = 1
+        s.buildOrder.push(escolhido)
+        }
+      }
+      s.wave++
+      s.round++
+      startWave()
+    }
+  }
+
   const step = (input: InputFrame): void => {
     const bits = bitsOf(input)
     if (s.phase === "run") stepRun(bits)
+    else if (s.phase === "card") stepCard(bits)
+    else if (s.phase === "reward") stepReward(bits)
+    else if (s.phase === "closed") stepClosed(bits)
     else stepDead(bits)
     s.prevBits = bits
     s.rngState = rng.state()
@@ -789,14 +1270,14 @@ export function createSim(seed: number, tuning: Tuning): Sim {
     packer
       .reset()
       .u32(s.tick)
-      .u8(s.phase === "run" ? 0 : 2)
+      .u8(s.phase === "run" ? 0 : s.phase === "card" ? 1 : s.phase === "reward" ? 3 : s.phase === "closed" ? 4 : 2)
       .u32(s.runIndex)
       .u32(s.wave)
       .u32(s.waveKills)
       .u32(s.quota)
       .u32(s.lives < 0 ? 0 : s.lives)
       .u32(s.shields)
-      .u32(s.kills)
+      .u32(s.kills).u32(s.score).u32(s.bestMult)
       .u32(s.bestKills)
       .u32(s.bestWave)
       .f64(s.player.x)
@@ -810,6 +1291,8 @@ export function createSim(seed: number, tuning: Tuning): Sim {
       .f64(s.worldScale)
       .u32(s.frozen)
       .u32(s.deadLock)
+      .u32(s.cardLock).u32(s.auraTicks).f64(s.instantAcc).u32(s.pick).u32(s.phaseIndex).u32(s.round)
+      .f64(s.fissionAcc)
       .u32(s.infection)
       .f64(s.spreadTimer)
       .f64(s.infectAcc)
@@ -829,15 +1312,19 @@ export function createSim(seed: number, tuning: Tuning): Sim {
       .u8(s.prevBits)
       .u32(s.rngState)
     for (const e of s.enemies) {
-      packer.u32(e.id).f64(e.x).f64(e.y).u32(e.hp).u32(e.bornTick)
+      packer.u32(e.id).f64(e.x).f64(e.y).u32(e.hp).u32(e.bornTick).f64(e.dx).f64(e.dy).f64(e.tumble).f64(e.poisonAcc)
       for (let i = 0; i < e.kind.length; i++) packer.u8(e.kind.charCodeAt(i))
     }
     for (let i = 0; i < s.field.length; i++) packer.u8(s.field[i]!)
     for (const d of s.drops) packer.u32(d.id).u32(d.power).f64(d.x).f64(d.y).u32(d.life)
     for (const n of s.active) packer.u32(n)
+    for (const n of s.owned) packer.u32(n)
+    for (const n of s.buildOrder) packer.u32(n)
+    for (const n of s.offer) packer.u32(n)
     for (const tr of s.trails) packer.f64(tr.x).f64(tr.y).u32(tr.life)
     for (const sh of s.shocks) packer.f64(sh.x).f64(sh.y).u32(sh.life)
     for (const cl of s.clouds) packer.f64(cl.x).f64(cl.y).u32(cl.life)
+    for (const pu of s.pulses) packer.f64(pu.x).f64(pu.y).u32(pu.life)
     for (const o of s.orbiters) packer.f64(o.ox).f64(o.oy)
     for (const m of s.macrophages) packer.f64(m.x).f64(m.y)
 

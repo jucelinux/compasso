@@ -15,9 +15,18 @@ session that skipped it would never read the work it was supposed to do.
 
 **The gate — the project's single direction metric.** Voluntary second-run rate; three
 consecutive "no" kill the thesis (`DECISIONS.md`, 31/07). Counter reset on 01/08 when the
-core changed. **Standing at 0 of 3 as of 02/08** — no reading taken against the tissue core.
-Current count is kept at the top of `BACKLOG.md`; update it there the same turn a reading
-comes in.
+core changed. **It counts STRIKES: zero is the best state, not the worst.** A "yes" holds
+it at zero — there is nothing to climb. **Standing at 0 strikes of 3 as of 02/08**, on four
+readings: two "yes" from H (one against the tissue core, one against the phase format) and
+two nulls, both from someone stopping for an outside reason rather than deciding not to
+play. Current count is kept at the top of `BACKLOG.md`; update it there the same turn a
+reading comes in.
+
+**Under revision as of 02/08.** H's call: the endless-run format is out, phases are in, and
+second-run rate is a format-bound metric that goes out with it. A replacement is owed, and
+it must be able to KILL — a project that swaps its death metric for one that cannot fail
+has stopped being able to fail. The standing proposal is *"the next phase, unaided"*; it is
+NOT ratified. Nothing is settled here until H says so.
 
 ---
 

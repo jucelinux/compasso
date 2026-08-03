@@ -177,6 +177,43 @@ export function healAround(
 }
 
 /** O tile mais SADIO, que é para onde um patógeno que caça tecido quer ir. */
+/**
+ * A FRONTEIRA da colônia mais próxima: o tile já infectado que ainda não
+ * saturou. É para onde a bactéria vai.
+ *
+ * Diferente de propósito do `healthiestTile`, que é o alvo da Salmonella. Os
+ * dois são "não caça o jogador", mas dizem coisas opostas: a Salmonella SALTA
+ * para o tecido mais são e abre frente nova (pressão posicional, defender em
+ * vez de caçar); a E. coli ENGROSSA o que já tomou, trabalhando a borda até
+ * saturar. Se as duas usassem o mesmo alvo, seriam reskin — que é a queixa que
+ * abriu este desenho (01/08).
+ *
+ * Sem fronteira nenhuma (campo limpo, ou tudo no talo), devolve -1 e quem
+ * chamou decide o que fazer.
+ */
+export function frontierTile(
+  field: Uint8Array,
+  spec: FieldSpec,
+  x: number,
+  y: number,
+  max: number,
+): number {
+  let best = -1
+  let bestD = Infinity
+  for (let i = 0; i < field.length; i++) {
+    const v = field[i]!
+    if (v === 0 || v >= max) continue
+    const dx = tileCenterX(spec, i) - x
+    const dy = tileCenterY(spec, i) - y
+    const d = dx * dx + dy * dy
+    if (d < bestD) {
+      bestD = d
+      best = i
+    }
+  }
+  return best
+}
+
 export function healthiestTile(field: Uint8Array, max: number): number {
   let best = 0
   let bestVal = max + 1

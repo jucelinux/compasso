@@ -50,8 +50,21 @@ export interface ActiveStats {
   speedMultiplier: number
 }
 
-export function activeStats(tuning: Tuning, active: readonly number[]): ActiveStats {
-  const on = (id: number): boolean => (active[id] ?? 0) > 0
+/**
+ * `owned` é o que você ESCOLHEU e vale a run inteira; `active` é o que ainda
+ * escorre de um efeito temporário.
+ *
+ * Os dois existem porque em 02/08 o sorteio por abate morreu: com 475 abates
+ * numa fase o jogador virava enxurrada de poder, e o pior é que a enxurrada
+ * premiava ficar PARADO — parar multiplica bacilo, bacilo vira abate, abate
+ * virava poder. Escolha no card não tem esse laço.
+ */
+export function activeStats(
+  tuning: Tuning,
+  active: readonly number[],
+  owned: readonly number[] = [],
+): ActiveStats {
+  const on = (id: number): boolean => (active[id] ?? 0) > 0 || (owned[id] ?? 0) > 0
   const p = tuning.powers
 
   return {

@@ -142,6 +142,15 @@ class Pool {
     return sp
   }
 
+  /** Quantos sprites foram usados neste quadro. */
+  get count(): number {
+    return this.used
+  }
+
+  at(i: number): Sprite {
+    return this.items[i]!
+  }
+
   begin(): void {
     this.used = 0
   }
@@ -356,11 +365,81 @@ export async function createRenderer(
   hud.addChild(hudBars)
   const waveLabel = new Label(hud, atlas)
   const buildLabel = new Label(hud, atlas)
+  const buildDots = new Graphics()
+  hud.addChild(buildDots)
+  const buildLabels = [0, 1, 2, 3].map(() => new Label(hud, atlas))
+  const scoreLabel = new Label(hud, atlas)
+  const multLabel = new Label(hud, atlas)
   const popLabels: Label[] = []
 
   const deadVeil = new Sprite(atlas.veil(INK, 2))
   overlay.addChild(deadVeil)
   const deadLines = [0, 1, 2, 3].map(() => new Label(overlay, atlas))
+
+  // ------------------------------------------------------- card da fase
+  /*
+   * A apresentação da doença. Dá IDENTIDADE, não estratégia (02/08): nome real,
+   * morfologia e o bicho grande na tela, animado. O que ela FAZ com você e o
+   * que fazer contra ela continuam sendo descoberta — em Flicky ninguém ensinou
+   * o objetivo, e é de onde vem a memória do jogo.
+   */
+  /*
+   * Véu de nível 1, não 2. O 2 é o da morte, e apaga o tecido inteiro — olhando
+   * a primeira captura, o card virou tela preta com um bicho, e preto lê como
+   * ausência (regra do projeto desde 02/08). A fase é apresentada DENTRO do
+   * organismo, com a multidão viva por trás, ou não é apresentação de fase.
+   */
+  const cardVeil = new Sprite(atlas.veil(INK, 1))
+  overlay.addChild(cardVeil)
+  /*
+   * Moldura das duas telas de cima. Entra ANTES do bicho e dos rótulos, senão
+   * cobre os dois — foi exatamente o que aconteceu na primeira versão, e o
+   * bacilo virou silhueta escura dentro do próprio card que existe para
+   * apresentá-lo. Só a captura pegou.
+   *
+   * Texto sobre tecido vermelho some, e o H apontou isso em 02/08: "ESPAÇO PRA
+   * COMEÇAR mal é visto". A saída não é escurecer a tela inteira — isso mataria
+   * "a fase acontece DENTRO do corpo" — é dar CHÃO ao texto e deixar o
+   * organismo visível em volta da moldura.
+   */
+  const rewardPanels = new Graphics()
+  overlay.addChild(rewardPanels)
+  /*
+   * PREVIEW do poder: o jogador com o efeito ligado, como ele aparece em jogo.
+   *
+   * Substituiu um emblema geométrico que eu tinha inventado alegando "não
+   * desenho". O H desmontou o argumento na hora, e com razão: o glóbulo JÁ é
+   * desenhado com o poder aplicado durante a partida — pedir preview não era
+   * pedir arte nova, era pedir para eu reusar o que já está na tela. Eu tinha
+   * invocado uma limitação onde ela não se aplicava.
+   */
+  const previewLayer = new Container()
+  overlay.addChild(previewLayer)
+  /*
+   * Máscara: o preview é recortado ao painel.
+   *
+   * As auras têm RAIO DE JOGO, não de card — o anel da FEBRE vazava para fora
+   * da moldura e cobria o painel vizinho. Recortar preserva a honestidade do
+   * preview (é o mesmo pixel da partida, no mesmo tamanho) e ainda comunica
+   * magnitude: efeito que estoura a moldura é efeito grande. Encolher o sprite
+   * seria mentir sobre o alcance e quebrar a grade de pixel junto.
+   */
+  const previewMask = new Graphics()
+  overlay.addChild(previewMask)
+  previewLayer.mask = previewMask
+  const previewPool = new Pool(previewLayer)
+  const cardBicho = new Sprite()
+  cardBicho.anchor.set(0.5)
+  // Escala INTEIRA: o pixel art nativo não tolera meio pixel, e o card é a
+  // única tela em que o bicho aparece grande o bastante para denunciar isso.
+  cardBicho.scale.set(4)
+  overlay.addChild(cardBicho)
+  const cardLines = [0, 1, 2, 3].map(() => new Label(overlay, atlas))
+  const cardPicks = [0, 1, 2].map(() => new Label(overlay, atlas))
+  const cardBlurbs = [0, 1, 2].map(() => new Label(overlay, atlas))
+  // O que SAI do build se você levar este. Só aparece com o build cheio.
+  const cardCusto = [0, 1, 2].map(() => new Label(overlay, atlas))
+  const cardBlurb = new Label(overlay, atlas)
 
   // ---------------------------------------------------------------- estado
   let particles: Particle[] = []
@@ -370,6 +449,9 @@ export async function createRenderer(
   let prevLives = -1
   let prevCombo = 0
   let prevWave = 1
+  // Pulso da pontuação: sobe no abate e decai em tempo REAL.
+  let scorePulse = 0
+  let prevScore = 0
   let flash = 0
   let shake = 0
 
@@ -403,7 +485,7 @@ export async function createRenderer(
 
   const drawAuras = (cur: SimState): void => {
     auraPool.begin()
-    const st = activeStats(tuning, cur.active)
+    const st = activeStats(tuning, cur.active, cur.owned)
     if (st.interferonRadius > 0) {
       const sp = auraPool.next(atlas.interferon)
       sp.position.set(Math.round(cur.player.x), Math.round(cur.player.y))
@@ -414,6 +496,22 @@ export async function createRenderer(
       // Só a visibilidade pisca; a densidade do dither já faz o esmaecimento.
       sp.visible = tr.life > 6 || (cur.tick & 2) === 0
     }
+    /*
+     * FOCOS plantados pela aura.
+     *
+     * Desenhados com a MESMA textura de aura da partida, pulsando em tempo
+     * REAL — eles curam independentemente do relógio do mundo, e a animação
+     * precisa dizer isso: com você parada e o mundo quase congelado, o foco
+     * continua trabalhando na cadência dele.
+     */
+    for (const pu of cur.pulses) {
+      const sp = auraPool.next(atlas.interferon)
+      sp.position.set(Math.round(pu.x), Math.round(pu.y))
+      const fim = Math.min(1, pu.life / 90)
+      sp.alpha = (0.35 + 0.25 * Math.sin(selfClock * 5 + pu.id)) * fim
+      sp.tint = col(SHI1)
+    }
+
     for (const cl of cur.clouds) {
       const sp = auraPool.next(atlas.cloud)
       sp.position.set(Math.round(cl.x), Math.round(cl.y))
@@ -730,7 +828,8 @@ export async function createRenderer(
     }
   }
 
-  const drawHud = (cur: SimState): void => {
+  const drawHud = (cur: SimState, dt: number): void => {
+    buildDots.clear()
     hudBars.clear()
 
     for (let i = 0; i < Math.max(0, cur.lives); i++) {
@@ -746,8 +845,7 @@ export async function createRenderer(
     const teto = tuning.field.cols * tuning.field.rows * max
     const infFrac = cur.infection / teto
     waveLabel.set(
-      `FASE ${cur.wave}   INFECÇÃO ${Math.ceil(infFrac * 100)}%` +
-        (cur.bestWave > 1 ? `   MELHOR ${cur.bestWave}` : ""),
+      `FASE ${cur.phaseIndex + 1}·${cur.round}   INFECÇÃO ${Math.ceil(infFrac * 100)}%`,
       infFrac > tuning.field.loseFraction * 0.7 ? HURT1 : WHITE,
       tuning.arena.width / 2,
       4,
@@ -811,24 +909,347 @@ export async function createRenderer(
       )
     }
 
-    const build = cur.active
-      .map((ticks, i) => (ticks > 0 ? `${POWERS[i]!.name} ${Math.ceil(ticks / 60)}` : null))
-      .filter((s): s is string => s !== null)
-      .join(" · ")
-    if (build.length > 0) buildLabel.set(build, DIM0, 6, tuning.arena.height - 22)
-    else buildLabel.hide()
+    /*
+     * O BUILD na tela, cada poder na cor dele.
+     *
+     * Era uma linha cinza única e o H não a via ("eu poderia ver na tela quais
+     * powerups estão habilitados"). Em cor própria, o mesmo pixel que o efeito
+     * usa em campo, ela vira leitura de relance em vez de texto de rodapé.
+     */
+    let bx = 6
+    for (let i = 0; i < buildLabels.length; i++) {
+      const id = cur.buildOrder[i]
+      if (id === undefined) {
+        buildLabels[i]!.hide()
+        continue
+      }
+      const w = buildLabels[i]!.set(
+        POWERS[id]!.name,
+        WHITE,
+        bx,
+        tuning.arena.height - 22,
+        1,
+      )
+      buildDots.circle(bx - 4, tuning.arena.height - 18, 2).fill({ color: POWERS[id]!.color })
+      bx += w + 14
+    }
+    // `buildLabel` era a linha cinza única; o build agora tem rótulo por poder.
+    buildLabel.hide()
+
+    /*
+     * PONTUAÇÃO com multiplicador vivo, no canto direito.
+     *
+     * Pedido do H: "estímulo sensorial de que está indo bem", com MegaBonk como
+     * referência. O que dá estímulo não é o placar, é o MULTIPLICADOR — número
+     * que só sobe é contabilidade; número que sobe mais rápido quando você
+     * encadeia é recompensa. Por isso os dois aparecem juntos, e o
+     * multiplicador herda a cor do escalão de combo que já existia.
+     */
+    /*
+     * A pontuação REAGE: pulsa no abate e cresce com o multiplicador.
+     *
+     * Pedido do H: "quando mantenho um streak ela pisca e cresce, o
+     * multiplicador deveria estar enfatizado nela". Placar parado é
+     * contabilidade; placar que responde ao gesto é recompensa — e o pulso
+     * decai em tempo REAL de propósito, porque é feedback para VOCÊ, não para
+     * o mundo, e o mundo está devagar justamente quando você está parada.
+     */
+    const mult = 1 + Math.floor(cur.combo / 3)
+    const tier = Math.min(COMBO_TIERS.length - 1, Math.max(0, Math.floor((cur.combo - 1) / 3)))
+    if (cur.score > prevScore) scorePulse = 1
+    prevScore = cur.score
+    scorePulse = Math.max(0, scorePulse - dt * 3.2)
+
+    // Uma linha ABAIXO das vidas: a 4 a pontuação colidia com os quadradinhos,
+    // e só a captura mostrou.
+    const grande = scorePulse > 0.45 || mult > 1
+    const escala = grande ? 2 : 1
+    const cor = mult > 1 ? COMBO_TIERS[tier]! : scorePulse > 0.45 ? GLD2 : WHITE
+    scoreLabel.set(
+      String(cur.score).padStart(6, "0"),
+      cor,
+      tuning.arena.width - 6 - 6 * 7 * escala,
+      18,
+      escala,
+    )
+    if (mult > 1) {
+      multLabel.set(
+        `${mult}×`,
+        COMBO_TIERS[tier]!,
+        tuning.arena.width - 6 - 3 * 7 * (scorePulse > 0.3 ? 3 : 2),
+        18 + 16 * escala,
+        scorePulse > 0.3 ? 3 : 2,
+      )
+    } else {
+      multLabel.hide()
+    }
   }
 
-  const drawOverlay = (cur: SimState): void => {
-    const on = cur.phase === "dead"
+  const drawCard = (cur: SimState, phase: number): void => {
+    const cx = tuning.arena.width / 2
+    const cy = tuning.arena.height / 2
+    const spec = tuning.phases[Math.min(cur.phaseIndex, tuning.phases.length - 1)]!
+    const kind = tuning.enemy.kinds[spec.disease]
+    const sheet = atlas.pathogens.get(spec.disease)
+    const tint = col(KIND_TINT[spec.disease] ?? WHITE)
+
+    /*
+     * MOLDURA. O card vira card de verdade em vez de texto solto no tecido.
+     *
+     * O H apontou em 02/08 que "ESPAÇO PRA COMEÇAR" mal era visto — o fundo da
+     * fase é vermelho inteiro e o texto sumia. A saída não é escurecer a tela
+     * toda: isso mataria "a fase acontece DENTRO do corpo", que é a regra mais
+     * cara deste projeto. É dar CHÃO ao texto e manter o organismo em volta.
+     *
+     * A moldura leva a cor do próprio patógeno, a mesma que ele usa em campo —
+     * então a apresentação já ensina a reconhecer a doença pela cor antes de
+     * você ver a primeira.
+     */
+    const W = 264
+    const H = 208
+    const x0 = Math.round(cx - W / 2)
+    const y0 = Math.round(cy - H / 2 - 8)
+    rewardPanels
+      .clear()
+      .rect(x0, y0, W, H)
+      .fill({ color: col(INK), alpha: 0.94 })
+      .stroke({ width: 1, color: tint, alignment: 0 })
+      .rect(x0, y0, W, 18)
+      .fill({ color: tint, alpha: 0.22 })
+
+    cardLines[0]!.set(`FASE ${cur.phaseIndex + 1}`, DIM0, cx, y0 + 6, 1, true)
+
+    if (sheet !== undefined) {
+      // Cambaleia em 8 direções, como ele faz em campo. Parado no card o bicho
+      // vira ilustração; girando, vira bicho.
+      const dir = Math.floor(phase * 0.18) & 7
+      cardBicho.texture = frameOf(sheet, 0, dir, phase)
+      cardBicho.position.set(cx, y0 + 82)
+      cardBicho.visible = true
+    } else {
+      cardBicho.visible = false
+    }
+
+    cardLines[1]!.set((kind?.real ?? spec.disease).toUpperCase(), WHITE, cx, y0 + 136, 2, true)
+    cardLines[2]!.set((kind?.form ?? "").toUpperCase(), GLD2, cx, y0 + 162, 1, true)
+    // Sem estratégia nesta tela. Só a tecla que segue.
+    cardLines[3]!.set(cur.cardLock > 0 ? "" : "ESPAÇO PRA COMEÇAR", WHITE, cx, y0 + 186, 1, true)
+  }
+
+  /**
+   * A tela de RECOMPENSA. Um card por habilidade, não uma lista de nomes.
+   *
+   * O H reprovou a lista em 02/08 — "queria um card demonstrando o que a
+   * habilidade faz". Nome grande, o que ela faz por extenso, e a cor própria
+   * do poder, que é a mesma que ele usa em campo.
+   */
+  /**
+   * Desenha o jogador com UM poder ligado, com as mesmas texturas da partida.
+   *
+   * Cada caso aqui espelha um trecho de `drawPowers`/`drawPlayer`. Não é
+   * ilustração: é o mesmo pixel que o jogador vai ver quando o poder estiver
+   * ativo, que é exatamente o que o H pediu.
+   */
+  const drawPreview = (id: number, ex: number, ey: number, sel: boolean): void => {
+    const a = sel ? 1 : 0.35
+    const orbita = Math.floor(selfClock * 2) % 8
+    if (id === 0) previewPool.next(atlas.trail).position.set(ex, ey)
+    if (id === 4) previewPool.next(atlas.cloud).position.set(ex, ey)
+    if (id === 5) previewPool.next(atlas.interferon).position.set(ex, ey)
+    if (id === 1) {
+      const sh = atlas.shock[Math.floor(selfClock * 6) % atlas.shock.length]
+      if (sh !== undefined) previewPool.next(sh).position.set(ex, ey)
+    }
+    // O corpo, sempre. Escalão 3 no SURTO, porque é o que o poder faz.
+    const corpo = previewPool.next(frameOf(atlas.player, id === 7 ? 3 : 0, 0, orbita))
+    corpo.position.set(ex, ey)
+    if (id === 2) {
+      for (let k = 0; k < 2; k++) {
+        const ang = ((orbita + k * 4) / 8) * TAU
+        previewPool
+          .next(atlas.orbiter)
+          .position.set(Math.round(ex + Math.cos(ang) * 15), Math.round(ey + Math.sin(ang) * 15))
+      }
+    }
+    if (id === 3) {
+      previewPool.next(frameOf(atlas.macrophage, 0, 2, orbita)).position.set(ex + 17, ey + 4)
+    }
+    if (id === 6) previewPool.next(atlas.hatch).position.set(ex + 15, ey - 9)
+    if (id === 8) {
+      previewPool.next(atlas.dot(SHI1, 3)).position.set(ex - 9, ey - 10)
+      previewPool.next(atlas.dot(SHI1, 3)).position.set(ex + 9, ey - 10)
+    }
+    for (let i = previewPool.count - 1; i >= 0; i--) previewPool.at(i).alpha = a
+  }
+
+  const drawReward = (cur: SimState): void => {
+    const cx = tuning.arena.width / 2
+    const cy = tuning.arena.height / 2
+    const pronto = cur.cardLock === 0
+    previewPool.begin()
+    previewMask.clear()
+
+    cardLines[0]!.set(`ONDA ${cur.round} CONTIDA`, GLD2, cx, cy - 96, 2, true)
+    cardLines[1]!.set("ESCOLHA O QUE LEVA DAQUI", DIM0, cx, cy - 66, 1, true)
+    cardLines[2]!.hide()
+    cardLines[3]!.set(pronto ? "SETAS ESCOLHEM · ESPAÇO CONFIRMA" : "", WHITE, cx, cy + 116, 1, true)
+
+    /*
+     * TRÊS PAINÉIS, mesmo tamanho.
+     *
+     * A primeira versão era uma linha de nomes com o escolhido em escala 2, e
+     * duas coisas quebravam: a linha ficava torta, e o jogador e os patógenos
+     * apareciam DESENHADOS POR CIMA da opção do meio — só a captura pegou. O H
+     * já tinha pedido "um card demonstrando o que a habilidade faz"; nome solto
+     * não é card. Aqui cada poder tem moldura, nome e o que faz, e a seleção é
+     * moldura acesa em vez de tamanho diferente.
+     */
+    const W = 186
+    const H = 92
+    const top = cy - 22
+    rewardPanels.clear()
+    for (let i = 0; i < 3; i++) {
+      const id = cur.offer[i]
+      if (id === undefined) {
+        cardPicks[i]!.hide()
+        cardBlurbs[i]!.hide()
+        continue
+      }
+      const power = POWERS[id]!
+      const sel = i === cur.pick
+      const tem = cur.owned[id] === 1
+      const x = Math.round(cx + (i - 1) * (W + 12) - W / 2)
+      rewardPanels
+        .rect(x, top, W, H)
+        // Opaco nos três: a 0.8 o jogador aparecia POR DENTRO do painel não
+        // selecionado, e painel que deixa o jogo passar não é card.
+        .fill({ color: col(INK), alpha: 0.96 })
+        .stroke({ width: 1, color: sel ? power.color : col(DIM1), alignment: 0 })
+
+      // PREVIEW: o jogador com o efeito, exatamente como aparece em jogo.
+      const ex = x + W / 2
+      const ey = top + 32
+      // Recorta na METADE DE CIMA do painel: o texto mora embaixo e não pode
+      // ser coberto por aura nenhuma.
+      previewMask.rect(x + 1, top + 1, W - 2, 60).fill({ color: 0xffffff })
+      drawPreview(power.id, ex, ey, sel)
+
+      cardPicks[i]!.set(power.name, sel ? WHITE : DIM1, ex, top + 52, 1, true)
+      cardBlurbs[i]!.set(power.blurb, sel ? GLD2 : DIM1, ex, top + 72, 1, true)
+
+      // Custo explícito: com o build cheio, levar este DERRUBA aquele.
+      const cheio = cur.buildOrder.length >= tuning.run.buildSlots
+      const sai = cheio && !tem ? cur.buildOrder[0] : undefined
+      cardCusto[i]!.set(
+        sai === undefined ? (tem ? "JÁ É SEU" : "") : `SAI: ${POWERS[sai]!.name}`,
+        sel ? HURT1 : DIM1,
+        ex,
+        top + 92,
+        1,
+        true,
+      )
+    }
+    cardBlurb.hide()
+    previewPool.end()
+  }
+
+  /**
+   * FECHAMENTO da doença. Balanço, sem escolha.
+   *
+   * O H apontou que oferecer poder depois da ÚLTIMA onda não faz sentido: a
+   * fase acabou, não há próxima onda para se preparar. O que cabe é o que a
+   * fase produziu.
+   */
+  const drawClosed = (cur: SimState): void => {
+    const cx = tuning.arena.width / 2
+    const cy = tuning.arena.height / 2
+    const spec = tuning.phases[Math.min(cur.phaseIndex, tuning.phases.length - 1)]!
+    const nome = tuning.enemy.kinds[spec.disease]?.real ?? spec.disease
+    const tint = col(KIND_TINT[spec.disease] ?? WHITE)
+
+    const W = 300
+    const H = 150
+    const x0 = Math.round(cx - W / 2)
+    const y0 = Math.round(cy - H / 2)
+    rewardPanels
+      .clear()
+      .rect(x0, y0, W, H)
+      .fill({ color: col(INK), alpha: 0.96 })
+      .stroke({ width: 1, color: tint, alignment: 0 })
+      .rect(x0, y0, W, 18)
+      .fill({ color: tint, alpha: 0.22 })
+
+    cardLines[0]!.set(`${nome} CONTIDA`.toUpperCase(), WHITE, cx, y0 + 6, 1, true)
+    cardLines[1]!.set(`${cur.score} PONTOS`, GLD2, cx, y0 + 34, 2, true)
+    cardLines[2]!.set(
+      `${cur.kills} PATÓGENOS · ${spec.waves} ONDAS · MULT ${cur.bestMult}×`,
+      DIM0,
+      cx,
+      y0 + 66,
+      1,
+      true,
+    )
+    const build = cur.buildOrder.map((p) => POWERS[p]!.name).join(" + ")
+    cardLines[3]!.set(build.length > 0 ? build : "SEM PODERES", DIM1, cx, y0 + 92, 1, true)
+    cardPicks[0]!.set(
+      cur.cardLock > 0 ? "" : "ESPAÇO PRA PRÓXIMA DOENÇA",
+      WHITE,
+      cx,
+      y0 + 122,
+      1,
+      true,
+    )
+    cardPicks[1]!.hide()
+    cardPicks[2]!.hide()
+    for (const l of cardBlurbs) l.hide()
+    for (const l of cardCusto) l.hide()
+    cardBlurb.hide()
+  }
+
+  const drawOverlay = (cur: SimState, phase: number): void => {
+    const isCard = cur.phase === "card"
+    const isReward = cur.phase === "reward"
+    const isClosed = cur.phase === "closed"
+    const telaDeCima = isCard || isReward || isClosed
+    const on = cur.phase === "dead" || telaDeCima
     overlay.visible = on
+    cardVeil.visible = telaDeCima
+    // A apresentação acontece DENTRO do organismo (véu leve); a recompensa é
+    // menu e precisa separar do jogo, senão corpo e patógeno passam por cima.
+    cardVeil.texture = atlas.veil(INK, isReward || isClosed ? 2 : 1)
+    cardBicho.visible = isCard
+    for (const l of cardLines) if (!telaDeCima) l.hide()
+    if (!isReward) {
+      for (const l of cardPicks) l.hide()
+      for (const l of cardBlurbs) l.hide()
+      for (const l of cardCusto) l.hide()
+      cardBlurb.hide()
+      rewardPanels.clear()
+      previewPool.begin()
+      previewPool.end()
+      previewMask.clear()
+    }
+    for (const l of deadLines) if (telaDeCima) l.hide()
+    deadVeil.visible = cur.phase === "dead"
     if (!on) return
+    if (isCard) {
+      drawCard(cur, phase)
+      return
+    }
+    if (isReward) {
+      drawReward(cur)
+      return
+    }
+    if (isClosed) {
+      drawClosed(cur)
+      return
+    }
     const cy = tuning.arena.height / 2
     const cx = tuning.arena.width / 2
     deadLines[0]!.set(cur.lostByTissue ? "O TECIDO MORREU" : "A INFECÇÃO VENCEU", HURT1, cx, cy - 40, 2, true)
-    deadLines[1]!.set(`ONDA ${cur.wave} · ${cur.kills} PATÓGENOS`, WHITE, cx, cy - 4, 1, true)
+    deadLines[1]!.set(`${cur.score} PONTOS · ${cur.kills} PATÓGENOS`, WHITE, cx, cy - 4, 1, true)
     deadLines[2]!.set(
-      cur.comboBest > 1 ? `MELHOR SEQUÊNCIA ${cur.comboBest}×` : "",
+      cur.bestMult > 1 ? `MELHOR MULTIPLICADOR ${cur.bestMult}×` : "",
       GLD2,
       cx,
       cy + 10,
@@ -1013,8 +1434,10 @@ export async function createRenderer(
       for (let i = nextPops.length; i < popLabels.length; i++) popLabels[i]!.hide()
       pops = nextPops
 
-      drawHud(cur)
-      drawOverlay(cur)
+      drawHud(cur, dt)
+      // O card usa o relógio REAL, não o do mundo: a sim está parada nele, e um
+      // bicho que não anima é ilustração, não apresentação.
+      drawOverlay(cur, Math.floor(selfClock * 6))
       app.render()
     },
     destroy() {

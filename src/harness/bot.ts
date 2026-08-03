@@ -177,6 +177,21 @@ export function playRun(
     const s = sim.state()
     if (s.phase === "dead") return report(tick, s, true)
 
+    /*
+     * Dispensa o card, senão o bot mede NADA.
+     *
+     * Toda fase abre parada numa apresentação desde 02/08, e o bot não tinha
+     * como sair dela: a primeira medição depois da mudança saiu com 0 abates,
+     * 0 fases e infecção travada em 1% nas cinco seeds. O absurdo denunciou —
+     * um erro do mesmo tipo em número plausível teria virado balanço.
+     *
+     * A trava conta com input vazio; a borda de subida gasta um tick.
+     */
+    if (s.phase === "card" || s.phase === "reward") {
+      sim.step(s.cardLock === 0 ? IN({ action: true }) : IN())
+      continue
+    }
+
     // --- medição, antes de decidir o input
     infSum += s.infection
     if (s.infection > infPico) infPico = s.infection

@@ -9,6 +9,7 @@
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
     "replay": "node src/harness/runner.ts",
+    "gate": "node src/harness/gate.ts",
     "smoke": "node src/harness/makeSmoke.ts",
     "pace": "node src/harness/bot.ts",
     "sweep": "node src/harness/sweep.ts",
