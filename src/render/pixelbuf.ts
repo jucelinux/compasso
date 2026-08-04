@@ -312,6 +312,27 @@ export function blit(dst: Buf, src: Buf, ox: number, oy: number): void {
   }
 }
 
+/** Quantos pixels o buffer pinta. */
+export function painted(b: Buf): number {
+  let n = 0
+  for (const v of b.d) if (v !== 0) n++
+  return n
+}
+
+/**
+ * Quantos pixels diferem entre dois buffers do mesmo tamanho.
+ *
+ * Existe para a trava de cópia de quadro medir DISTÂNCIA em vez de igualdade.
+ * A régua "não ser idêntico" passa com um pixel de diferença, e um pixel de
+ * diferença é o que um ciclo de N fases que na tela tem N/2 produz.
+ */
+export function diffCount(a: Buf, b: Buf): number {
+  if (a.w !== b.w || a.h !== b.h) return Math.max(a.d.length, b.d.length)
+  let n = 0
+  for (let i = 0; i < a.d.length; i++) if (a.d[i] !== b.d[i]) n++
+  return n
+}
+
 /**
  * Índices → RGBA. Único ponto onde cor aparece.
  *

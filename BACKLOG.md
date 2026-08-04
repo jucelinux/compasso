@@ -71,6 +71,42 @@ Implementados e cobertos por tipo, mas a captura automatizada não os mostra —
 mata e não tem poder, então os dois ficam em zero. Depois de seis defeitos visuais achados
 por captura nesta sessão, isto não conta como pronto.
 
+**Parcialmente destravado em 04/08 por `npm run olho`**, que despeja qualquer folha assada
+em luminância no terminal, sem browser e sem bot. Ele mostra a ARTE; a captura mostra a
+CENA. Estes dois itens são de HUD em estado de jogo, então continuam dependendo da captura
+— o que mudou é que a arte deles pode ser conferida antes.
+
+## Achados do olho, 04/08 — fora do tema, decisão do H
+
+- **`organSheet` é assado por ninguém.** Exportado em `sprites.ts`, 6 quadros de 58x58, e
+  não é chamado por `atlas.ts` nem por nada em `src/`. Ou tem uso previsto e nunca foi
+  montado, ou é código morto. Não foi apagado.
+- **A necrose da colônia é uma treliça regular de 4 px sobre a arena inteira.** No nível 1 o
+  corte é `bayer(x, y) < 0.10`, que acende sempre as MESMAS 2 das 16 posições da célula de
+  Bayer; o tile é 20x20, múltiplo de 4, então o padrão atravessa os tiles sem quebrar. Pode
+  ser o dither ordenado fazendo o trabalho dele — mas é o tipo de coisa reprovada como
+  xadrez em 01/08, e a captura não a mostra isolada. Ver antes de mexer.
+
+## Vindo do ateliê e ainda NÃO trazido
+
+O `~/development/atelie` é fonte, não fork (`DECISIONS.md`, 04/08). Entraram a régua de
+distância e o olho em terminal. Ficaram em espera, nesta ordem:
+
+- **Travas contra AUSÊNCIA.** É o `frontSprite` de 02/08 virado em regra: a folha promete
+  rampas, e alguma delas tem que aparecer na tela. Três vias foram levantadas e a escolhida
+  ainda não foi decidida pelo H — a recomendação é **decodificar o PNG da captura** (~70
+  linhas, `node:zlib`, sem dependência nova, sem mexer no `renderer.ts`), porque a lista de
+  montagem confiável é o que saiu na tela, não uma segunda descrição do que deveria sair.
+  As outras duas: compor um campo indexado headless (duplica o `renderer.ts` e diverge dele)
+  e trava estática de montagem (não pegaria o caso real — o `frontSprite` ERA referenciado).
+- **A folha declarar o próprio contrato** (`rowSpan`, `rowMargin`, `crossRowDistinct`). Só
+  passa a valer quando existir aqui uma folha cujo contrato não seja o global de hoje — por
+  exemplo linha girada em runtime, que encosta na borda por PREÇO da técnica e não por
+  defeito.
+
+Fora de escopo por decisão: bancada com knob, paleta por estilo, tabela de mistura em
+espaço de índice. `volume.ts` e `rig.ts` são lembrete, não fila.
+
 ## Dívida técnica
 
 - **6 testes de determinismo vermelhos.** As fixtures foram gravadas antes do card e não

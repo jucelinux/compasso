@@ -14,6 +14,7 @@
     "pace": "node src/harness/bot.ts",
     "sweep": "node src/harness/sweep.ts",
     "shot": "node src/harness/shot.ts",
+    "olho": "node src/harness/olho.ts",
     "palettes": "node src/harness/palettes.ts",
     "rec": "node src/harness/rec.ts"
   },

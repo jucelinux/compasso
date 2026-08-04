@@ -2,7 +2,15 @@ import { describe, expect, it } from "vitest"
 import tuningJson from "../tuning.json"
 import type { Tuning } from "../src/sim/types.ts"
 import { PALETTE, cycledPalette } from "../src/render/palette.ts"
-import { bayer, makeBuf, outline, toRGBA, type Buf } from "../src/render/pixelbuf.ts"
+import {
+  bayer,
+  diffCount,
+  makeBuf,
+  outline,
+  painted,
+  toRGBA,
+  type Buf,
+} from "../src/render/pixelbuf.ts"
 import { BODY_H, GLYPH_W, glyphBuf, knownChars, rawRows } from "../src/render/font.ts"
 import {
   PLAYER_DIRS,
@@ -148,16 +156,31 @@ describe("quadros de animação", () => {
      * e 2 a 5. Metade dos quadros era cópia e a animação tinha metade da
      * suavidade que o número prometia. O respiro da célula do organismo tinha o
      * mesmo defeito. Aqui a comparação é de todos contra todos.
+     *
+     * E a régua "não ser idêntico" também não basta — foi ELA que deixou passar,
+     * no ateliê (03/08), um ciclo de 4 fases que na tela era de 2: as duas fases
+     * de passagem diferiam em UM pixel, e a igualdade exata as aprovava. Lá o
+     * mesmo defeito apareceu quatro vezes (corpo do RPG, corredor, criatura,
+     * passada do dinossauro) e só a régua de distância pegou as quatro.
+     *
+     * O piso é 5% dos pixels pintados do quadro, com mínimo absoluto de 3 —
+     * senão sprite pequeno passaria por ter pouco pixel.
      */
     for (const [name, sheet] of allSheets()) {
       for (let t = 0; t < sheet.tiers; t++) {
         for (let d = 0; d < sheet.dirs; d++) {
-          const seen = new Map<string, number>()
-          for (let p = 0; p < sheet.phases; p++) {
-            const key = sheet.frames[(t * sheet.dirs + d) * sheet.phases + p]!.d.join(",")
-            const antes = seen.get(key)
-            expect(antes, `${name}: fase ${p} é cópia da fase ${antes}`).toBeUndefined()
-            seen.set(key, p)
+          const base = (t * sheet.dirs + d) * sheet.phases
+          for (let a = 0; a < sheet.phases; a++) {
+            const fa = sheet.frames[base + a]!
+            const piso = Math.max(3, Math.round(painted(fa) * 0.05))
+            for (let b = a + 1; b < sheet.phases; b++) {
+              const dist = diffCount(fa, sheet.frames[base + b]!)
+              expect(
+                dist,
+                `${name} escalão ${t} direção ${d}: fases ${a} e ${b} diferem em só ` +
+                  `${dist} pixel(s) — mínimo ${piso}`,
+              ).toBeGreaterThanOrEqual(piso)
+            }
           }
         }
       }
