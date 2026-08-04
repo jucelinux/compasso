@@ -1,151 +1,155 @@
 # COMPASSO
 
-**O tempo só anda quando você anda.**
+**Time only moves when you move.**
 
-Um jogo de arena de run curta, com camada roguelite de poderes temporários. Você é um
-glóbulo branco dentro de um tecido infectado: mover *é* atacar, o mundo roda a 5% da
-velocidade enquanto você está parada, e a fase acaba quando a doença está **contida** — não
-quando uma cota de abates é cumprida.
+A short-run arena action game with a roguelite layer of temporary powers. You are a white
+blood cell inside infected tissue: moving *is* attacking, the world runs at 5% speed while
+you stand still, and a phase ends when the disease is **contained** — not when a kill quota
+is met.
 
-Web primeiro. Roda em navegador de desktop e de celular. Pixel art nativo em 640x360, com
-paleta travada.
+Web first. Runs in desktop and mobile browsers. Native 640x360 pixel art, locked palette.
+
+> The project documents (`DECISIONS.md`, `TASTE.md`, `BACKLOG.md`, `TASTE-LOOP.md`) are
+> written in Portuguese, as is the in-game text. This README is the English entry point.
 
 ---
 
-## Rodar
+## Running it
 
-Requer **Node 22.18+** — os scripts do rig executam `.ts` direto, sem passo de build.
+Requires **Node 22.18+** — the rig's scripts execute `.ts` directly, with no build step.
 
 ```bash
 npm install
 npm run dev        # http://localhost:5173
 ```
 
-Parâmetros de URL úteis no dev: `?seed=1234` fixa a semente, `?palette=<nome>` troca a
-variante de cor (a tecla **P** cicla entre elas mantendo a mesma seed).
+Useful dev URL parameters: `?seed=1234` pins the seed, `?palette=<name>` switches the color
+variant (the **P** key cycles through them keeping the same seed).
 
-## Controles
+## Controls
 
-| tecla | o quê |
+| key | what |
 |---|---|
-| **WASD** / setas | mover — e mover é atacar |
-| **espaço** | impulso: em movimento é arranco, parada é aura |
-| **R** / Enter | recomeçar depois de morrer (tecla própria, de propósito) |
-| **F9** | grava os últimos 30s como replay JSON |
-| **shift+F9** | grava a run inteira |
-| **P** | próxima paleta, mesma seed |
+| **WASD** / arrows | move — and moving is attacking |
+| **space** | impulse: a dash while moving, an aura while still |
+| **R** / Enter | restart after dying (its own key, on purpose) |
+| **F9** | dump the last 30s as a replay JSON |
+| **shift+F9** | dump the whole run |
+| **P** | next palette, same seed |
 
-O impulso tem recarga e **dois verbos decididos por contexto**: acima do limiar de
-velocidade é alcance, abaixo dele planta um foco de cura que trabalha sem você (teto de 2).
-`R` é tecla separada de `espaço` porque o portão do projeto mede intenção de rejogar, e
-reinício no mesmo botão da ação vira reflexo.
-
----
-
-## As regras que não se mexem
-
-Cada uma é uma linha em `DECISIONS.md` e só cai com outra linha lá.
-
-- **Um verbo.** Mover é atacar. O impulso é recurso com recarga, não o verbo central.
-- **Velocidade é o relógio do mundo.** Parada, o mundo roda a `time.creep` (0.05); a toda,
-  a 1.0. Você anda sempre em tempo real. Essa assimetria *é* o jogo.
-- **O contato resolve por velocidade.** Rápido o bastante engole; devagar demais machuca. O
-  limiar é por patógeno (`engulfSpeed`).
-- **Três vidas**, e i-frames **sem timer** — caem no primeiro patógeno que você engolir.
-- **O campo é o organismo.** A arena é tecido com infecção por tile. A infecção espalha em
-  tempo de *mundo*; a cura corre em tempo *real* e cai junto com a sua velocidade. Patógeno
-  nasce de tecido infectado, então a fase pode convergir.
-- **Pixel art nativo, paleta travada.** Sem rotação em runtime, posições inteiras, sprite
-  redondo dentro da hitbox com que a sim colide.
-
-Patógenos são doenças reais e a morfologia decide o comportamento: E. coli anda em
-corrida-e-cambalhota e faz fissão binária, influenza caça você, e assim por diante
-(`tuning.json` → `enemy.kinds`). Os poderes são imunológicos — CITOCINA, FEBRE, ANTICORPO,
-MACRÓFAGO, HISTAMINA, INTERFERON, ENZIMA, SURTO, MEMBRANA, PLAQUETA.
+The impulse has a cooldown and **two verbs decided by context**: above the speed threshold
+it is reach, below it plants a healing focus that works without you (cap of 2). `R` is a
+separate key from `space` because the project's gate measures the intent to replay, and a
+restart bound to the action button becomes a reflex.
 
 ---
 
-## Arquitetura
+## The rules that don't move
+
+Each one is a line in `DECISIONS.md` and only falls with another line there.
+
+- **One verb.** Moving is attacking. The impulse is a resource with a cooldown, not the
+  core verb.
+- **Speed is the world clock.** Standing still, the world runs at `time.creep` (0.05); at
+  full speed, at 1.0. You always move in real time. That asymmetry *is* the game.
+- **Contact resolves by speed.** Fast enough engulfs, too slow hurts. The threshold is per
+  pathogen (`engulfSpeed`).
+- **Three lives**, and i-frames with **no timer** — they drop on the first pathogen you
+  engulf.
+- **The field is the organism.** The arena is tissue with per-tile infection. Infection
+  spreads in *world* time; healing runs in *real* time and falls with your speed. Pathogens
+  are born from infected tissue, so a phase can converge.
+- **Native pixel art, locked palette.** No runtime rotation, integer positions only, a round
+  sprite that fits inside the hitbox the sim collides with.
+
+Pathogens are real diseases, and morphology decides behavior: E. coli does run-and-tumble
+and splits by binary fission, influenza hunts you, and so on (`tuning.json` →
+`enemy.kinds`). The powers are immunological — CITOCINA, FEBRE, ANTICORPO, MACRÓFAGO,
+HISTAMINA, INTERFERON, ENZIMA, SURTO, MEMBRANA, PLAQUETA.
+
+---
+
+## Architecture
 
 ```
 src/
-  sim/          # lógica pura e determinística — o core
-  render/       # renderer, interpolação, atlas de pixel art
-  input/        # captura e log de input
-  harness/      # runner headless, replay, bot, capturas
-tests/          # determinismo, slice, harness, pixel art
-tuning.json     # TODO número do jogo
-replays/        # replays commitados: fixtures de regressão
+  sim/          # pure, deterministic logic — the core
+  render/       # renderer, interpolation, pixel-art atlas
+  input/        # capture and input logging
+  harness/      # headless runner, replay, bot, capture
+tests/          # determinism, slice, harness, pixel art
+tuning.json     # EVERY number in the game
+replays/        # committed replays: regression fixtures
 ```
 
-Pré-requisitos inegociáveis, detalhados em `HARNESS.md` §1:
+Non-negotiable prerequisites, detailed in `HARNESS.md` §1:
 
-1. **Sim e render separados.** `src/sim/` nunca importa o renderer nem o DOM.
-2. **Passo fixo a 60Hz.** Nada de lógica dependente de `deltaTime` variável.
-3. **RNG semeado.** `Math.random()` é proibido em `src/sim/`.
-4. **Input é log.** Uma run inteira é `{ seed, inputs[] }` — replay determinístico de graça.
-5. **Todo número de ajuste vive em `tuning.json`.** É também o A/B mais barato que existe.
-6. **Determinismo é testado.** Se o teste de determinismo quebrar, para tudo e conserta.
+1. **Sim and rendering are separate.** `src/sim/` never imports the renderer or the DOM.
+2. **Fixed timestep at 60Hz.** No logic depending on a variable `deltaTime`.
+3. **Seeded RNG.** `Math.random()` is forbidden in `src/sim/`.
+4. **Input is a log.** A whole run is `{ seed, inputs[] }` — deterministic replay for free.
+5. **Every tuning number lives in `tuning.json`.** It is also the cheapest A/B there is.
+6. **Determinism is tested.** If the determinism test breaks, stop and fix it first.
 
-## O rig
+## The rig
 
 ```bash
-npm run test                       # sim headless + determinismo
+npm run test                       # headless sim + determinism
 npm run typecheck                  # tsc --noEmit
-npm run build                      # build de produção
-npm run replay <arquivo.json>      # roda um replay, imprime o hash, escreve out/<label>/metrics.csv
-npm run gate <arquivo.json>        # leitura de portão: depois que a run acabou, veio outra?
-npm run pace                       # bot de ritmo — jogador constante, mede duração de onda e de run
-npm run sweep <caminho> <v1> <v2>  # varre um parâmetro do tuning e ranqueia por métrica
-npm run shot [seed]                # capturas do build atual em shots/
-npm run palettes [seed]            # capturas de todas as variantes de paleta
-npm run rec [nome] [seed]          # grava uma fixture sintética do build atual
-npm run smoke                      # regera replays/smoke.json
+npm run build                      # production build
+npm run replay <file.json>         # run a replay, print the hash, write out/<label>/metrics.csv
+npm run gate <file.json>           # gate reading: after the run ended, did another one start?
+npm run pace                       # pacing bot — a constant player, measures wave and run length
+npm run sweep <path> <v1> <v2>     # sweep one tuning parameter and rank by metric
+npm run shot [seed]                # stills of the current build, into shots/
+npm run palettes [seed]            # stills of every palette variant
+npm run rec [name] [seed]          # record a synthetic fixture of the current build
+npm run smoke                      # regenerate replays/smoke.json
 ```
 
-`shots/` e os dumps `f9-*.json` da raiz são ignorados pelo git: captura é ferramenta de
-leitura, não artefato de projeto. As fixtures que ficam moram em `replays/`.
+`shots/` and the `f9-*.json` dumps at the root are gitignored: capture is a reading tool,
+not a project artifact. The fixtures that stay live in `replays/`.
 
 ## Stack
 
-| camada | escolha | por quê |
+| layer | choice | why |
 |---|---|---|
-| linguagem | TypeScript (strict) | tudo é texto; sem ida e volta pelo editor |
-| render | PixiJS | rápido, WebGL, sem opinião sobre arquitetura de jogo |
-| build | Vite | HMR instantâneo |
-| testes | Vitest | sim determinística testável sem navegador |
-| captura | Playwright | quadros e clipes do build real |
+| language | TypeScript (strict) | everything is text; no editor round-trips |
+| rendering | PixiJS | fast, WebGL, no opinion about game architecture |
+| build | Vite | instant HMR |
+| tests | Vitest | deterministic sim testable without a browser |
+| capture | Playwright | frames and clips of the real build |
 
-**Nenhuma engine em cima do Pixi.** O game loop, o ECS e as máquinas de estado são nossos e
-do tamanho exato do que o jogo precisa.
+**No engine on top of Pixi.** The game loop, the ECS, and the state machines are ours and
+sized exactly to what the game needs.
 
 ---
 
-## Os documentos
+## The documents
 
-O repositório é metade jogo, metade método. Os `.md` não são documentação do código — são o
-estado do projeto, e a sessão seguinte começa lendo eles.
+This repository is half game, half method. The `.md` files are not documentation of the
+code — they are the state of the project, and the next session starts by reading them.
 
-| arquivo | o quê |
+| file | what |
 |---|---|
-| `CLAUDE.md` | instância do projeto: gênero, decisões vinculantes, ordem de construção, don'ts |
-| `TASTE.md` | gosto do humano destilado, bar por eixo, vieses e teto do modelo |
-| `DECISIONS.md` | log append-only de decisões. Superado ≠ errado-na-época |
-| `BACKLOG.md` | só o presente: o que está aberto e o contador do portão |
-| `HARNESS.md` | o rig — contratos da sim, formato de replay, aceitação, fase 2 |
-| `TASTE-LOOP.md` | o método: como uma rodada roda e quando chamar o humano |
-| `TASTE-LOOP-LEARNING.md` | insumo para evoluir o próprio método |
+| `CLAUDE.md` | project instance: genre, binding decisions, build order, don'ts |
+| `TASTE.md` | the human's taste distilled, the bar per axis, the model's biases and ceiling |
+| `DECISIONS.md` | append-only decision log. Superseded ≠ wrong-at-the-time |
+| `BACKLOG.md` | the present only: what is open, and the gate counter |
+| `HARNESS.md` | the rig — sim contracts, replay format, acceptance, phase 2 |
+| `TASTE-LOOP.md` | the method: how a round runs and when to call the human |
+| `TASTE-LOOP-LEARNING.md` | input for evolving the method itself |
 
-**O portão** é a métrica de direção do projeto: ele conta *strikes*, não acertos — zero é o
-melhor estado possível. A contagem atual fica no topo do `BACKLOG.md` e a definição no
-`DECISIONS.md`. A métrica está **em revisão** desde 02/08: com o formato de fases, "segunda
-partida" mede repetir quando o sucesso virou avançar. A proposta em aberto é *"a fase
-seguinte, sem ajuda"*, e ela não foi ratificada.
+**The gate** is the project's direction metric, and it counts *strikes*, not successes —
+zero is the best possible state. The current count lives at the top of `BACKLOG.md`, the
+definition in `DECISIONS.md`. The metric is **under revision** as of 02/08: with the phase
+format, "a second run" measures repeating when success became advancing. The standing
+proposal is *"the next phase, unaided"*, and it has not been ratified.
 
-## Don'ts do projeto
+## Project don'ts
 
-- Não adicione dependência sem propor antes.
-- Não configure Tauri nem Capacitor antes do slice vertical ser aprovado.
-- Não reabra as decisões vinculantes sem uma linha nova no `DECISIONS.md`.
-- Não restaure do zero as coisas marcadas como mortas no `CLAUDE.md` — o log é append-only
-  e ainda carrega o que caiu.
+- Do not add a dependency without proposing it first.
+- Do not configure Tauri or Capacitor before the vertical slice is approved.
+- Do not reopen the binding decisions without a new line in `DECISIONS.md`.
+- Do not restore anything marked dead in `CLAUDE.md` — the log is append-only and still
+  carries what fell.
