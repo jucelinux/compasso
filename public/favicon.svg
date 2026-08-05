@@ -1,0 +1,17 @@
+<!--
+  O leucócito, na grade. Oito por oito, sem curva e sem gradiente: é a mesma
+  regra do resto da arte — posição inteira, paleta travada, contorno em `INK`.
+  Cor por cor, os índices de `src/render/palette.ts`: INK, LEU0..LEU3, HEM1.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 8 8" shape-rendering="crispEdges">
+  <rect width="8" height="8" fill="#0a0409"/>
+  <g fill="#4a6a90">
+    <rect x="2" y="1" width="4" height="1"/><rect x="1" y="2" width="6" height="4"/>
+    <rect x="2" y="6" width="4" height="1"/>
+  </g>
+  <g fill="#7e9cc0"><rect x="2" y="2" width="4" height="4"/></g>
+  <g fill="#b9d2ea"><rect x="2" y="2" width="3" height="2"/></g>
+  <g fill="#ecf5ff"><rect x="2" y="2" width="1" height="1"/></g>
+  <!-- O bacilo que ele veio comer. -->
+  <g fill="#72141f"><rect x="5" y="5" width="2" height="1"/></g>
+</svg>

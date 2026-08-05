@@ -1,10 +1,16 @@
 import tuningJson from "../tuning.json"
 import { createSim } from "./sim/sim.ts"
-import type { SimState, Tuning } from "./sim/types.ts"
+import type { InputFrame, SimState, Tuning } from "./sim/types.ts"
 import { createKeyboard } from "./input/keyboard.ts"
+import {
+  createTouchPad,
+  fullscreenSupported,
+  toggleFullscreen,
+  touchMode,
+} from "./input/touch.ts"
 import { createRecorder, downloadReplay } from "./input/recorder.ts"
 import { browserGitSha } from "./harness/gitSha.ts"
-import { createRenderer } from "./render/renderer.ts"
+import { createRenderer, type Renderer } from "./render/renderer.ts"
 import { applyPaletteVariant, PALETTE_NAMES } from "./render/palette.ts"
 
 const tuning = tuningJson as Tuning
@@ -43,37 +49,112 @@ window.addEventListener("keydown", (event) => {
 const mount = document.getElementById("app")!
 const hud = document.getElementById("hud")!
 
+/*
+ * O esquema de entrada é decidido UMA vez, antes de qualquer coisa nascer.
+ *
+ * Ele muda três coisas que não são o input: a classe do `<html>` (que revela a
+ * camada de toque), o texto do HUD e as linhas de instrução DENTRO do jogo. Um
+ * aparelho de toque com "ESPAÇO PRA COMEÇAR" na tela não está com o texto
+ * feio — está mandando apertar uma tecla que não existe ali.
+ */
+const touch = touchMode()
+const touchLayer = document.getElementById("toque")!
+const fullscreenButton = document.getElementById("tela-cheia")!
+if (touch) {
+  document.documentElement.classList.add("toque")
+  if (fullscreenSupported()) document.documentElement.classList.add("tem-tela-cheia")
+  fullscreenButton.addEventListener("click", toggleFullscreen)
+}
+
 const sim = createSim(seed, tuning)
 const keyboard = createKeyboard()
+const pad = touch ? createTouchPad(touchLayer) : null
 const recorder = createRecorder(seed, tuning, browserGitSha())
 const crowdParam = params.get("crowd")
-const renderer = await createRenderer(
-  mount,
-  tuning,
-  crowdParam === null ? undefined : Number(crowdParam),
-)
 
 /**
- * Escala inteira.
+ * Teclado OU toque, no mesmo `InputFrame` — nunca um terceiro contrato.
  *
- * Decorre direto do pixel art nativo escolhido em 01/08: com vizinho-próximo em
- * escala fracionária, uma parte dos pixels ocupa 2 unidades de tela e outra 3, e
- * a diferença aparece como cintilação assim que o fundo rola. Múltiplo inteiro
- * custa uma tarja preta e devolve a grade intacta. 640x360 é exatamente 1/3 de
- * 1920x1080 e 1/2 de 1280x720, então na maioria das telas não sobra nada.
+ * O botão único vira `action` ou `restart` conforme a FASE, e é aqui que essa
+ * tradução mora porque é aqui que a fase é conhecida. Em `dead` só `restart`
+ * faz alguma coisa; em `card`, `reward` e `closed` os dois avançam; em `run`
+ * `restart` não faz nada e `action` é o impulso. O resultado é um
+ * `InputFrame` legítimo, então o F9 grava e o replay reproduz um toque com a
+ * mesma fidelidade com que reproduz uma tecla.
+ */
+function readInput(): InputFrame {
+  const k = keyboard.frame()
+  const t = pad?.state()
+  if (t === undefined) return k
+  const morto = sim.state().phase === "dead"
+  return {
+    up: k.up || t.up,
+    down: k.down || t.down,
+    left: k.left || t.left,
+    right: k.right || t.right,
+    action: k.action || (t.press && !morto),
+    restart: k.restart || (t.press && morto),
+  }
+}
+
+/**
+ * Escala inteira — em pixels de DISPOSITIVO, não de CSS.
+ *
+ * A regra de 01/08 continua a mesma e continua binding: com vizinho-próximo em
+ * escala fracionária, uma parte dos pixels ocupa 2 unidades de tela e outra 3,
+ * e a diferença aparece como cintilação assim que o fundo rola. O que muda em
+ * 05/08 é EM QUE GRADE o inteiro é contado.
+ *
+ * Contar em px de CSS era certo enquanto a única tela era um monitor com
+ * `devicePixelRatio` 1. Num iPad o CSS é uma grade FICTÍCIA: 1180x820 de CSS
+ * são 2360x1640 de verdade. Contando em CSS, `floor(1180/640)` dava escala 1 —
+ * o jogo saía num retângulo de 640x360 no meio de uma tela quase quatro vezes
+ * maior, o que não é "sem espaço sobrando", é ilegível. Contando na grade
+ * FÍSICA dá 3, e 3 é inteiro exatamente onde a cintilação nasce: no pixel que
+ * a tela realmente acende. Em `dpr` 1 as duas contas são a mesma conta, então
+ * nada muda no desktop.
+ *
+ * A POSIÇÃO também é travada na grade física. `place-items: center` podia
+ * deixar o canvas meio pixel de dispositivo fora do lugar — e meio pixel fora
+ * do lugar num upscale de vizinho-próximo é uma coluna inteira duplicada.
  */
 function fitInteger(): void {
   const canvas = mount.querySelector("canvas")
   if (canvas === null) return
-  const scale = Math.max(
+  const dpr = window.devicePixelRatio || 1
+  const W = tuning.arena.width
+  const H = tuning.arena.height
+  const device = Math.max(
     1,
-    Math.floor(Math.min(window.innerWidth / tuning.arena.width, window.innerHeight / tuning.arena.height)),
+    Math.floor(Math.min((window.innerWidth * dpr) / W, (window.innerHeight * dpr) / H)),
   )
-  canvas.style.width = `${tuning.arena.width * scale}px`
-  canvas.style.height = `${tuning.arena.height * scale}px`
+  const scale = device / dpr
+  const cssW = W * scale
+  const cssH = H * scale
+  const snap = (v: number): number => Math.round(v * dpr) / dpr
+  canvas.style.width = `${cssW}px`
+  canvas.style.height = `${cssH}px`
+  canvas.style.left = `${snap((window.innerWidth - cssW) / 2)}px`
+  canvas.style.top = `${snap((window.innerHeight - cssH) / 2)}px`
 }
-fitInteger()
 window.addEventListener("resize", fitInteger)
+/*
+ * O iOS gira a tela ANTES de `innerWidth` mudar, e a barra do Safari some sem
+ * disparar `resize` nenhum. Os dois ouvintes extras existem por isso — sem
+ * eles o jogo passa a rotação inteira com a escala da orientação anterior.
+ */
+window.addEventListener("orientationchange", () => setTimeout(fitInteger, 120))
+window.visualViewport?.addEventListener("resize", fitInteger)
+
+/*
+ * O renderizador nasce em `boot()`, e o `!` é o preço de ele não nascer aqui.
+ *
+ * Isto era `const renderer = await createRenderer(...)` no topo do módulo, e
+ * esse `await` de topo era A CAUSA de o jogo não abrir em produção — ver
+ * `boot()` no fim do arquivo. O laço só começa depois da atribuição, então a
+ * asserção é verdadeira por construção e não por otimismo.
+ */
+let renderer!: Renderer
 
 const clone = (s: Readonly<SimState>): SimState => structuredClone(s) as SimState
 let prev = clone(sim.state())
@@ -110,7 +191,7 @@ function frame(now: number): void {
   // sim — mudar a taxa do laço aqui quebraria o replay em silêncio.
   while (accumulator >= STEP) {
     prev = clone(sim.state())
-    const input = keyboard.frame()
+    const input = readInput()
     recorder.push(input)
     sim.step(input)
     accumulator -= STEP
@@ -124,8 +205,10 @@ function frame(now: number): void {
   hud.textContent =
     `run ${s.runIndex + 1} · seed ${seed} · tick ${s.tick} · fase ${s.phase} · ` +
     `${sim.snapshot().hash} · ${fpsLabel}\n` +
-    `WASD/setas movem · espaço = impulso · R recomeça · shift+F9 grava a run · ` +
-    `P troca a paleta (${variant}) · ?crowd=<n> muda a densidade das hemácias`
+    (touch
+      ? `arraste na esquerda pra mover · toque na direita = impulso`
+      : `WASD/setas movem · espaço = impulso · R recomeça · shift+F9 grava a run · ` +
+        `P troca a paleta (${variant}) · ?crowd=<n> muda a densidade das hemácias`)
 
   requestAnimationFrame(frame)
 }
@@ -147,4 +230,41 @@ window.addEventListener("keydown", (event) => {
   downloadReplay(replay)
 })
 
-requestAnimationFrame(frame)
+/**
+ * O boot é uma FUNÇÃO, e o módulo termina de avaliar sem esperar por ela.
+ *
+ * Isto não é estilo: é o conserto do bug que fez o jogo não abrir no Netlify,
+ * e o mecanismo merece ficar escrito porque o sintoma não denuncia a causa em
+ * lugar nenhum — tela preta, console limpo, zero erro, zero exceção. O jogo
+ * simplesmente parava de existir depois dos imports.
+ *
+ * A causa é `await` no TOPO do módulo de entrada, e só aparece no BUILD:
+ *
+ * 1. O Pixi carrega o ambiente do browser por `import()` dinâmico, lá dentro
+ *    de `renderer.init()` — `environment-browser/browserAll`.
+ * 2. No `vite dev` cada módulo é servido solto, e esse `import()` não passa
+ *    por aqui. Em produção o Rollup junta o código compartilhado do Pixi no
+ *    pedaço de ENTRADA, e o pedaço tardio passa a importar DE VOLTA da
+ *    entrada.
+ * 3. Um módulo com `await` de topo só conta como avaliado quando a promessa
+ *    resolve. A entrada esperava o Pixi; o Pixi esperava a entrada terminar de
+ *    avaliar. Impasse circular, sem erro nenhum — a especificação do ESM não
+ *    manda ninguém reclamar disso.
+ *
+ * Por isso a regra, que vale além deste arquivo: **`await` de topo não entra
+ * no módulo de entrada.** Trabalho assíncrono de partida mora numa função, e
+ * o módulo termina de avaliar na hora.
+ */
+async function boot(): Promise<void> {
+  renderer = await createRenderer(
+    mount,
+    tuning,
+    crowdParam === null ? undefined : Number(crowdParam),
+    touch,
+  )
+  // O canvas só existe depois do renderizador; ajustar antes não ajustava nada.
+  fitInteger()
+  requestAnimationFrame(frame)
+}
+
+void boot()

@@ -31,6 +31,22 @@ virou AVANÇAR. Proposta em aberto, do `DECISIONS.md` de 02/08: *"a fase seguint
 ajuda"* — o jogador atravessa a fase 1 sem ninguém explicar e vai para a 2 por ato próprio;
 "não" é largar dentro da fase 1 ou precisar que expliquem. **Não foi ratificada pelo H.**
 
+## Fora do tema, a pedido do H — o deploy e o iPad (05/08)
+
+Sessão pedida antes de retomar o relógio lento. Estado: **fechado, faltando a validação no
+aparelho de verdade.**
+
+O jogo não abria no Netlify por **`await` no topo do módulo de entrada** — impasse circular
+que só existe depois do empacotamento e cujo sintoma é tela preta com console limpo. Os 92
+testes, o `tsc`, o `npm run dev` e o `npm run shot` estavam todos verdes, porque nenhum
+deles abre o `dist`. Detalhe e regra em `DECISIONS.md`, 05/08.
+
+**Dívida que isto abriu, e que continua aberta:** as seis falhas de
+`tests/determinism.test.ts` são ANTERIORES a esta sessão e não foram tocadas — os baselines
+commitados não batem mais com o core atual. `HARNESS.md` §1 diz que determinismo quebrado é
+para parar e consertar primeiro. É a regravação dos replays que saiu da fila em 02/08, e ela
+volta como dívida no momento em que o log de decisão registra que o teste está vermelho.
+
 ## O ÚNICO tema aberto — a relação com o relógio lento
 
 O H cortou todo o resto para focar aqui: *"o que estamos fazendo agora define todo o futuro
@@ -141,7 +157,11 @@ espaço de índice. `volume.ts` e `rig.ts` são lembrete, não fila.
   do render. Assar a folha vermelha do jogador custa 192 quadros e não muda jogo nenhum.
 - **Arte desenhada à mão.** O pipeline em `sprites.ts` é o ponto de troca: a interface é
   uma matriz de índices de paleta por quadro.
-- **Mobile sem controle de toque.** O alvo inclui mobile; o slice só tem teclado.
+- ~~**Mobile sem controle de toque.**~~ **Fechado em 05/08.** Manche flutuante na metade
+  esquerda, impulso na direita, instruções trocadas por esquema de entrada, escala inteira
+  contada na grade física. Verificado em iPad deitado, iPad de pé e telefone emulados, e o
+  desktop está medido como inalterado. Falta a validação no aparelho de verdade — o H
+  valida no iPad dele.
 - **Áudio.** Nada ainda.
 - **Fase 2 do harness.** Gatilho em `HARNESS.md` §7: mesmo eixo subjetivo julgado mais de
   duas vezes por semana. `npm run shot` e `npm run rec` já cobrem parte do rig de captura.

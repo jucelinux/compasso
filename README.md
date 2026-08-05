@@ -37,6 +37,17 @@ variant (the **P** key cycles through them keeping the same seed).
 | **shift+F9** | dump the whole run |
 | **P** | next palette, same seed |
 
+On a **touch device** the left half of the screen is a floating stick — it appears where
+your thumb lands — and the right half is the impulse. The on-screen prompts change with it:
+"TOQUE PRA COMEÇAR" instead of "ESPAÇO PRA COMEÇAR". Detection is `(pointer: coarse)`;
+`?touch=1` and `?touch=0` force it either way.
+
+The stick is **digital**, quantized to the same 8 directions as the keyboard, and that is a
+decision rather than a shortcut: an analog stick would give continuous speed — which *is*
+the world clock here — but it would change the `InputFrame` contract and invalidate every
+recorded replay. As it stands, a replay of a touch is indistinguishable from a replay of a
+key.
+
 The impulse has a cooldown and **two verbs decided by context**: above the speed threshold
 it is reach, below it plants a healing focus that works without you (cap of 2). `R` is a
 separate key from `space` because the project's gate measures the intent to replay, and a
@@ -105,7 +116,24 @@ npm run shot [seed]                # stills of the current build, into shots/
 npm run palettes [seed]            # stills of every palette variant
 npm run rec [name] [seed]          # record a synthetic fixture of the current build
 npm run smoke                      # regenerate replays/smoke.json
+npm run deploy                     # does the PRODUCTION build actually open? (see below)
 ```
+
+`npm run deploy` builds `dist/`, serves it, opens it in a real browser and asks one
+question: did the game start? It exists because on 05/08 the build did **not** open on
+Netlify while every other instrument here said it was fine — 92 tests green, `tsc` green,
+`npm run dev` playable, `vite build` without a warning. The cause was a top-level `await` in
+the entry module, which deadlocks only after bundling, and whose symptom is a black screen
+with a clean console. Nothing that inspects source or dev mode can see it.
+
+`node src/harness/deploy.ts --verifica-o-instrumento` builds a decoy with the bug and
+requires the check to **reject** it. A verifier that has never failed is not a verifier.
+
+### Deploying
+
+`netlify.toml` is committed: build `npm run build`, publish `dist`, Node 22. Any static host
+works the same way — the one thing that must not happen is publishing the repository root,
+where `index.html` points at `/src/main.ts` and the browser gets raw TypeScript.
 
 `shots/` and the `f9-*.json` dumps at the root are gitignored: capture is a reading tool,
 not a project artifact. The fixtures that stay live in `replays/`.

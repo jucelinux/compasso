@@ -1,0 +1,28 @@
+# Netlify.
+#
+# Sem este arquivo o site subia como PASTA ESTÁTICA da raiz do repo: o
+# `index.html` da raiz aponta para `/src/main.ts`, o browser recebe TypeScript
+# cru com o tipo MIME errado, o módulo nem chega a avaliar e a tela fica preta.
+# Nada no console diz "faltou build" — diz erro de módulo, que parece bug de
+# jogo. É por isso que o publish é `dist` e o build é explícito aqui.
+
+[build]
+  command = "npm run build"
+  publish = "dist"
+
+[build.environment]
+  # Vite 7 exige Node ^20.19 || >=22.12. O padrão do Netlify varia com a idade
+  # do site, e um padrão antigo derruba o build com erro de engine.
+  NODE_VERSION = "22"
+
+# Os arquivos de `assets/` levam hash no nome — imutáveis por construção.
+[[headers]]
+  for = "/assets/*"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"
+
+# O HTML, não. Ele é quem aponta para o bundle novo depois de cada deploy.
+[[headers]]
+  for = "/index.html"
+  [headers.values]
+    Cache-Control = "public, max-age=0, must-revalidate"

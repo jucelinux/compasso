@@ -160,11 +160,36 @@ class Pool {
   }
 }
 
+/**
+ * As linhas que ENSINAM O CONTROLE, por esquema de entrada.
+ *
+ * Existe porque "ESPAÇO PRA COMEÇAR" num iPad não é texto ruim, é texto FALSO:
+ * manda apertar uma tecla que não existe naquele aparelho. E a lição de 02/08
+ * vale aqui — foi exatamente esta linha que o H reclamou de não ver. Uma
+ * instrução que não pode ser obedecida é pior do que uma que mal se lê.
+ */
+const PROMPTS = {
+  teclado: {
+    comecar: "ESPAÇO PRA COMEÇAR",
+    escolher: "SETAS ESCOLHEM · ESPAÇO CONFIRMA",
+    proxima: "ESPAÇO PRA PRÓXIMA DOENÇA",
+    outra: "R OU ENTER PRA OUTRA",
+  },
+  toque: {
+    comecar: "TOQUE PRA COMEÇAR",
+    escolher: "ARRASTE ESCOLHE · TOQUE CONFIRMA",
+    proxima: "TOQUE PRA PRÓXIMA DOENÇA",
+    outra: "TOQUE PRA OUTRA",
+  },
+} as const
+
 export async function createRenderer(
   mount: HTMLElement,
   tuning: Tuning,
   crowdArea?: number,
+  touch = false,
 ): Promise<Renderer> {
+  const prompt = touch ? PROMPTS.toque : PROMPTS.teclado
   const app = new Application()
   await app.init({
     width: tuning.arena.width,
@@ -1033,7 +1058,7 @@ export async function createRenderer(
     cardLines[1]!.set((kind?.real ?? spec.disease).toUpperCase(), WHITE, cx, y0 + 136, 2, true)
     cardLines[2]!.set((kind?.form ?? "").toUpperCase(), GLD2, cx, y0 + 162, 1, true)
     // Sem estratégia nesta tela. Só a tecla que segue.
-    cardLines[3]!.set(cur.cardLock > 0 ? "" : "ESPAÇO PRA COMEÇAR", WHITE, cx, y0 + 186, 1, true)
+    cardLines[3]!.set(cur.cardLock > 0 ? "" : prompt.comecar, WHITE, cx, y0 + 186, 1, true)
   }
 
   /**
@@ -1092,7 +1117,7 @@ export async function createRenderer(
     cardLines[0]!.set(`ONDA ${cur.round} CONTIDA`, GLD2, cx, cy - 96, 2, true)
     cardLines[1]!.set("ESCOLHA O QUE LEVA DAQUI", DIM0, cx, cy - 66, 1, true)
     cardLines[2]!.hide()
-    cardLines[3]!.set(pronto ? "SETAS ESCOLHEM · ESPAÇO CONFIRMA" : "", WHITE, cx, cy + 116, 1, true)
+    cardLines[3]!.set(pronto ? prompt.escolher : "", WHITE, cx, cy + 116, 1, true)
 
     /*
      * TRÊS PAINÉIS, mesmo tamanho.
@@ -1192,7 +1217,7 @@ export async function createRenderer(
     const build = cur.buildOrder.map((p) => POWERS[p]!.name).join(" + ")
     cardLines[3]!.set(build.length > 0 ? build : "SEM PODERES", DIM1, cx, y0 + 92, 1, true)
     cardPicks[0]!.set(
-      cur.cardLock > 0 ? "" : "ESPAÇO PRA PRÓXIMA DOENÇA",
+      cur.cardLock > 0 ? "" : prompt.proxima,
       WHITE,
       cx,
       y0 + 122,
@@ -1256,7 +1281,7 @@ export async function createRenderer(
       1,
       true,
     )
-    deadLines[3]!.set("R OU ENTER PRA OUTRA", DIM0, cx, cy + 34, 1, true)
+    deadLines[3]!.set(prompt.outra, DIM0, cx, cy + 34, 1, true)
   }
 
   return {

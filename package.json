@@ -16,7 +16,8 @@
     "shot": "node src/harness/shot.ts",
     "olho": "node src/harness/olho.ts",
     "palettes": "node src/harness/palettes.ts",
-    "rec": "node src/harness/rec.ts"
+    "rec": "node src/harness/rec.ts",
+    "deploy": "node src/harness/deploy.ts"
   },
   "dependencies": {
     "pixi.js": "^8.6.6"

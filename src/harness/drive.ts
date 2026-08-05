@@ -131,6 +131,11 @@ export async function drive(
           if (c === null) return
           c.style.width = `${640 * s}px`
           c.style.height = `${360 * s}px`
+          // O canvas passou a ser posicionado à mão em 05/08 (escala inteira
+          // na grade física). Sem zerar a posição, a captura em escala maior
+          // sai cortada pela borda da janela.
+          c.style.left = "0px"
+          c.style.top = "0px"
         }, scale)
         await page.locator("#app canvas").screenshot({ path })
       },
