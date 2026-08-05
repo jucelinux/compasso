@@ -208,6 +208,11 @@ espaço de índice. `volume.ts` e `rig.ts` são lembrete, não fila.
   do render. Assar a folha vermelha do jogador custa 192 quadros e não muda jogo nenhum.
 - **Arte desenhada à mão.** O pipeline em `sprites.ts` é o ponto de troca: a interface é
   uma matriz de índices de paleta por quadro.
+- **iPhone: a tela do Safari não some.** O botão de tela cheia é detectado por recurso e o
+  iPhone **não implementa a Fullscreen API** (o iPad implementa), então lá ele nem aparece. O
+  caminho que funciona é **Adicionar à Tela de Início** — o `apple-mobile-web-app-capable` já
+  está no `index.html`, e em modo standalone a barra some e a altura útil volta a 390, o que
+  sobe a escala de 2,83 para 3,25. Não há como forçar isso por código; é gesto do usuário.
 - ~~**Mobile sem controle de toque.**~~ **Fechado em 05/08.** Manche flutuante na metade
   esquerda, impulso na direita, instruções trocadas por esquema de entrada, escala inteira
   contada na grade física. Verificado em iPad deitado, iPad de pé e telefone emulados, e o

@@ -82,6 +82,18 @@
         touch-action: none;
         z-index: 2;
       }
+      /*
+       * No telefone o HUD some por padrão, e isso virou NECESSÁRIO quando a
+       * tela passou a ser preenchida: sem tarja preta em cima, a linha de
+       * diagnóstico é desenhada POR CIMA da arena e colide com o "FASE 1 ·
+       * INFECÇÃO 1" do próprio jogo — dois textos no mesmo lugar. Ele é
+       * instrumentação, não interface; `?hud=1` traz de volta.
+       *
+       * `visibility` e não `display: none`: o rig lê `#hud` por `textContent`
+       * para saber a fase e o hash, e um elemento removido do layout continua
+       * legível — mas manter a caixa evita depender disso.
+       */
+      html.toque.sem-hud #hud { visibility: hidden; }
       /* O HUD sobe para o topo: embaixo ele fica debaixo do polegar. */
       html.toque #hud {
         bottom: auto;

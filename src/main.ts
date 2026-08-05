@@ -62,6 +62,8 @@ const touchLayer = document.getElementById("toque")!
 const fullscreenButton = document.getElementById("tela-cheia")!
 if (touch) {
   document.documentElement.classList.add("toque")
+  // Instrumentação não é interface. No telefone ela some, e `?hud=1` traz.
+  if (!params.has("hud")) document.documentElement.classList.add("sem-hud")
   if (fullscreenSupported()) document.documentElement.classList.add("tem-tela-cheia")
   fullscreenButton.addEventListener("click", toggleFullscreen)
 }
@@ -117,25 +119,68 @@ function readInput(): InputFrame {
  * A POSIÇÃO também é travada na grade física. `place-items: center` podia
  * deixar o canvas meio pixel de dispositivo fora do lugar — e meio pixel fora
  * do lugar num upscale de vizinho-próximo é uma coluna inteira duplicada.
+ *
+ * ---
+ *
+ * **O DEGRAU, e por que ele quebra o telefone.** *(05/08, segunda passada)*
+ *
+ * Num `dpr` 3 as escalas inteiras disponíveis são 1, 2, 3 — em fração de tela,
+ * degraus de 33%. Cair um degrau custa um TERÇO do tamanho do jogo, e o iPhone
+ * cai justamente por causa da barra do Safari: em paisagem ela come ~50px de
+ * CSS, a altura útil vai de 390 para ~340, e `340·3/360 = 2,83` desce para 2.
+ * Canvas de 427x240 numa tela de 844 de largura. Medido, não suposto.
+ *
+ * Então a regra de 01/08 ganha o qualificador que ela sempre teve implícito:
+ * inteiro **na grade que o olho resolve**. Ela nasceu num monitor de `dpr` 1,
+ * onde um pixel de dispositivo é ~0,25mm e a irregularidade do vizinho-próximo
+ * em escala fracionária é visível como cintilação. Num telefone de ~460ppi e
+ * `dpr` 3, o resíduo de uma escala fracionária é 1/3 de pixel de jogo ≈
+ * 0,055mm — abaixo do que o olho separa à distância de uso.
+ *
+ * Isto NÃO é licença para escala fracionária em qualquer lugar. Em `dpr` 1 o
+ * comportamento é idêntico ao de antes, byte por byte, porque lá a razão
+ * original continua valendo inteira.
+ *
+ * `?fit=inteiro` força o comportamento antigo, e existe para ele poder comparar
+ * os dois no aparelho de verdade — que é o único lugar onde este argumento
+ * pode ser conferido de fato.
  */
+
+/** Acima de quanto desperdício vale trocar o inteiro pelo exato. */
+const DESPERDICIO_TOLERADO = 0.08
+/** `?fit=inteiro` volta ao comportamento de antes, para comparar no aparelho. */
+const FORCA_INTEIRO = params.get("fit") === "inteiro"
+
 function fitInteger(): void {
   const canvas = mount.querySelector("canvas")
   if (canvas === null) return
   const dpr = window.devicePixelRatio || 1
   const W = tuning.arena.width
   const H = tuning.arena.height
-  const device = Math.max(
-    1,
-    Math.floor(Math.min((window.innerWidth * dpr) / W, (window.innerHeight * dpr) / H)),
-  )
+  /*
+   * No iOS o `visualViewport` é o que sobra DEPOIS da barra do Safari e do
+   * teclado; `innerHeight` mente durante a transição. É a medida certa de
+   * "quanto de tela eu realmente tenho".
+   */
+  const vv = window.visualViewport
+  const vw = vv?.width ?? window.innerWidth
+  const vh = vv?.height ?? window.innerHeight
+
+  const exato = Math.min((vw * dpr) / W, (vh * dpr) / H)
+  const inteiro = Math.max(1, Math.floor(exato))
+  // `dpr` 1 nunca entra aqui: no monitor a razão de 01/08 vale inteira.
+  const cabeMaisFracionado =
+    !FORCA_INTEIRO && dpr >= 2 && exato > 1 && (exato - inteiro) / exato > DESPERDICIO_TOLERADO
+  const device = cabeMaisFracionado ? exato : inteiro
+
   const scale = device / dpr
   const cssW = W * scale
   const cssH = H * scale
   const snap = (v: number): number => Math.round(v * dpr) / dpr
   canvas.style.width = `${cssW}px`
   canvas.style.height = `${cssH}px`
-  canvas.style.left = `${snap((window.innerWidth - cssW) / 2)}px`
-  canvas.style.top = `${snap((window.innerHeight - cssH) / 2)}px`
+  canvas.style.left = `${snap((vw - cssW) / 2)}px`
+  canvas.style.top = `${snap((vh - cssH) / 2)}px`
 }
 window.addEventListener("resize", fitInteger)
 /*

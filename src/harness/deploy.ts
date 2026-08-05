@@ -120,15 +120,29 @@ async function abre(outDir: string, pagina = "/"): Promise<Veredito> {
       }
     }
 
-    // Não basta existir: tem que estar dimensionado, e em escala INTEIRA.
+    /*
+     * Não basta existir: tem que estar dimensionado, e em escala inteira —
+     * mas a exigência vale ONDE ela é verdade, e isso mudou em 05/08.
+     *
+     * A escala fracionária passou a ser permitida em `dpr >= 2`, onde o
+     * resíduo é menor que o pixel que o olho separa; em `dpr` 1 a regra de
+     * 01/08 continua inteira. Este verificador roda em `dpr` 1, então ele
+     * continua exigindo inteiro — e a asserção agora diz de qual regra está
+     * falando, senão o próximo a lê como "escala inteira sempre" e a rodada
+     * do telefone volta atrás sem ninguém decidir isso.
+     */
     const medida = await page.evaluate(() => {
       const c = document.querySelector("#app canvas") as HTMLCanvasElement
       const r = c.getBoundingClientRect()
-      return { escala: (r.width * window.devicePixelRatio) / c.width, largura: r.width }
+      return {
+        escala: (r.width * window.devicePixelRatio) / c.width,
+        largura: r.width,
+        dpr: window.devicePixelRatio,
+      }
     })
     if (medida.largura === 0) return { ok: false, motivo: "o canvas apareceu com largura zero" }
-    if (!Number.isInteger(medida.escala)) {
-      return { ok: false, motivo: `escala física fracionária: ${medida.escala}` }
+    if (medida.dpr === 1 && !Number.isInteger(medida.escala)) {
+      return { ok: false, motivo: `em dpr 1 a escala tem que ser inteira, e veio ${medida.escala}` }
     }
 
     // O jogo tem que ANDAR, não só existir: um tick parado é tela congelada.
