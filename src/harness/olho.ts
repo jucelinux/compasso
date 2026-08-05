@@ -6,6 +6,7 @@ import {
   bloodCell,
   CELL_LEVELS,
   colonyTile,
+  necroticTile,
   dropSheet,
   macrophageSheet,
   organSheet,
@@ -232,6 +233,21 @@ const pecas: Peca[] = [
         const s = crowdShape(v)
         return bloodCell(s.r, s.squash, s.tilt, lv)
       }),
+    })),
+  },
+  {
+    nome: "necrose",
+    nota: "a CICATRIZ: sem colônia, porque tecido morto não pare — ver `necroticTile`",
+    linhas: Array.from({ length: TISSUE_LEVELS }, (_, lv) => ({
+      rotulo: `nível ${lv}`,
+      quadros: Array.from({ length: TISSUE_VARIANTS }, (_, v) =>
+        necroticTile(
+          Math.ceil(tuning.arena.width / tuning.field.cols),
+          Math.ceil(tuning.arena.height / tuning.field.rows),
+          lv,
+          v,
+        ),
+      ),
     })),
   },
   {

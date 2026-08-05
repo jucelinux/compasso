@@ -4,6 +4,11 @@ import {
   crowdAt,
   fieldSpec,
   healAround,
+  healNecroseAround,
+  applyNecroseFloor,
+  liveInfection,
+  necroseStep,
+  totalNecrose,
   healthiestTile,
   frontierTile,
   infectAt,
@@ -127,7 +132,10 @@ export function createSim(seed: number, tuning: Tuning): Sim {
     },
     enemies: [],
     field: makeField(FIELD),
+    necrose: makeField(FIELD),
     infection: 0,
+    necrosed: 0,
+    necroseTimer: 0,
     spreadTimer: 0,
     infectAcc: 0,
     healAcc: 0,
@@ -241,14 +249,23 @@ export function createSim(seed: number, tuning: Tuning): Sim {
    * tensão, porque a mesma alavanca acelera os dois lados.
    */
   const spawnFromTissue = (): boolean => {
+    /*
+     * TECIDO MORTO NÃO PARE. Só a infecção VIVA — `field` menos a cicatriz —
+     * conta para parir patógeno.
+     *
+     * Sem esta linha o ratchet vira espiral: a cicatriz é permanente, então
+     * ela seria criadouro eterno e nenhuma fase fecharia. Com ela, deixar uma
+     * região cicatrizar PARA a reprodução ali, ao preço de perder o chão. Isso
+     * não é atenuação da punição — é a decisão que a rodada existe para criar.
+     */
     let candidatos = 0
     for (let i = 0; i < s.field.length; i++) {
-      if (s.field[i]! >= tuning.field.spawnThreshold) candidatos++
+      if (liveInfection(s.field, s.necrose, i) >= tuning.field.spawnThreshold) candidatos++
     }
     if (candidatos === 0) return false
     let pick = rng.nextInt(0, candidatos)
     for (let i = 0; i < s.field.length; i++) {
-      if (s.field[i]! < tuning.field.spawnThreshold) continue
+      if (liveInfection(s.field, s.necrose, i) < tuning.field.spawnThreshold) continue
       if (pick-- > 0) continue
       pushEnemy(rollKind(), tileCenterX(FIELD, i), tileCenterY(FIELD, i))
       return true
@@ -259,6 +276,17 @@ export function createSim(seed: number, tuning: Tuning): Sim {
   /** Semeia os focos iniciais da doença, longe do centro onde a célula nasce. */
   const seedInfection = (): void => {
     s.field.fill(0)
+    /*
+     * A cicatriz zera com a onda, e isso é decisão de desenho.
+     *
+     * A necrose é o ratchet DENTRO da fase — é ela que transforma o ponto fixo
+     * em ladeira. Persistir entre ondas a tornaria dívida composta, e como o
+     * piso conta para a contenção (`winFraction`), bastariam duas ondas ruins
+     * para a fase virar matematicamente inatingível. Ratchet que não pode ser
+     * pago não é tensão, é sentença.
+     */
+    s.necrose.fill(0)
+    s.necrosed = 0
     // A doença escala por fase: mais focos iniciais e fonte mais forte. Sem
     // isto a fase 20 é idêntica à fase 1, que é a queixa de 01/08 com outra
     // roupa ("a quantidade de kills era a mesma de acordo com o nível").
@@ -333,8 +361,11 @@ export function createSim(seed: number, tuning: Tuning): Sim {
     s.score = 0
     s.bestMult = 1
     s.field.fill(0)
+    s.necrose.fill(0)
     s.infection = 0
+    s.necrosed = 0
     s.spreadTimer = 0
+    s.necroseTimer = 0
     s.infectAcc = 0
     s.healAcc = 0
     s.pulses = []
@@ -907,6 +938,26 @@ export function createSim(seed: number, tuning: Tuning): Sim {
     }
 
     /*
+     * CICATRIZAÇÃO, com relógio PRÓPRIO — e este erro merece ficar escrito.
+     *
+     * A primeira versão pendurou a necrose no passo de alastramento, por ser a
+     * mesma constante. Mas o alastramento é travado por `tissueSpread`, e a
+     * fase 1 — E. coli — tem `tissueSpread: 0.0` de propósito: a E. coli
+     * ENGROSSA o que já tomou em vez de avançar. Ou seja, eu desliguei a
+     * cicatriz exatamente na fase cuja doença mais cicatriza, e a medição
+     * saiu com 0% em todas as seeds e em todas as políticas.
+     *
+     * Que tenha saído ZERO redondo é sorte: um número plausível teria virado
+     * balanceamento. A cadência continua sendo `spreadSeconds`, que é o que
+     * mantém o número ancorado; o que sai é a trava que não era dela.
+     */
+    s.necroseTimer += passo
+    if (s.necroseTimer >= tuning.field.spreadSeconds) {
+      s.necroseTimer -= tuning.field.spreadSeconds
+      necroseStep(s.field, s.necrose, tuning.field.necroseAmount, MAXINF)
+    }
+
+    /*
      * FISSÃO BINÁRIA — a colônia DOBRA sozinha, no relógio do mundo.
      *
      * Não confundir com o `splits` da espécie, que divide quando ela MORRE.
@@ -964,7 +1015,25 @@ export function createSim(seed: number, tuning: Tuning): Sim {
         s.pulseAcc -= n
         for (const pu of s.pulses) {
           healAround(s.field, FIELD, pu.x, pu.y, tuning.dash.auraFocusRadius, n)
+          /*
+           * O foco é PRESENÇA PLANTADA, então vale a mesma regra: ele morde a
+           * cicatriz na mesma fração. É isto — e não o número dele — que
+           * responde ao "foco irrelevante" medido em 02/08: com necrose,
+           * plantar é a única forma de trabalhar num lugar onde você não está,
+           * e o teto de 2 vira triagem. O `auraFocusHeal` continua 9.0 de
+           * propósito: o H disse que traria a ideia dele para esse número, e
+           * afinar antes de ouvi-lo seria decidir no lugar dele.
+           */
+          healNecroseAround(
+            s.necrose,
+            FIELD,
+            pu.x,
+            pu.y,
+            tuning.dash.auraFocusRadius,
+            Math.floor(n * tuning.field.necroseHealFraction),
+          )
         }
+        applyNecroseFloor(s.field, s.necrose)
         s.infection = totalInfection(s.field)
       }
       const vivos: Pulse[] = []
@@ -982,9 +1051,28 @@ export function createSim(seed: number, tuning: Tuning): Sim {
       const n = Math.floor(s.healAcc)
       s.healAcc -= n
       healAround(s.field, FIELD, p.x, p.y, tuning.field.healRadius, n)
+      // A CICATRIZ cede ao mesmo gesto, mais devagar. É o único trabalho do
+      // jogo que a velocidade não faz — e por isso é o que faz parar ter razão
+      // de existir, que a medição de 05/08 mostrou que não tinha.
+      healNecroseAround(
+        s.necrose,
+        FIELD,
+        p.x,
+        p.y,
+        tuning.field.healRadius,
+        Math.floor(n * tuning.field.necroseHealFraction),
+      )
     }
 
+    /*
+     * O PISO, aplicado depois de TUDO que cura neste tick — fagocitose, foco,
+     * aura, plaqueta, cura do jogador. Num lugar só de propósito: espalhar a
+     * regra pelos cinco pontos que curam é exatamente como um deles ficaria de
+     * fora, e o defeito apareceria como "a cicatriz às vezes some".
+     */
+    applyNecroseFloor(s.field, s.necrose)
     s.infection = totalInfection(s.field)
+    s.necrosed = totalNecrose(s.necrose)
 
     // --- resolução: fagocitose por velocidade
     let hit = false
@@ -1294,7 +1382,9 @@ export function createSim(seed: number, tuning: Tuning): Sim {
       .u32(s.cardLock).u32(s.auraTicks).f64(s.instantAcc).u32(s.pick).u32(s.phaseIndex).u32(s.round)
       .f64(s.fissionAcc)
       .u32(s.infection)
+      .u32(s.necrosed)
       .f64(s.spreadTimer)
+      .f64(s.necroseTimer)
       .f64(s.infectAcc)
       .f64(s.healAcc)
       .bool(s.lostByTissue)
@@ -1316,6 +1406,7 @@ export function createSim(seed: number, tuning: Tuning): Sim {
       for (let i = 0; i < e.kind.length; i++) packer.u8(e.kind.charCodeAt(i))
     }
     for (let i = 0; i < s.field.length; i++) packer.u8(s.field[i]!)
+    for (let i = 0; i < s.necrose.length; i++) packer.u8(s.necrose[i]!)
     for (const d of s.drops) packer.u32(d.id).u32(d.power).f64(d.x).f64(d.y).u32(d.life)
     for (const n of s.active) packer.u32(n)
     for (const n of s.owned) packer.u32(n)

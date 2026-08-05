@@ -22,11 +22,24 @@ two nulls, both from someone stopping for an outside reason rather than deciding
 play. Current count is kept at the top of `BACKLOG.md`; update it there the same turn a
 reading comes in.
 
-**Under revision as of 02/08.** H's call: the endless-run format is out, phases are in, and
-second-run rate is a format-bound metric that goes out with it. A replacement is owed, and
-it must be able to KILL — a project that swaps its death metric for one that cannot fail
-has stopped being able to fail. The standing proposal is *"the next phase, unaided"*; it is
-NOT ratified. Nothing is settled here until H says so.
+**RATIFICADA em 05/08 — a fase seguinte, sem ajuda.** *(as of 05/08)*
+
+A métrica ficou "em revisão" de 02/08 a 05/08 esperando ratificação, e nesse intervalo o
+portão não podia registrar leitura nenhuma: o formato tinha mudado e a régua não. Em 05/08
+o H passou a direção para o modelo — *"assuma o controle, não consigo lidar com as decisões
+acumuladas"* — e esta é uma das decisões acumuladas. Chamada minha, sob delegação explícita,
+e o H reverte com uma linha.
+
+**A régua:** o jogador atravessa a fase 1 sem ninguém explicar e entra na fase 2 por ato
+próprio. **"Não"** é largar dentro da fase 1, ou precisar que expliquem para seguir. Nula
+continua sendo parada por motivo externo, pelo mesmo critério de 02/08.
+
+**Ela PODE matar**, que é a condição inegociável: três "não" seguidos derrubam a tese. Um
+projeto que troca a métrica de morte por uma que não falha parou de poder falhar.
+
+**O contador ZERA com a ratificação.** As quatro leituras de 02/08 mediam a régua velha
+contra um formato que já tinha mudado; carregá-las para a nova seria somar medições de
+coisas diferentes. Partindo de **0 strikes de 3**, sem nenhuma leitura ainda.
 
 ---
 

@@ -57,7 +57,43 @@ conserto não foi só trocar cinco números:
 - a **âncora ganhou teste próprio**: mexer em `tuning.json` derruba o teste na hora, com o
   remédio na mensagem. Verificado mexendo em `time.creep`.
 
-## O ÚNICO tema aberto — a relação com o relógio lento
+## Rodada de DIREÇÃO, 05/08 — o H passou o volante
+
+Ele pediu: *"assuma o controle da direção, resolva os itens acumulados"*. O que segue são
+calls minhas. Todas reversíveis; a principal, num número.
+
+**O diagnóstico é medido, não opinado** (`npm run pace`, 05/08), e refuta a hipótese com
+que eu abri a sessão — eu ia argumentar que parar era dominante, e a `curandeira` morre 5/5:
+
+| achado | evidência |
+|---|---|
+| o campo tinha DOIS atratores e a **seed** escolhia qual | mesma política: seed 7 fecha 3 fases a 3%; seed 99 morre a 100% |
+| o patógeno **não é ameaça** | `perigo 0.0s` em 10 runs móveis; 0 mortes por toque em 15 runs |
+| o dilema central **não existia** | matar limpava o campo, curar não. Parar nunca era certo |
+
+O terceiro explica os outros dois e explica três sessões de tuning que não pegaram: enquanto
+tudo que a cura faz o abate também fizer, e mais rápido, **nenhum valor** de `auraFocusHeal`
+cria dilema. Era estrutura, não número.
+
+**A resposta: NECROSE**, o ratchet. Quatro regras em `src/sim/field.ts`. A terceira cria o
+dilema (só a presença desfaz cicatriz); a quarta impede que ele vire espiral (tecido morto
+não pare) e transforma "deixar cicatrizar" em triagem legítima — pagar o chão para parar a
+reprodução.
+
+**Resultado medido:** a política que ALTERNA passa a ganhar. Empatava com a agressiva sem
+necrose (1,8 vs 1,6 fases), abre vantagem com ela (**2,4 vs 1,6**). Run média 305s → 164s,
+alvo ~120s. Caso nulo (`necroseAmount: 0`) reproduz o baseline anterior seed por seed.
+
+### O que segue aberto DESTA rodada
+
+- **Nada disto foi jogado por humano.** O bot mede estrutura, não sensação. É a leitura que
+  falta, e é a única que decide se a rodada valeu.
+- **`perigo 0.0s` continua.** Não toquei: é outro eixo, e §3.1 diz um eixo por rodada. Mas é
+  a maior superfície não usada do jogo — seis doenças sem consequência de risco — e é a
+  minha recomendação para a rodada seguinte.
+- **`auraFocusHeal` continua 9.0**, de propósito. O H disse que traria a ideia dele.
+
+## Tema anterior, agora respondido — a relação com o relógio lento
 
 O H cortou todo o resto para focar aqui: *"o que estamos fazendo agora define todo o futuro
 desse game"*. Memória imunológica, cor de doença na colônia, dinâmica das outras quatro
@@ -82,9 +118,14 @@ Medido no replay dele, com `scratchpad`/instrumentação do `npm run gate`:
 
 Não é que ele não percebeu: **não havia o que perceber.** `auraFocusHeal` foi escolhido
 como `9.0` sem âncora nenhuma — o mesmo erro de granularidade que trocou `sourceRate` por
-`poison` horas antes e derrubou a pressão da doença em 4x. **Proposta: ancorar numa fração
-do `healRate` do jogador (245), não em valor solto.** Ele tem uma ideia própria e vai
-trazer; não afinar antes de ouvi-la.
+`poison` horas antes e derrubou a pressão da doença em 4x.
+
+**Respondido em 05/08, e não por número.** A medição mostrou que o problema era anterior ao
+valor: o foco era irrelevante porque a CURA era irrelevante — matar fazia tudo que curar
+fazia, mais rápido. Com a necrose o foco passa a ser presença plantada, a única forma de
+trabalhar num lugar onde você não está, e o teto de 2 vira triagem. **`auraFocusHeal`
+continua 9.0**: o H disse que traria a ideia dele para esse número, e afiná-lo agora seria
+decidir no lugar dele.
 
 ### 2. O mesmo botão faz duas coisas e nada na tela diz qual aconteceu
 
@@ -135,14 +176,14 @@ espaço de índice. `volume.ts` e `rig.ts` são lembrete, não fila.
 
 ## Dívida técnica
 
-- **6 testes de determinismo vermelhos.** As fixtures foram gravadas antes do card e não
-  jogam mais: o input delas nunca dispensa a apresentação, então elas não jogam em vez de
-  jogarem diferente. Trocar o hash esconderia isso. Os replays humanos de 02/08 continuam
-  válidos contra o build `73f423d`, que é por isso que carregam gitSha. Regravar quando a
-  mecânica do relógio lento assentar.
+- ~~**6 testes de determinismo vermelhos.**~~ Fechado em 05/08. Este item contradizia, no
+  MESMO arquivo, a seção que já dizia "99 testes verdes" — defeito de `TASTE-LOOP.md` §3b.4,
+  e do tipo mais caro: prosa sobre restrição morta soa estranha, número velho lê bem.
 - **O bot não usa a aura.** Ele nunca aperta o impulso parado, então `npm run pace` não
-  mede nada do que foi construído no fim de 02/08. Os 274/305/208s de lá descrevem um jogo
-  sem foco plantado.
+  mede nada do foco plantado. Segue aberto e ficou MAIS caro em 05/08: com a necrose, o
+  foco passou a ser a única forma de trabalhar onde você não está, e é justamente isso que
+  o bot não sabe fazer. A política `triagem` mede o gesto de parar, não o de plantar.
+  Reproduzir tudo com `npm run pace` (05/08).
 
 ## Aberto com o humano
 

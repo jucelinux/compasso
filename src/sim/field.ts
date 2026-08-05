@@ -82,6 +82,116 @@ export function crowdAt(
   return 1 - (sum < 0 ? 0 : sum > 1 ? 1 : sum)
 }
 
+/**
+ * NECROSE — o tecido que morreu de vez.
+ *
+ * Entrou em 05/08 e é a resposta a uma medição, não a uma intuição. O bot
+ * mostrou que o campo tinha DOIS atratores e que a seed escolhia qual: com a
+ * mesma política, a seed 7 fechava três fases a 3% de infecção e a seed 99
+ * morria a 100%. Nenhuma força puxava de um para o outro, então a curva de
+ * tensão era duas retas, não uma curva.
+ *
+ * A necrose é o RATCHET que faltava. Três regras, e nenhuma delas é número
+ * novo solto:
+ *
+ * 1. **Tile no talo cicatriza.** Fica em `maxInfection` tempo demais e vira
+ *    necrose, na mesma taxa com que a doença toma o vizinho (`spreadAmount`
+ *    por `spreadSeconds`). A doença cicatriza o que já tomou no mesmo ritmo em
+ *    que avança — não é analogia, é a mesma constante.
+ * 2. **Necrose é PISO da infecção, e fagocitose não encosta nela.** Abater
+ *    limpa infecção viva; cicatriz não. É isto que dá à presença um trabalho
+ *    que a velocidade não faz — o dilema que o projeto vinha desenhando desde
+ *    01/08 e que a medição de 05/08 mostrou que não existia no jogo.
+ * 3. **Tecido morto não pare.** Só infecção VIVA (`field - necrose`) cria
+ *    patógeno. Sem isto a cicatriz vira criadouro eterno e o ratchet vira
+ *    espiral da morte; com isto, deixar uma região cicatrizar é uma forma
+ *    legítima de parar a reprodução — pagando o chão para sempre. É triagem, e
+ *    é a decisão recorrente que o formato pedia.
+ */
+
+/** Quanto de infecção do tile é VIVA — a única que produz patógeno. */
+export function liveInfection(field: Uint8Array, necrose: Uint8Array, index: number): number {
+  const v = field[index]! - necrose[index]!
+  return v < 0 ? 0 : v
+}
+
+/**
+ * Um passo de cicatrização. Só morde tile no talo; o resto não cicatriza.
+ *
+ * `max` é o teto do tile. A necrose nunca passa dele, senão o piso subiria
+ * acima do próprio valor que ele limita.
+ */
+export function necroseStep(
+  field: Uint8Array,
+  necrose: Uint8Array,
+  amount: number,
+  max: number,
+): void {
+  if (amount <= 0) return
+  for (let i = 0; i < field.length; i++) {
+    if (field[i]! < max) continue
+    const v = necrose[i]! + amount
+    necrose[i] = v > max ? max : v
+  }
+}
+
+/**
+ * O PISO. Chamado depois de tudo que cura, e é o que torna a cicatriz cicatriz.
+ *
+ * Fica numa função só, e é chamado num lugar só, porque espalhar `Math.max`
+ * pelos quatro pontos que curam é como um deles seria esquecido.
+ */
+export function applyNecroseFloor(field: Uint8Array, necrose: Uint8Array): void {
+  for (let i = 0; i < field.length; i++) {
+    if (field[i]! < necrose[i]!) field[i] = necrose[i]!
+  }
+}
+
+/**
+ * Cura de necrose em volta de um ponto — a mesma geometria de `healAround`.
+ *
+ * Reaproveita a forma de propósito: a cicatriz cede ao MESMO gesto que a
+ * infecção, só que mais devagar. Duas geometrias diferentes fariam o jogador
+ * ter que aprender duas coisas para uma decisão só.
+ */
+export function healNecroseAround(
+  necrose: Uint8Array,
+  spec: FieldSpec,
+  x: number,
+  y: number,
+  radius: number,
+  amount: number,
+): number {
+  if (amount <= 0) return 0
+  const cx = Math.floor(x / spec.tileW)
+  const cy = Math.floor(y / spec.tileH)
+  let curado = 0
+  for (let ty = cy - radius; ty <= cy + radius; ty++) {
+    if (ty < 0 || ty >= spec.rows) continue
+    for (let tx = cx - radius; tx <= cx + radius; tx++) {
+      if (tx < 0 || tx >= spec.cols) continue
+      const dist = Math.abs(tx - cx) + Math.abs(ty - cy)
+      if (dist > radius) continue
+      const dose =
+        dist === 0 ? amount : Math.floor((amount * (radius - dist + 1)) / (radius + 1))
+      if (dose <= 0) continue
+      const i = ty * spec.cols + tx
+      const before = necrose[i]!
+      const after = before - dose
+      necrose[i] = after < 0 ? 0 : after
+      curado += before - necrose[i]!
+    }
+  }
+  return curado
+}
+
+/** Quanto do campo já é cicatriz. Serve ao HUD e às métricas do bot. */
+export function totalNecrose(necrose: Uint8Array): number {
+  let sum = 0
+  for (let i = 0; i < necrose.length; i++) sum += necrose[i]!
+  return sum
+}
+
 export function tileCenterX(spec: FieldSpec, index: number): number {
   return (index % spec.cols) * spec.tileW + spec.tileW / 2
 }

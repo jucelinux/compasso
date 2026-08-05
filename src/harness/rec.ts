@@ -24,12 +24,27 @@ const seed = Number(process.argv[3] ?? 4242)
 const d = await drive(seed)
 try {
   // Anda em oito direções para exercitar as oito folhas de sprite e o parallax.
+  /*
+   * O passeio, com PARADAS — e as paradas entraram em 05/08 por necessidade,
+   * não por capricho.
+   *
+   * Com a necrose, tecido cicatrizado deixa de parir patógeno. O passeio antigo
+   * nunca parava, então ele varria a arena, deixava tudo saturar e cicatrizar,
+   * a reprodução morria junto e a run virava imortal: o gravador estourou os
+   * 240 passos sem morrer em duas seeds diferentes.
+   *
+   * Parar não é só o conserto — é o que faz a fixture EXERCITAR o core. Uma
+   * âncora do jogo cujo tema é "matar exige velocidade, curar exige presença"
+   * que só contivesse velocidade ancoraria metade do jogo.
+   */
   const passo: ReadonlyArray<[string[], number]> = [
     [["ArrowRight"], 1400],
     [["ArrowRight", "ArrowDown"], 900],
+    [[], 1500],
     [["ArrowDown"], 1100],
     [["ArrowLeft", "ArrowDown"], 900],
     [["ArrowLeft"], 1400],
+    [[], 1500],
     [["ArrowLeft", "ArrowUp"], 900],
     [["ArrowUp"], 1100],
     [["ArrowRight", "ArrowUp"], 900],
@@ -69,12 +84,34 @@ try {
    * Agora ele lê a fase no readout do HUD em vez de adivinhar por relógio.
    */
   let passos = 0
-  const MAX = 8 * 30
-  while (passos < MAX && (await fase()) === "run") {
+  const MAX = 10 * 30
+  /*
+   * O laço para SÓ na morte — e a versão anterior parava em qualquer fase que
+   * não fosse `run`, o que virou defeito no mesmo dia em que a necrose entrou.
+   *
+   * Com cicatriz, tecido morto deixa de parir, então o passeio passou a CONTER
+   * ondas em vez de só sobreviver a elas. Contida a onda, o jogo vai para o
+   * card de recompensa, `fase()` deixa de ser "run", o laço saía inteiro e o
+   * gravador reclamava que a run não morreu — quando na verdade ela estava
+   * ganhando. Sintoma que aponta para o lugar errado é o pior tipo.
+   *
+   * É o mesmo defeito que o reinício já tinha, na outra ponta do laço: card é
+   * estado normal do jogo agora, e todo laço que dirige o jogo precisa saber
+   * dispensá-lo.
+   */
+  let atual = await fase()
+  while (passos < MAX && atual !== "dead") {
+    if (atual !== "run") {
+      await d.hold([" "], 150)
+      await d.page.waitForTimeout(200)
+      atual = await fase()
+      continue
+    }
     const [keys, ms] = passo[passos % passo.length]!
     await d.hold(keys, ms)
     passos++
     if (passos % 4 === 0) await testemunha()
+    atual = await fase()
   }
   const morreu = (await fase()) === "dead"
   console.log(`${morreu ? "morreu" : "NÃO morreu"} em ${passos} passos`)

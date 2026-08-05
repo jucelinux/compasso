@@ -622,6 +622,43 @@ export function bloodCell(r: number, squash: number, tilt: number, necrose: numb
  *
  * Nível 0 é transparente por completo: tecido sadio não desenha nada.
  */
+/**
+ * CICATRIZ — o tecido que morreu de vez, e que precisa ler DIFERENTE de tomado.
+ *
+ * Mesma silhueta do `colonyTile` de propósito, com duas trocas que carregam a
+ * regra do jogo inteira:
+ *
+ * 1. **Sem colônia.** Tecido morto não pare (é regra da sim, não estilo), então
+ *    desenhar pus crescendo aqui seria o desenho MENTINDO sobre a mecânica. O
+ *    que fica é só o leito.
+ * 2. **O leito escurece mais, e para no `INK2`.** É a única coisa no jogo que
+ *    subtrai de propósito — e não contradiz "doença se manifesta, não subtrai"
+ *    de 02/08, porque aqui o que se foi não é a doença, é o ÓRGÃO. Perda como
+ *    acúmulo continua valendo: a mancha cresce, ela não some.
+ */
+export function necroticTile(w: number, h: number, level: number, variant: number): Buf {
+  const b = makeBuf(w, h)
+  if (level <= 0) return b
+  const escuro = [0, 0.24, 0.42, 0.6, 0.78][level] ?? 0
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      if (bayer(x, y) < escuro) plot(b, x, y, INK2)
+    }
+  }
+  /*
+   * Grumos de detrito, ESCUROS, para a cicatriz não virar chapada. Poucos e
+   * pequenos: quem tem que crescer na tela é a colônia viva, não o cadáver.
+   */
+  const grumos = [0, 1, 2, 4, 6][level] ?? 0
+  for (let i = 0; i < grumos; i++) {
+    const cx = hashNoise(i, variant, 53) * w
+    const cy = hashNoise(i, variant, 59) * h
+    const r = 1.0 + hashNoise(i, variant, 61) * 0.9
+    body(b, cx, cy, r, [INK2, INK2, PLASMA0, PLASMA0] as Ramp, () => r)
+  }
+  return b
+}
+
 export function colonyTile(w: number, h: number, level: number, variant: number): Buf {
   const b = makeBuf(w, h)
   if (level <= 0) return b

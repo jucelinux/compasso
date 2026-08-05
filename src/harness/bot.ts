@@ -89,6 +89,10 @@ export interface Folga {
   infPico: number
   /** Fases limpas até o fim: infecção levada a zero. */
   fases: number
+  /** Cicatriz média do campo, em fração do teto de derrota. O ratchet de 05/08. */
+  necMedia: number
+  /** Pico de cicatriz. É o que diz se a ladeira existe ou se voltou a ser reta. */
+  necPico: number
 }
 
 export interface RunReport {
@@ -124,7 +128,28 @@ export interface RunReport {
  * ser dominante — e a única forma de saber é comparar com quem alterna e com
  * quem só cura. Se `agressiva` continuar ganhando, a hipótese caiu.
  */
-export type Policy = "agressiva" | "cautelosa" | "exploradora" | "ritmo" | "curandeira"
+/*
+ * `triagem` entrou em 05/08 e existe para uma pergunta só: **o dilema é real
+ * agora?**
+ *
+ * A medição daquele dia mostrou que não era. Matar limpava o campo (a
+ * `agressiva` fechava fases sem nunca parar) e curar não (a `curandeira`
+ * morria 5/5). Com isso, "matar exige velocidade, curar exige presença" — o
+ * tema que o projeto vinha desenhando desde 01/08 — não existia na mecânica:
+ * parar nunca era certo.
+ *
+ * Esta política faz o gesto que a necrose deveria tornar obrigatório: caça,
+ * mas PARA em cima da cicatriz, porque cicatriz é a única coisa que a
+ * velocidade não desfaz. Se ela não ganhar das outras duas, a necrose não
+ * criou dilema nenhum — criou só punição, e a rodada falhou.
+ */
+export type Policy =
+  | "agressiva"
+  | "cautelosa"
+  | "exploradora"
+  | "ritmo"
+  | "curandeira"
+  | "triagem"
 
 /** Escalão de velocidade, os mesmos quatro que o render usa para escolher o sprite. */
 const tierOf = (speed: number): 0 | 1 | 2 | 3 =>
@@ -152,6 +177,8 @@ export function playRun(
   const PERDE = TETO * tuning.field.loseFraction
   let infSum = 0
   let infPico = 0
+  let necSum = 0
+  let necPico = 0
   let fases = 0
 
   const report = (tick: number, done: Readonly<SimState>, died: boolean): RunReport => ({
@@ -169,6 +196,8 @@ export function playRun(
       escaloes: [tierTicks[0] / 60, tierTicks[1] / 60, tierTicks[2] / 60, tierTicks[3] / 60],
       infMedia: tick === 0 ? 0 : infSum / tick / PERDE,
       infPico: infPico / PERDE,
+      necMedia: tick === 0 ? 0 : necSum / tick / PERDE,
+      necPico: necPico / PERDE,
       fases,
     },
   })
@@ -195,6 +224,8 @@ export function playRun(
     // --- medição, antes de decidir o input
     infSum += s.infection
     if (s.infection > infPico) infPico = s.infection
+    necSum += s.necrosed
+    if (s.necrosed > necPico) necPico = s.necrosed
     tierTicks[tierOf(s.player.speed)]++
     if (s.player.invulnerable) invulnTicks++
     let nearest = Infinity
@@ -231,9 +262,17 @@ export function playRun(
      */
     const tileAqui = tileAt(FIELD, s.player.x, s.player.y)
     const sujeiraAqui = s.field[tileAqui]! / tuning.field.maxInfection
+    const cicatrizAqui = s.necrose[tileAqui]! / tuning.field.maxInfection
     const fonteLonge = target === null || Math.sqrt(dist2(target.x, target.y, s.player.x, s.player.y)) > 90
+    /*
+     * A `triagem` para em cima de cicatriz mesmo com fonte por perto — é esse
+     * o custo que a decisão tem que ter. Parar só quando é seguro não é
+     * triagem, é folga.
+     */
     const curar =
-      policy === "curandeira" || (policy === "ritmo" && sujeiraAqui > 0.25 && fonteLonge)
+      policy === "curandeira" ||
+      (policy === "ritmo" && sujeiraAqui > 0.25 && fonteLonge) ||
+      (policy === "triagem" && cicatrizAqui > 0.15)
 
     const protegido = s.player.invulnerable
     const segurar =
@@ -295,7 +334,8 @@ if (import.meta.url === `file://${process.argv[1]}`) {
       const tot = r.folga.escaloes.reduce((a, b) => a + b, 0) || 1
       console.log(
         `  fases ${r.folga.fases} · infecção méd ${(r.folga.infMedia * 100).toFixed(0)}% ` +
-          `pico ${(r.folga.infPico * 100).toFixed(0)}% · perigo ${r.folga.perigo.toFixed(1)}s · ` +
+          `pico ${(r.folga.infPico * 100).toFixed(0)}% · cicatriz méd ${(r.folga.necMedia * 100).toFixed(0)}% ` +
+          `pico ${(r.folga.necPico * 100).toFixed(0)}% · perigo ${r.folga.perigo.toFixed(1)}s · ` +
           `escalões ${r.folga.escaloes.map((v) => `${((v / tot) * 100).toFixed(0)}%`).join("/")}`,
       )
     }
@@ -311,7 +351,8 @@ if (import.meta.url === `file://${process.argv[1]}`) {
     }
     console.log(
       `       fases ${media((f) => f.fases)} · infecção méd ${media((f) => f.infMedia * 100)}% ` +
-        `pico ${media((f) => f.infPico * 100)}% · perigo ${media((f) => f.perigo)}s · ` +
+        `pico ${media((f) => f.infPico * 100)}% · cicatriz méd ${media((f) => f.necMedia * 100)}% ` +
+        `pico ${media((f) => f.necPico * 100)}% · perigo ${media((f) => f.perigo)}s · ` +
         `folga ${media((f) => f.media)}px`,
     )
   }
@@ -321,4 +362,5 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   suite("agressiva")
   suite("ritmo")
   suite("curandeira")
+  suite("triagem")
 }

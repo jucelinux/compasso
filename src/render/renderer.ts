@@ -829,9 +829,24 @@ export async function createRenderer(
       // vazia que o jogo tinha até 01/08 é, literalmente, o estado infectado.
       const inf = cur.field[i]!
       const lv = inf === 0 ? 0 : Math.min(LEVELS - 1, 1 + Math.floor((inf * (LEVELS - 1)) / (max + 1)))
-      if (tileLevel[i] === lv) continue
-      tileLevel[i] = lv
-      tiles[i]!.texture = atlas.colony[lv]![(i * 7 + Math.floor(i / 32) * 3) % VARIANTS]!
+      /*
+       * CICATRIZ ou colônia — e o corte é METADE, não um número de tuning.
+       *
+       * O tile é misto: parte infecção viva, parte necrose. Quando a cicatriz
+       * já responde por metade do que há ali, o tile passa a LER como morto.
+       * Metade é regra, não balanceamento — é o tipo de corte sem número que o
+       * H prefere, e muda de estado num ponto que o jogador consegue prever.
+       *
+       * `tileLevel` guarda nível E estado no mesmo número (negativo = cicatriz)
+       * porque o cache existe para evitar trocar textura à toa, e um cache que
+       * ignora metade da chave devolve a textura errada quando só o estado muda.
+       */
+      const morto = inf > 0 && cur.necrose[i]! * 2 >= inf
+      const chave = morto ? -lv - 1 : lv
+      if (tileLevel[i] === chave) continue
+      tileLevel[i] = chave
+      const folha = morto ? atlas.necrose : atlas.colony
+      tiles[i]!.texture = folha[lv]![(i * 7 + Math.floor(i / 32) * 3) % VARIANTS]!
     }
   }
 

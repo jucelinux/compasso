@@ -11,7 +11,7 @@ import type { Tuning } from "../src/sim/types.ts"
  */
 
 const SMOKE = resolve(projectRoot, "replays", "smoke.json")
-const BASELINE_HASH = "e6a65e63"
+const BASELINE_HASH = "9ce9d7e9"
 
 /**
  * Run real do humano, 7,6 min de input de verdade, do core do dash (`7c952a6`).
@@ -21,7 +21,7 @@ const BASELINE_HASH = "e6a65e63"
  * leitura de ritmo, e não como cobertura de morte.
  */
 const RUN_01 = resolve(projectRoot, "replays", "run-01.json")
-const RUN_01_HASH = "55ac22a0"
+const RUN_01_HASH = "45a9e811"
 
 /**
  * Segunda run real: 5 min, 10 ondas, uma morte. Gravada antes da tecla de
@@ -29,7 +29,7 @@ const RUN_01_HASH = "55ac22a0"
  * Vale como determinismo sobre input humano longo.
  */
 const RUN_02 = resolve(projectRoot, "replays", "run-02.json")
-const RUN_02_HASH = "5545c765"
+const RUN_02_HASH = "b323ce8a"
 
 /**
  * Terceira run real: 5,7 min de input humano, gravada quando os modificadores
@@ -38,7 +38,7 @@ const RUN_02_HASH = "5545c765"
  * Com os patógenos reais este input voltou a morrer, na onda 6.
  */
 const RUN_03 = resolve(projectRoot, "replays", "run-03.json")
-const RUN_03_HASH = "ebe09613"
+const RUN_03_HASH = "2c09b185"
 
 /**
  * Fixture do core contínuo, gravada por `npm run rec`. Sintética, não humana:
@@ -56,11 +56,11 @@ const RUN_03_HASH = "ebe09613"
  *
  * Esta é a primeira gravada com verificação BROWSER↔NODE: o `npm run rec` colhe
  * pares (tick, hash) do HUD durante a captura e exige que o replay em Node
- * reproduza os mesmos hashes nos mesmos ticks. Bateu em 15 testemunhas. Sem
+ * reproduza os mesmos hashes nos mesmos ticks. Bateu em 11 testemunhas. Sem
  * isso, um baseline nascido no browser seria verdade só do Node.
  */
 const CORE_ATUAL = resolve(projectRoot, "replays", "core-atual.json")
-const CORE_ATUAL_HASH = "90c2bd87"
+const CORE_ATUAL_HASH = "9fef19b4"
 
 const smoke = () => loadReplay(SMOKE)
 const tuning = () => loadTuning()
@@ -93,6 +93,19 @@ const tuning = () => loadTuning()
  * diverge em nenhum tick" passaram o tempo todo. O que apodreceu foi o
  * REGISTRO. E é por isso que o conserto não foi só trocar cinco números —
  * ver a âncora, logo abaixo.
+ *
+ * QUINTA VEZ, em 05/08, e esta foi como rebase deve ser: a NECROSE entrou.
+ *
+ * Tile no talo passa a cicatrizar; cicatriz é piso da infecção; fagocitose não
+ * a alcança e só a presença desfaz; e tecido morto não pare. Quatro regras que
+ * mudam o campo, logo mudam todo hash — deriva declarada, no mesmo commit da
+ * mudança, com a âncora regravada antes de qualquer número ser trocado.
+ *
+ * A diferença entre esta e a quarta é o que o portão da âncora comprou: em
+ * `68fb8fd` ninguém soube que os baselines tinham morrido, e eles ficaram três
+ * commits vermelhos. Desta vez o teste da âncora caiu no primeiro `npm test`
+ * depois da mudança, com o remédio escrito na mensagem, e o rebase virou passo
+ * de procedimento em vez de arqueologia.
  */
 
 /**

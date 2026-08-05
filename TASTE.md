@@ -86,8 +86,19 @@ perguntar "isso é você indo pro que você gosta de novo?" — e a resposta hon
   pressão da doença em 4x), e escolhi `auraFocusHeal` 9.0 sem referência (saiu 27x mais
   fraco que a cura que ele já tinha, e a mecânica ficou imperceptível). _02/08, medido._
 
+- **Escrevo o diagnóstico ANTES de medir, e ele soa bom.** Em 05/08 abri a sessão de direção
+  com uma tese pronta — "parar é estratégia dominante, o jogo é um laço de realimentação
+  negativa" — construída lendo o código. O bot respondeu o contrário na primeira execução: a
+  política 100% parada morre 5/5. A tese era coerente, citava mecanismo, e estava errada.
+  _05/08, `npm run pace`._
+
 **Consequência operacional:** quando eu propuser polimento de feel antes do sistema estar
 medido, isso é o viés falando. Recuse sem cerimônia.
+
+**Quarta, de 05/08:** diagnóstico de sistema que eu não medi é HIPÓTESE, e vai para as
+rungs 1–3 antes de virar direção — vale para o jogo o mesmo que §4 do `TASTE-LOOP.md` já
+exigia para o meu próprio teto. Se eu narrar a causa de um problema de balanço sem colar o
+número ao lado, pergunte qual comando produziu o número.
 
 **Segunda consequência operacional, de 02/08:** número novo nasce ancorado num número que
 já existe no `tuning.json`, e eu digo em qual. Número solto é chute com aparência de

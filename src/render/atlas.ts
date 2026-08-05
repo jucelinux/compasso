@@ -42,6 +42,7 @@ import {
   bloodCell,
   CELL_LEVELS,
   colonyTile,
+  necroticTile,
   TISSUE_LEVELS,
   TISSUE_VARIANTS,
   sheetIndex,
@@ -134,6 +135,8 @@ export interface Atlas {
   readonly crowd: ReadonlyArray<CrowdCell>
   /** Colônia da doença por cima: [nível][variante]. Nível 0 é transparente. */
   readonly colony: ReadonlyArray<ReadonlyArray<Texture>>
+  /** A CICATRIZ, mesma grade do `colony`. Ver `necroticTile`. */
+  readonly necrose: ReadonlyArray<ReadonlyArray<Texture>>
   readonly drops: ReadonlyArray<TexSheet>
   readonly macrophage: TexSheet
   readonly orbiter: Texture
@@ -231,6 +234,11 @@ export function buildAtlas(tuning: Tuning, crowdArea?: number): Atlas {
       )
     })(),
     crowd: crowdLayout(tuning.arena.width, tuning.arena.height, 4242, crowdArea),
+    necrose: Array.from({ length: TISSUE_LEVELS }, (_, lv) =>
+      Array.from({ length: TISSUE_VARIANTS }, (_, v) =>
+        toTexture(necroticTile(Math.ceil(tileW), Math.ceil(tileH), lv, v)),
+      ),
+    ),
     colony: Array.from({ length: TISSUE_LEVELS }, (_, lv) =>
       Array.from({ length: TISSUE_VARIANTS }, (_, v) =>
         toTexture(colonyTile(Math.ceil(tileW), Math.ceil(tileH), lv, v)),

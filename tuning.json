@@ -243,6 +243,8 @@
     "plaquetaHeal": 25,
     "loseFraction": 0.5,
     "crowdDrag": 0.3,
+    "necroseAmount": 3,
+    "necroseHealFraction": 0.25,
     "spawnThreshold": 45,
     "spawnCalmSeconds": 2.5,
     "winFraction": 0.03,

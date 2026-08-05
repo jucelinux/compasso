@@ -296,6 +296,24 @@ export interface Tuning {
     readonly healRadius: number
     /** Quanto a PLAQUETA tira de infecção do campo inteiro, de uma vez. */
     readonly plaquetaHeal: number
+    /**
+     * Quanto um tile NO TALO cicatriza por passo de alastramento.
+     *
+     * Ancorado em `spreadAmount` e não escolhido solto — a doença cicatriza o
+     * que já tomou no mesmo ritmo em que avança sobre o vizinho. **Zero
+     * desliga a necrose inteira**, e é assim que esta rodada se desfaz: um
+     * número.
+     */
+    readonly necroseAmount: number
+    /**
+     * Fração da cura do jogador que morde a CICATRIZ.
+     *
+     * Fração e não taxa própria de propósito: assim ela já herda a penalidade
+     * de velocidade do `healSpeedPenalty`, e "só a presença desfaz cicatriz"
+     * passa a ser consequência de uma regra que já existe em vez de uma
+     * segunda regra para o jogador aprender.
+     */
+    readonly necroseHealFraction: number
     /** Infecção mínima de um tile para ele parir patógeno. */
     readonly spawnThreshold: number
     /** Intervalo de spawn com o campo quase limpo, em segundos de MUNDO. */
@@ -509,9 +527,22 @@ export interface SimState {
   enemies: Enemy[]
   /** Infecção por tile, 0..`field.maxInfection`. O organismo É o campo. */
   field: Uint8Array
+  /**
+   * NECROSE por tile — o piso de `field`, e o que a fagocitose não alcança.
+   *
+   * É o ratchet do jogo, de 05/08: o campo tinha dois atratores e nada puxava
+   * de um para o outro, então a tensão era duas retas. Cicatriz não volta
+   * sozinha e só cede à PRESENÇA, que é o trabalho que a velocidade não faz.
+   */
+  necrose: Uint8Array
   /** Soma de `field`, cacheada. Zero encerra a fase; o teto encerra a run. */
   infection: number
+  /** Soma de `necrose`, cacheada. Quanto do organismo não volta mais sozinho. */
+  necrosed: number
   spreadTimer: number
+  /** Relógio da cicatrização. Separado do `spreadTimer` porque a necrose NÃO é
+   *  travada por `tissueSpread` — ver o comentário na sim. */
+  necroseTimer: number
   infectAcc: number
   healAcc: number
   lostByTissue: boolean
