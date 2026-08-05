@@ -93,7 +93,12 @@ export async function drive(
   const vite = await startVite()
   let browser: Browser | null = null
   try {
-    browser = await chromium.launch()
+    /*
+     * `CHROME_PATH` existe para caixas onde o Chromium do Playwright não foi
+     * baixado (CI, contêiner). Sem a variável, o comportamento é o de sempre.
+     */
+    const executablePath = process.env["CHROME_PATH"]
+    browser = await chromium.launch(executablePath === undefined ? {} : { executablePath })
     const page = await browser.newPage({
       viewport: { width: 1280, height: 720 },
       deviceScaleFactor: 1,

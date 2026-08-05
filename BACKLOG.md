@@ -41,11 +41,21 @@ que só existe depois do empacotamento e cujo sintoma é tela preta com console 
 testes, o `tsc`, o `npm run dev` e o `npm run shot` estavam todos verdes, porque nenhum
 deles abre o `dist`. Detalhe e regra em `DECISIONS.md`, 05/08.
 
-**Dívida que isto abriu, e que continua aberta:** as seis falhas de
-`tests/determinism.test.ts` são ANTERIORES a esta sessão e não foram tocadas — os baselines
-commitados não batem mais com o core atual. `HARNESS.md` §1 diz que determinismo quebrado é
-para parar e consertar primeiro. É a regravação dos replays que saiu da fila em 02/08, e ela
-volta como dívida no momento em que o log de decisão registra que o teste está vermelho.
+**A dívida de determinismo, aberta e FECHADA na mesma sessão.** As seis falhas de
+`tests/determinism.test.ts` eram anteriores; bisseccionadas até `68fb8fd`, o pivô das fases,
+que atualizou o `slice.test.ts` e esqueceu este. **99 testes verdes agora.**
+
+O determinismo em si nunca esteve quebrado — o que apodreceu foi o registro. Por isso o
+conserto não foi só trocar cinco números:
+
+- a fixture `core-atual.json` foi **regravada**, porque depois das fases a run parou de
+  morrer e ela perdeu a única coisa que a torna especial (mesmo modo de falha de 02/08);
+- o `npm run rec` também estava para trás: reiniciar cai no CARD e ele só apertava `R`.
+  Agora dispensa o card e **recusa** escrever fixture que não cobre morte e reinício em NODE;
+- o `npm run rec` passou a verificar **browser contra node** por testemunhas (tick, hash)
+  colhidas do HUD — 15 bateram;
+- a **âncora ganhou teste próprio**: mexer em `tuning.json` derruba o teste na hora, com o
+  remédio na mensagem. Verificado mexendo em `time.creep`.
 
 ## O ÚNICO tema aberto — a relação com o relógio lento
 

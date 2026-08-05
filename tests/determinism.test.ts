@@ -11,7 +11,7 @@ import type { Tuning } from "../src/sim/types.ts"
  */
 
 const SMOKE = resolve(projectRoot, "replays", "smoke.json")
-const BASELINE_HASH = "e17874bd"
+const BASELINE_HASH = "e6a65e63"
 
 /**
  * Run real do humano, 7,6 min de input de verdade, do core do dash (`7c952a6`).
@@ -21,7 +21,7 @@ const BASELINE_HASH = "e17874bd"
  * leitura de ritmo, e não como cobertura de morte.
  */
 const RUN_01 = resolve(projectRoot, "replays", "run-01.json")
-const RUN_01_HASH = "8c8b7194"
+const RUN_01_HASH = "55ac22a0"
 
 /**
  * Segunda run real: 5 min, 10 ondas, uma morte. Gravada antes da tecla de
@@ -29,7 +29,7 @@ const RUN_01_HASH = "8c8b7194"
  * Vale como determinismo sobre input humano longo.
  */
 const RUN_02 = resolve(projectRoot, "replays", "run-02.json")
-const RUN_02_HASH = "c646b82f"
+const RUN_02_HASH = "5545c765"
 
 /**
  * Terceira run real: 5,7 min de input humano, gravada quando os modificadores
@@ -38,18 +38,29 @@ const RUN_02_HASH = "c646b82f"
  * Com os patógenos reais este input voltou a morrer, na onda 6.
  */
 const RUN_03 = resolve(projectRoot, "replays", "run-03.json")
-const RUN_03_HASH = "a81b1a7d"
+const RUN_03_HASH = "ebe09613"
 
 /**
- * Fixture do core contínuo, gravada por `npm run rec`. **Regravada em 02/08**
- * (`gitSha c0a30ec`): com o tecido resistindo, o input de 01/08 deixou de morrer
- * e a fixture perdeu a única coisa que a tornava especial. Sintética, não humana:
+ * Fixture do core contínuo, gravada por `npm run rec`. Sintética, não humana:
  * serve de âncora de determinismo, não para julgar ritmo. É a ÚNICA que atravessa
  * morte → reinício, que é o gesto que o gate mede — as quatro anteriores são
  * todas do `7c952a6`, anterior ao pivô.
+ *
+ * **Regravada em 02/08** (`c0a30ec`): com o tecido resistindo, o input de 01/08
+ * deixou de morrer e a fixture perdeu a única coisa que a tornava especial.
+ *
+ * **Regravada de novo em 05/08** (`a821cbb`), pela mesma razão exata: depois das
+ * FASES a run parou de morrer de novo, e a fixture voltou a não cobrir o que diz
+ * cobrir. Duas vezes o mesmo modo de falha em quatro dias é o que fez a âncora
+ * ganhar teste próprio, logo abaixo.
+ *
+ * Esta é a primeira gravada com verificação BROWSER↔NODE: o `npm run rec` colhe
+ * pares (tick, hash) do HUD durante a captura e exige que o replay em Node
+ * reproduza os mesmos hashes nos mesmos ticks. Bateu em 15 testemunhas. Sem
+ * isso, um baseline nascido no browser seria verdade só do Node.
  */
 const CORE_ATUAL = resolve(projectRoot, "replays", "core-atual.json")
-const CORE_ATUAL_HASH = "524af4bd"
+const CORE_ATUAL_HASH = "90c2bd87"
 
 const smoke = () => loadReplay(SMOKE)
 const tuning = () => loadTuning()
@@ -68,7 +79,70 @@ const tuning = () => loadTuning()
  * máxima agora cai com quanta hemácia há no ponto, então todo input antigo
  * produz outra trajetória. Não é regressão; é a mudança que o H pediu, e o
  * rebase é o preço declarado dela.
+ *
+ * QUARTA VEZ, em 05/08, e esta foi rebase ATRASADO, não rebase consciente.
+ *
+ * O commit `68fb8fd` ("a run infinita sai, e a E. coli ganha uma fase inteira")
+ * reescreveu `sim.ts`, `types.ts` e `tuning.json`, atualizou o `slice.test.ts`
+ * junto — e não encostou neste arquivo. Bisseccionado: os mesmos seis testes
+ * passam em `73f423d` e falham em `68fb8fd`. Ficaram vermelhos por três
+ * commits, contra a regra do `HARNESS.md` §1 que manda parar tudo quando o
+ * determinismo quebra.
+ *
+ * O determinismo em si nunca esteve quebrado: "mesma seed = mesmo hash" e "não
+ * diverge em nenhum tick" passaram o tempo todo. O que apodreceu foi o
+ * REGISTRO. E é por isso que o conserto não foi só trocar cinco números —
+ * ver a âncora, logo abaixo.
  */
+
+/**
+ * A ÂNCORA, e o que ela tripwire.
+ *
+ * O `core-atual.json` é o único replay gravado contra o `tuning.json` VIGENTE;
+ * os outros quatro são input humano de `7c952a6` e o `tuningHash` deles nunca
+ * mais vai bater — eles valem como determinismo sobre input real, e só.
+ *
+ * Então esta é a asserção que faltava em 02/08: a âncora tem que continuar
+ * ancorada. Editar `tuning.json` derruba este teste na hora, com o remédio
+ * escrito na mensagem, em vez de deixar cinco baselines apodrecerem em
+ * silêncio por três commits.
+ *
+ * Não contradiz "divergência de tuningHash é aviso, não erro", lá embaixo:
+ * para um replay QUALQUER é aviso mesmo. Para o replay cuja identidade é *ser
+ * o core atual*, é erro por definição — ele deixou de ser o que diz que é.
+ */
+const REGRAVA =
+  "o `core-atual.json` foi gravado contra outro `tuning.json` e não é mais a " +
+  "âncora do core atual. Regrave com `npm run rec` e atualize os cinco " +
+  "baselines deste arquivo — os quatro replays humanos mudam de hash junto."
+
+/**
+ * A mensagem para quando o tuning NÃO mudou e o hash mudou assim mesmo.
+ *
+ * Distinguir os dois casos é o trabalho que em 05/08 teve que ser feito à mão,
+ * com bissecção, porque "expected X got Y" não diz de qual dos dois se trata —
+ * e os dois pedem coisas opostas: um pede rebase, o outro pede desfazer.
+ */
+const REGRESSAO =
+  "o `tuning.json` é o MESMO da gravação e o hash mudou assim mesmo: isto é " +
+  "regressão de código em `src/sim/`, não deriva de design. Não rebaseie o " +
+  "baseline — ache o que mudou. `npm run replay <arquivo>` imprime hash por tick."
+
+/**
+ * A mensagem dos quatro replays de `7c952a6`.
+ *
+ * Para eles o `tuningHash` está permanentemente diferente — foram gravados
+ * contra um `tuning.json` que não existe mais — então esse sinal não separa
+ * nada, e a pergunta tem que ir para quem está lendo. Só há duas respostas, e
+ * uma delas é "não mexi em nada", que é a resposta perigosa.
+ */
+const DERIVA_OU_REGRESSAO =
+  "hash diferente do baseline. Você mudou `src/sim/` ou `tuning.json` DE " +
+  "PROPÓSITO? Então é deriva: regrave a âncora com `npm run rec`, atualize os " +
+  "cinco baselines juntos e escreva no bloco de comentário acima o que mudou e " +
+  "por quê. Não mudou nada? Então é REGRESSÃO, e rebasear esconde o defeito — " +
+  "foi assim que estes testes ficaram três commits vermelhos em 02/08."
+
 describe("determinismo", () => {
   it("mesma seed + mesmos inputs = mesmo hash", () => {
     expect(runReplay(smoke(), tuning()).finalHash).toBe(
@@ -78,7 +152,7 @@ describe("determinismo", () => {
 
   it("bate com o baseline commitado", () => {
     // Mudar este valor é um ato consciente: significa que o comportamento mudou.
-    expect(runReplay(smoke(), tuning()).finalHash).toBe(BASELINE_HASH)
+    expect(runReplay(smoke(), tuning()).finalHash, DERIVA_OU_REGRESSAO).toBe(BASELINE_HASH)
   })
 
   it("não diverge em nenhum tick, não só no final", () => {
@@ -90,20 +164,20 @@ describe("determinismo", () => {
 
   it("input humano real: bate com o baseline", () => {
     const result = runReplay(loadReplay(RUN_01), tuning())
-    expect(result.finalHash).toBe(RUN_01_HASH)
+    expect(result.finalHash, DERIVA_OU_REGRESSAO).toBe(RUN_01_HASH)
     expect(result.ticks).toBeGreaterThan(20000)
   })
 
   it("segunda run humana: bate com o baseline", () => {
     const result = runReplay(loadReplay(RUN_02), tuning())
-    expect(result.finalHash).toBe(RUN_02_HASH)
+    expect(result.finalHash, DERIVA_OU_REGRESSAO).toBe(RUN_02_HASH)
     expect(result.ticks).toBeGreaterThan(17000)
   })
 
   it("terceira run humana: bate com o baseline", () => {
     const replay = loadReplay(RUN_03)
     const result = runReplay(replay, tuning())
-    expect(result.finalHash).toBe(RUN_03_HASH)
+    expect(result.finalHash, DERIVA_OU_REGRESSAO).toBe(RUN_03_HASH)
     expect(result.ticks).toBeGreaterThan(19000)
   })
 
@@ -136,9 +210,13 @@ describe("determinismo", () => {
     expect(reaches(RUN_03)).toBe(true)
   })
 
+  it("a âncora ainda está ancorada: o tuning da gravação é o tuning de agora", () => {
+    expect(runReplay(loadReplay(CORE_ATUAL), tuning()).tuningMatches, REGRAVA).toBe(true)
+  })
+
   it("a fixture do core atual bate com o baseline", () => {
     const result = runReplay(loadReplay(CORE_ATUAL), tuning())
-    expect(result.finalHash).toBe(CORE_ATUAL_HASH)
+    expect(result.finalHash, result.tuningMatches ? REGRESSAO : REGRAVA).toBe(CORE_ATUAL_HASH)
   })
 
   it("a fixture do core atual atravessa morte E reinício", () => {

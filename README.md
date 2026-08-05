@@ -102,6 +102,19 @@ Non-negotiable prerequisites, detailed in `HARNESS.md` §1:
 5. **Every tuning number lives in `tuning.json`.** It is also the cheapest A/B there is.
 6. **Determinism is tested.** If the determinism test breaks, stop and fix it first.
 
+On (6), a note earned the hard way. A broken determinism test means one of two opposite
+things, and telling them apart is the whole job: **drift** (you changed `src/sim/` or
+`tuning.json` on purpose, so rebase the baselines and write down why) or **regression** (you
+changed nothing and the hash moved anyway, so rebasing hides the defect). The assertion
+messages now say which, and `core-atual.json` — the one fixture recorded against the current
+`tuning.json` — has its own test asserting it is still anchored: editing `tuning.json` fails
+it immediately. That guard exists because it was missing once, and the baselines sat stale
+and red for three commits while every other instrument stayed green.
+
+`npm run rec` also verifies **browser against Node**: it collects (tick, hash) witnesses from
+the HUD while capturing, and requires the Node replay to reproduce the same hashes at the same
+ticks. Without it, a baseline born in a browser would be a Node-only truth.
+
 ## The rig
 
 ```bash
