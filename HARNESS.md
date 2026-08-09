@@ -111,6 +111,24 @@ The second makes every behavior change a conscious act.
 
 ---
 
+## 4.4 The perception channel — `npm run olho`
+
+Added here on 08/08, importing `TASTE-LOOP.md` v0.7 §3c and `HARNESS.md` §3 of the package.
+It was already built; what was missing was it being named as **part of round zero** rather
+than as a tool that happened to appear.
+
+The rule: **the agent must be able to perceive its own output with no human and no browser
+in the path.** Visual → text dump; audio → envelope; data → shape. Without that channel
+there is no loop on a perceptual axis — only generation plus syntax checks. Here the channel
+is `npm run olho`, which dumps any baked sheet as luminance in the terminal in under a
+second, and `npm run shot`, which shows the composed scene.
+
+The two are not interchangeable and neither replaces the other. **`olho` shows the ART;
+`shot` shows the SCENE** — only what the bot reaches, which is why the score pulse and the
+build labels are still unverified. Both are instruments and both fall under section 8.
+
+---
+
 ## 5. Acceptance
 
 Validate against a throwaway scene — a square that moves and collides with another square.
@@ -120,6 +138,11 @@ Delete it when the real game arrives.
 - [ ] `npm run replay replays/smoke.json` prints a stable hash across runs
 - [ ] `F9` downloads a replay the headless runner can consume
 - [ ] changing a value in `tuning.json` changes behavior with no code edit
+- [ ] one bench-loop turn — change a tunable, regenerate, look — is fast enough that the
+  agent keeps experimenting. **The loop's latency is a design decision, not an
+  optimization**: half a second is known to change, and worsen, what gets tried. Today
+  `npm run olho` is well under a second and the full suite is ~1.8s, so this passes; it is
+  written down so it stays a budget rather than an accident.
 
 Then stop. Go build the vertical slice.
 
@@ -163,3 +186,49 @@ Still deferred, and still correctly so:
 
 **Trigger:** build these when the human is being asked to judge the same subjective axis
 more than twice a week. Until then, they are apparatus without a subject.
+---
+
+## 8. Instruments, and the rule that governs all of them
+
+Imported on 08/08 from `TASTE-LOOP.md` §2 and the package's `HARNESS.md` §5. Everything this
+rig produces is an instrument, and instruments are the method's blind spot: their output is a
+number or an image, and both get believed — including by whoever built them.
+
+**A new instrument runs a case whose answer is known before its output is trusted**, usually
+with the measured thing switched off. If it cannot separate that from the real case, its
+number is worse than no number.
+
+**Instrument defects are not random in direction. They flatter.** This project has the
+cleanest evidence of it on record: the three defects `npm run olho` was born with in 04/08 —
+inverted luminance ladder, a 3:1 reduction that made the player's eight directions look
+identical, and a strip assuming equal frame sizes — were all inherited conventions from
+another project, and **all three made the instrument approve what it exists to denounce**.
+
+Two corollaries, each with its own scar here:
+
+- **A visual instrument catches what is WRONG, never what is ABSENT.** A layer that never
+  reaches the screen leaves no trace in a capture, so the capture approves it — `frontSprite`,
+  02/08. Against absence the check is counting the assembly list, which is now a lock:
+  `tests/montagem.test.ts`.
+- **An instrument that reduces or samples hides exactly the difference it exists to show.**
+  Check the reduction against a case where two inputs are known to differ.
+
+**A lock needs margin, not equality.** Equality passes on a one-pixel difference — that is
+how a 4-phase cycle that was really 2 phases got approved in the atelier, and why the
+phase-copy ruler here is a ≥5% distance with an absolute floor of 3, not a `join(",")`.
+
+Locks in place, and what each covers:
+
+| lock | covers | blind to |
+|---|---|---|
+| `tests/determinism.test.ts` | hash drift, fixture provenance, death → restart → card → play | whether a fixture still exercises anything |
+| `tests/necrose.test.ts` | the ratchet: scarring, and that only presence undoes it | whether the dilemma *feels* like one — no bot measures that |
+| `tests/montagem.test.ts` | producer in `sprites.ts` never assembled (`organSheet`) | the `frontSprite` class — assembled but never staged |
+| `tests/ancoras.test.ts` | a magnitude number changed without declaring its new fraction | whether the fraction is the *right* one |
+| `tests/pixelart.test.ts` | locked palette, frame distance, silhouette inside the hitbox | composition — who covers whom, who touches whom |
+
+The last row is the family named in `TASTE.md` §2b — six defects in one day, all of position
+and order. By `TASTE-LOOP.md` §3.8 that family owed a single lock at its third occurrence.
+It is owed, deliberately not written yet, and is the first thing to build the next time this
+project touches visuals: writing it today would mean guessing the invariants against no live
+defect, which is precisely how `olho.ts` was born wrong.

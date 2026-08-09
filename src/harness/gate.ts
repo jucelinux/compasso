@@ -1,9 +1,12 @@
 /**
- * Leitura de portão a partir de um F9 — `npm run gate <arquivo.json>`.
+ * Fronteira de run a partir de um F9 — `npm run gate <arquivo.json>`.
  *
- * A pergunta é uma só: depois que a run ACABOU, veio outra? `runIndex` responde,
- * e a trava de `deadLockTicks` garante que não foi reflexo — a lição de 31/07,
- * quando o portão mediu um reflexo 2,9s depois da morte em vez de uma intenção.
+ * Nasceu como leitura do PORTÃO, quando o portão era taxa de segunda partida.
+ * Desde 08/08 o portão é "a dilatação é lida sem explicação" (`CLAUDE.md`), que
+ * nenhum script mede: quem lê é uma pessoa olhando outra jogar. Então este
+ * comando NÃO devolve veredito nenhum. Ele diz quando cada run acabou, com
+ * abates, onda e tempo na tela de morte — e é assim que ele instrumentou o
+ * replay da aura em 02/08, que é para esse tipo de uso que ele fica.
  *
  * Não altera nada: replica a sim e olha o estado.
  *

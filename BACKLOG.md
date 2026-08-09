@@ -11,25 +11,22 @@ de propósito. `DECISIONS.md` guarda o histórico; este arquivo guarda só o pre
 
 ## Aberto agora
 
-**PORTÃO: 0 STRIKES de 3.** Conta **"não"**, não "sim" — três *não* seguidos derrubam a
-tese (31/07). Zero é o melhor estado possível, não o pior. **Quatro leituras em 02/08 e
-nenhum strike gasto:**
+**PORTÃO: 0 STRIKES de 3** — *"a dilatação é lida sem explicação"*, escolha do H em 08/08.
+Conta **"não"**, não "sim": zero é o melhor estado possível. Definição no `CLAUDE.md`.
 
-| leitura | o quê |
-|---|---|
-| **SIM** (core do tecido) | morreu em 85,4s, 9,9s na tela, apertou R, segunda run |
-| **SIM** (formato de FASES) | morreu em 131,3s, apertou R **3,2s depois**, e na segunda fechou a fase na onda 4 |
-| NULA (filho, 1º externo) | não apertou, mas o pai encerrou por compromisso dele |
-| NULA (última run) | morreu por tecido em 226,3s e não apertou — mas encerrou a SESSÃO, não a partida |
+Leitura só existe quando **alguém de fora joga sem ninguém explicar**. "Não" = encerrou sem
+entender que o tempo responde ao movimento, ou precisou que explicassem. Nula continua sendo
+parada por motivo externo. **Em dia sem jogador externo não há nada a conferir aqui** — isso
+é do desenho, não descuido.
 
-Reproduzir qualquer uma com `npm run gate replays/<arquivo>.json`. Atualizar esta linha na
-mesma vez que a leitura chegar — a definição está no `DECISIONS.md` (31/07), o contador
-mora aqui.
+**Substitui a régua ratificada em 05/08** (*"a fase seguinte, sem ajuda"*), que era chamada
+do modelo sob delegação. Em 08/08 o H reabriu o conceito inteiro, considerou removê-lo, e
+escolheu esta entre duas propostas. O critério que decidiu: **um portão só se paga se puder
+SURPREENDER quem é dono da decisão de matar** — e a régua de 05/08 falha nisso, porque o H
+produz aquela leitura sozinho e já sabe a resposta.
 
-**A métrica está em revisão.** Com fases, "segunda partida" mede REPETIR quando o sucesso
-virou AVANÇAR. Proposta em aberto, do `DECISIONS.md` de 02/08: *"a fase seguinte, sem
-ajuda"* — o jogador atravessa a fase 1 sem ninguém explicar e vai para a 2 por ato próprio;
-"não" é largar dentro da fase 1 ou precisar que expliquem. **Não foi ratificada pelo H.**
+Contador zerado. As duas evidências que sobrevivem como CONTEXTO, não como strike: o filho em
+02/08 não leu a dilatação (seria "não" hoje), e a esposa leu — mas assistindo, não jogando.
 
 ## Fora do tema, a pedido do H — o deploy e o iPad (05/08)
 

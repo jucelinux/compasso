@@ -1,0 +1,68 @@
+{
+  "_": [
+    "ÂNCORAS — quem manda em quem dentro do tuning.json. 08/08.",
+    "",
+    "Existe por causa do defeito mais caro do projeto, cometido duas vezes no mesmo dia:",
+    "escolhi `dash.auraFocusHeal` = 9.0 sem referência nenhuma, e o foco plantado saiu 27x",
+    "mais fraco do que simplesmente ficar parado — a mecânica ficou imperceptível porque era",
+    "irrelevante. Horas antes eu tinha trocado `field.sourceRate` por `poison` achando que só",
+    "mudava de lugar, e derrubei a pressão da doença em 4x.",
+    "",
+    "A regra estava escrita em prosa no TASTE.md §2a e não travava nada: `número novo nasce",
+    "ancorado num número que já existe, e eu digo em qual`. Aqui ela vira trava.",
+    "",
+    "Cada entrada diz: este valor É uma fração declarada daquele outro. Mexer no número sem",
+    "mexer na fração quebra `tests/ancoras.test.ts`. Isso não impede escolher errado — impede",
+    "escolher SEM DIZER em relação a quê, que foi o que aconteceu.",
+    "",
+    "A lista não cobre o tuning.json inteiro e não deve: constante de mundo (arena, hz),",
+    "primitiva de sensação (accel, drag) e número que É a âncora não têm a quem se ancorar.",
+    "Ela cobre MAGNITUDE DE MECÂNICA — número cujo sentido só existe comparado a outro."
+  ],
+  "ancoras": [
+    {
+      "valor": "dash.auraFocusHeal",
+      "ancora": "field.healRate",
+      "fracao": 0.036734693877551024,
+      "porque": [
+        "O foco plantado cura em tempo real e sem você; a sua cura PARADO é `field.healRate`.",
+        "9.0 sobre 245 é 3,67%, e essa é a fração VIGENTE — declarada, não aprovada.",
+        "",
+        "Medido em 02/08: 9.0 dava ~4/s contra ~867/s de veneno entrando, 0,4%, e 27x menos",
+        "que simplesmente ficar ali. Em 08/08 eu ia trocar por 1/4 do healRate, e a rodada",
+        "de 05/08 já tinha REFUTADO essa via com o bot: enquanto tudo que a cura faz o abate",
+        "também fizer, e mais rápido, NENHUM valor de auraFocusHeal cria dilema. Era",
+        "estrutura, e a resposta foi a NECROSE em `src/sim/field.ts`, não um número.",
+        "",
+        "O valor continua 9.0 de propósito: o H disse que traria a ideia dele. Esta entrada",
+        "existe para que a próxima escolha seja uma FRAÇÃO dita em voz alta e não outro",
+        "número solto — que é o defeito que ela trava, e não este valor em particular.",
+        "",
+        "ACHADO de 08/08, lendo `sim.ts` para escolher o número: a cura do foco é QUADRÁTICA.",
+        "O acumulador soma `auraFocusHeal × k` por segundo e `healAround` é chamado uma vez",
+        "POR FOCO com o mesmo n, então o total é `auraFocusHeal × k²`. Ninguém decidiu isso.",
+        "Reforça o teto de 2, e é o primeiro lugar a olhar quando o número for revisto."
+      ]
+    },
+    {
+      "valor": "field.sourceRate",
+      "ancora": "enemy.kinds.influenza.poison",
+      "fracao": 1.0,
+      "porque": [
+        "Os dois alimentam a mesma pia: veneno entrando no tecido. Foram tratados como",
+        "grandezas independentes em 02/08 e não são — trocar um pelo outro mudou a pressão",
+        "da doença em 4x sem que nada no código parecesse ter mudado de escala."
+      ]
+    },
+    {
+      "valor": "field.plaquetaHeal",
+      "ancora": "field.healRate",
+      "fracao": 0.10204081632653061,
+      "porque": [
+        "Cura pontual da plaqueta, medida contra a cura contínua do jogador parado — mesma",
+        "pergunta do foco plantado, mesma âncora, para as duas ajudas serem comparáveis",
+        "entre si e não só cada uma consigo mesma."
+      ]
+    }
+  ]
+}

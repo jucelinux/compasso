@@ -1,330 +1,285 @@
 # TASTE-LOOP.md
 
-A method for driving an agent toward exceptional quality without burning the scarce
-resource, which is human judgment.
+**Version 0.8 — 08/08/2026.** Distilled: every rule keeps its case in **one line**; the
+full incident, evidence and validation status live in the package's `CHANGELOG.md`
+(append-only; only the *Validated* column of past entries may be filled in).
 
-Domain-agnostic. Nothing here is specific to games, to a stack, or to a project. The
-domain-specific machinery lives in a harness file; the project itself lives in `CLAUDE.md`.
+A method for driving an agent toward exceptional quality without burning the scarce
+resource: human judgment. **This file is domain-neutral and must stay so** — the projects
+and vivid incidents behind each rule live in the package's `CHANGELOG.md`, which never
+enters a project repo: a case that reads like a requirement gets copied as one (v0.6).
+
+**Ceiling: 350 lines, currently at it.** A new rule costs a merge or a retirement
+(§3b.6): a method that does not fit a session's attention is remembered selectively, and
+that is where rules die (the null-case rule, in writing and not run — v0.4 ⚠️).
 
 ---
 
 ## 1. What it optimizes
 
-Tokens are abundant. Rounds are abundant. **Taste is the scarce input.** Every part of this
-design exists to spend as little of it as possible and to never lose what was spent.
+Tokens are abundant. Rounds are abundant. **Taste is the scarce input — and there are two
+of them:**
 
-The loop does not end when an artifact passes a bar. It ends when the cheap critic has
-learned to judge the way the human does. Each recorded verdict makes the next round
-cheaper — that is the whole mechanism.
+- **The human's taste** — what the thing should *be*. Extracted in binary questions,
+  distilled into `TASTE.md` §1, never lost once spent.
+- **The agent's side** — where its ceiling is, what constraint shape raises it, what it
+  pulls toward. Recorded in `TASTE.md` §2. The frontier is joint: the human cannot see
+  where the agent's ceiling is highest, and the agent is an unreliable reporter of it.
+  (Three rounds below a known ceiling — CHANGELOG v0.3.)
+
+**A spent verdict stays spent by compiling.** Prose evaporates by the next session. An
+aesthetic choice compiles into a **knob** (a parameter); a rule compiles into a **lock**
+(an assertion that trips on its own); only the continuous residue stays prose in the
+rubric. The loop ends not when an artifact passes a bar but when the judgment that passed
+it has become structure — and **the critic that gets calibrated is the lock set**; the
+LLM critic (§9) is the niche for what will not become a count. (A full project ran the
+loop on 266 locks and zero LLM verdicts — v0.5.)
+
+**Two loops, one method.**
+
+| Loop | Who | One turn |
+|---|---|---|
+| **The round** (§3) | agent + human | axis → variants → ladder → verdict → compile |
+| **The bench loop** (§3c) | agent alone | author → look → name the defect → knob or lock |
+
+The bench loop runs dozens of times per round, spending compiled judgment, not the human's.
 
 ---
 
 ## 2. The oracle ladder
 
 Never climb a rung if the one below still catches the problem. LLM judgment is the most
-expensive and least reliable oracle in the cycle — it is the last resort, not the first.
+expensive and least reliable oracle — last resort, not first.
 
 | # | Oracle | Cost | Catches |
 |---|---|---|---|
 | 1 | Compiler, linter, build | ~zero | Mechanical errors |
-| 2 | Deterministic tests | ~zero | Behavior and performance regressions |
+| 2 | Deterministic tests, **locks** | ~zero | Behavior, regressions, compiled taste |
 | 3 | Automated diff against a baseline | low | Unintended drift |
-| 4 | Blind critic (LLM) | high | Genuinely subjective axes only |
+| 4 | Blind critic (LLM) | high | The continuous residue of subjective axes |
 | 5 | Human, 30 seconds | highest | Direction, taste, "this isn't the thing" |
 
-**Nothing reaches rung 5 without clearing rungs 1–3.** Burning fresh human attention on a
-mechanical error is the most expensive waste available.
+**Nothing reaches rung 5 without clearing rungs 1–3.** Rung 2 holds most of the value: it
+is where mechanical properties live *and* where verdicts land when they compile. In a
+discrete, locked space half of taste becomes counting (§8); the rest is the upper rungs'.
 
-Rung 2 holds most of the value and is the rung almost nobody builds. Whatever the domain,
-ask: what property of the artifact can be asserted mechanically and re-checked forever?
+**Instruments flatter.** Everything that measures is an instrument, and its defects are
+not random in direction. Three rules:
 
-**A new instrument passes the null case before its output is trusted.** The ladder says which
-rung to use; it said nothing about whether a rung *works*, and on 02/08 that cost a measurement
-that looked convincing and measured nothing — a pixel-difference test built to detect whether
-a crowd of cells was animating, on a screen where palette cycling already repaints 96.6% of
-pixels with the crowd switched off. Run any new instrument on a case whose answer is known,
-usually with the thing being measured turned off. If it cannot separate that from the real
-case, it is not an instrument, and its number is worse than no number — because numbers get
-believed, including by whoever built them.
+1. **A new instrument passes the null case first.** Run it with the measured thing off;
+   if it cannot tell that from the real case, its number is worse than no number. (An
+   instrument reported massive change with its subject off — v0.4 ✅✅, then ⚠️ skipped.)
+2. **A lock needs margin, not equality — calibrated both ways against desired behaviour.**
+   Equality passes on a trivial difference; a 100% rule fails a deliberate pause. (A
+   four-state cycle collapsed to two and passed a byte-equality lock — v0.5.)
+3. **Inherited convention is not verified convention.** A port carries assumptions in
+   silence; the null case is how they surface. (Three inherited defects, all flattering —
+   v0.4.)
 
 ---
 
 ## 3. One round
 
-0. **Probe the frontier — first round on an axis only.** Before optimizing, produce 2–4
-   cheap, disposable samples spanning *different idioms*, not variants of one idea, and let
-   the human pick. This exists because neither party can see the frontier alone: the human
-   cannot see where the agent's ceiling is highest, and the agent is an unreliable reporter
-   of its own ceiling (§4). Skip on later rounds of the same axis — the idiom is settled.
-1. **Narrow the axis.** One axis per round. "Make it better" is too vague to produce a
-   gradient — the lead agent decomposes the goal into separately judgeable pieces.
+0. **Probe the frontier — first round on an axis only.** 2–4 cheap disposable samples in
+   *different idioms*, and the spread **brackets**: one sample deliberately overshoots.
+   (Two binary questions beat three rounds of reasoning — v0.3 ✅; a mid-range probe
+   wasted its round — v0.5.)
+1. **Narrow the axis, and name what is absent.** One axis per round; "make it better" is
+   not a diagnosis — the defect is almost never in the parameter you want to touch.
+   (Five cosmetic fixes tried first, five failures — v0.5.)
 2. **Two materially different variants**, A and B. Not one and a fine-tune of it.
 3. **Climb rungs 1–3** on both. A variant that fails is discarded and redone, not judged.
-4. **Blind critic**, if and only if the axis is subjective.
+4. **Blind critic** (§9), only if a subjective residue remains after the locks speak.
 5. **Clear margin → apply and continue. Tie or direction call → hold for the human.**
-6. **Human review in batches**, never per round.
-7. **Record the verdict** in the same turn it is given.
-8. **Propagate it.** Recording is not the same as applying. If the verdict supersedes
-   something a *state* file still declares, fix that file now — see section 8.
-9. **Close the round.** Answer four questions out loud, in the same turn:
-   *Did this round produce a gate reading, or not?* · *What did the loop itself get wrong?*
-   · ***Did this round operate below a ceiling either side knows about but did not name?*** ·
-   *Does anything in this file need to change?* See section 12.
+6. **Human review in batches, bounded by attributability** — as much as one sitting can
+   attribute, no more, never per round. (Seven changes, untraceable reaction; then the
+   opposite failure, accumulation — v0.5.)
+7. **Record the verdict the same turn — then compile it.** Choice → knob; rule → lock;
+   residue → prose. If it supersedes a state file, fix that file now (§8). (Prose
+   judgments evaporated overnight — v0.5.)
+8. **Third occurrence of a defect class → stop patching.** The fix is at the wrong level:
+   write the pattern in the log, generalize the lock so the family trips as one. (Two
+   families, four occurrences each — v0.5.)
+9. **Close the round, out loud:** any direction reading — gate or other — or none? ·
+   what did the loop itself get
+   wrong? · did we operate below a named ceiling? · does this file need to change? (§12)
 
 ---
 
 ## 3b. Cycle open — the reconciliation pass
 
-A round has a close (§3.9). A **cycle** — a fresh session, a new sitting, anything that
-starts from cold context — needs an open, and until 02/08 it did not have one. The agent
-read the state files and believed them. Nothing checked them against each other.
+A round has a close; a **cycle** — any session from cold context — has an open. Costs no
+human attention; lives on rungs 1–3. (A handoff passed on content, failed on navigation —
+v0.4 ✅.) The agent's total recall of files it just read beats yesterday's memory here.
 
-Runs before any work, costs no human attention, and lives entirely on rungs 1–3:
+1. **Rungs 1–3 first.** Build, tests, numbers — reconstruct against a working tree.
+2. **Reconstruct out loud from the files alone.** What you know but cannot point to a
+   file for is a hole in the files — fix the file.
+3. **Reading order complete?** Every state file reachable from `CLAUDE.md`'s ordering. A
+   file nobody is told to read does not exist.
+4. **Contradictions inside state files.** Settled-and-open at once; two "next"s; binding
+   lists with no *as of* date; one measurement, two values. Every baseline carries **the
+   command that regenerates it and its date** — without both it is a rumour. (One was
+   quoted into a conclusion a sweep contradicted — v0.4 ○.)
+5. **State living in a log.** Changing numbers need an owner in a state file;
+   `DECISIONS.md` records that they changed, never what they are.
+6. **Distillation debt.** `DECISIONS.md` ~30 lines past the last `TASTE.md` §1
+   distillation → distill. Same for this file: near the ceiling → merge or retire (§12).
+7. **Instrument debt.** Any instrument created or changed since the last open: show its
+   null-case run, or mark its output untrusted. (This item *runs* the rule that was
+   skipped — v0.4 ⚠️ → v0.5.)
+8. **Validation debt.** Any `CHANGELOG.md` rule still ○ after ~2 weeks, or ⚠️: into the
+   human's next batch, binary — keep or retire. (v0.5.)
 
-1. **Rungs 1–3 first.** Build, typecheck, tests. Reconstruct against a working tree, not a
-   broken one, and report the numbers.
-2. **Reconstruct out loud.** State where the project is using *only* what the files say.
-   Whatever you know and cannot point to a file for is a hole in the files — fix the file.
-3. **Is the reading order complete?** Every state file must be reachable from the session
-   ordering in `CLAUDE.md`. A file nobody is told to read is a file that does not exist.
-4. **Contradictions inside state files.** The same item declared both settled and open. Two
-   different "next" declared. A list called binding with no *as of* date. **And the same
-   measurement quoted with two different values** — numbers rot faster than prose, because
-   prose about a dead constraint reads odd while a stale number reads fine. Every measured
-   baseline in a state file carries the command that regenerates it and the date it was
-   taken; a baseline without that is a rumour, and on 02/08 one was quoted into a conclusion
-   that a parameter sweep then contradicted.
-5. **State living in a log.** Any number that changes — a gate count, a strike counter —
-   needs an owner in a state file. `DECISIONS.md` records that it changed, never what it is.
-6. **Distillation debt.** Has `DECISIONS.md` grown past ~30 lines since `TASTE.md` §1 was
-   last distilled? §8 says to distill and nothing ever checked.
+**Output:** every defect fixed same-turn or named open; one `LOOP` line in `DECISIONS.md`;
+direction calls batched with the round's opening ask.
 
-**Output:** every defect either fixed in the same turn — most are mechanical — or named as
-an open item. Each one gets a line in `DECISIONS.md` on the `LOOP` axis. What cannot be
-resolved without a direction call goes to the human, batched, with the round's opening ask.
+---
 
-The pass is cheap by construction. It is the one place in the method where the agent's total
-recall of files it just read is worth more than the human's memory of a session he had
-yesterday, and that asymmetry is the whole reason it works.
+## 3c. The bench loop
+
+The agent's inner cycle, between human calls: **author → look → name the defect →
+compile.** Authoring is the cheapest step; looking cannot be skipped; naming decides
+whether the fix is real or cosmetic; compiling is what stops the defect returning.
+
+- **The agent must have a channel to perceive its own output** — no human, no browser in
+  the path: visual → text dump, audio → envelope, data → shape. Without it there is no
+  loop, only generation plus syntax checks. Built at round zero (`HARNESS.md` §3). (Five
+  defects behind 65 green tests — v0.2 ✅; a blank output behind 266 — v0.5.)
+- **Looking catches what is wrong, not what is absent.** Against absence, **count**:
+  re-read the assembly list; lock that what is produced reaches the output. (A layer
+  updated 60×/s, never staged — v0.2 ✅; four assembly locks — v0.5.)
+- **The loop's latency is a design decision.** A half-second turn produces worse
+  judgments than a 20 ms turn — it changes what the agent dares to try. Budget in
+  `HARNESS.md` §4. (500 ms → 7 ms — v0.5.)
+- **Derived numbers survive the loop; hand-calibrated numbers do not.** The loop is made
+  of knob turns; a magic constant breaks on the first one. (v0.5.)
 
 ---
 
 ## 4. Judge artifacts, never source
 
-The critic evaluates the *output*, in the form a real user would encounter it — never the
-code, the diff, the commit message, or the filenames. Source access converts a judge into
-a reviewer, and reviewers rate effort instead of results.
+The critic — LLM or human — evaluates the *output*, as a real user would meet it. Source
+access converts a judge into a reviewer, and reviewers rate effort.
 
-Every domain needs three things defined before the loop can run:
+Three questions define a domain before the loop can run (worked table in `HARNESS.md`
+§1): **Core** — what re-runs identically? **Sample** — what artifact carries the axis in
+under a minute? **Bar** — what external thing sets the standard, *per axis*? One bar per
+axis; a general "be as good as X" gives no gradient.
 
-| | Question | Example (2D game) |
-|---|---|---|
-| **Core** | What can be made deterministic and re-run identically? | Seeded fixed-timestep sim |
-| **Sample** | What artifact captures the axis in seconds? | 3s clip from a replay |
-| **Bar** | What external, real-world thing sets the standard? | Celeste, for movement |
+**The bar is negotiated, not assigned.** The human supplies direction and ambition; the
+agent reports the reachable set **with samples**; the human picks the point. A bar
+outside the reachable set is a wasted round. (An unreachable bar was set while a stronger
+reachable idiom sat unused — v0.3 ○.)
 
-If any of the three is missing, the loop degrades into "ask the human every round."
-
-One bar per axis, not one bar overall. A general "be as good as X" gives no gradient.
-
-### The bar is negotiated, not assigned
-
-Neither party can set it alone, and assigning it to the human wastes rounds. He knows what
-the thing should *be*; he does not know what is reachable, because the agent's capability
-surface is invisible to him and is not a fact about "AI" in general — it is specific to this
-model, this harness and this stack.
-
-| Who | Supplies |
-|---|---|
-| Human | Direction and ambition level — *what this should feel like, and how far to push* |
-| Agent | Where the frontier actually is, **with samples** — *here is the reachable set* |
-| Human | Picks a point on it |
-
-A bar outside the reachable set is not ambition; it is a wasted round. On 01/08 this project
-spent one asking for near-photorealism, which no amount of effort was going to reach, while
-a stronger reachable idiom sat unused for three rounds.
-
-**Agent self-report does not count as the frontier.** It is a hypothesis, and it goes to
-rungs 1–3 of the ladder like any other. The same day the agent wrote *"the real jump is a
-WebGL shader"* into the decision log as fact, and it was wrong about the direction — the
-real jump was animation, of which the game had exactly zero frames. Fluent, confident,
-recorded, and pointing away from the answer. Samples are evidence; paragraphs are not.
+**Agent self-report is a hypothesis.** It goes to rungs 1–3 like any claim; samples are
+evidence, paragraphs are not. (The agent recorded its guessed frontier as fact — fluent,
+confident, wrong about the direction — v0.3 ✅.)
 
 ---
 
 ## 5. Parallelize capability, serialize coherence
 
-Sub-agents working in parallel on axes that **interact** produce a soup where every
-individual axis is maximized and the whole is incoherent.
+Parallel sub-agents on axes that **interact** produce a soup: every axis maximized, the
+whole incoherent. Parallelize independent subsystems that meet at an interface; serialize
+— one agent, human in the loop — whatever composes into one perceived impression. Test:
+if improving A alone could make B feel worse, they do not parallelize.
 
-- **Parallelize:** independent subsystems that meet at an interface.
-- **Serialize, in a single agent, with the human in the loop:** anything where the axes
-  compose into a single perceived impression.
-
-The test: if improving axis A alone could make axis B feel worse, they do not parallelize.
+**Corollary.** Multi-agent machinery raises *production*; this loop is bottlenecked on
+*validation* — added production is inventory. The one fan-out step is the probe (§3.0).
 
 ---
 
 ## 6. Late and narrow
 
-Do not run the loop from scratch. Polishing architecture that is still going to change is
-the most common way to spend a lot for nothing.
-
-Reach a working vertical slice through ordinary collaboration, which is cheap. Only then
-point the loop at the two or three axes that are worth it.
-
-This applies to the harness too, and it is easy to get wrong. Round zero is only the
-**deterministic core** — the thing that makes runs re-runnable. The judging apparatus that
-turns runs into samples is built *after* the slice exists, when there is finally something
-whose quality is worth judging. Building the judge before the artifact is the same mistake
-as running the loop before the slice, wearing better clothes.
+Do not run the loop from scratch — polishing architecture that will still change buys
+nothing. Reach a vertical slice through ordinary collaboration, then point the loop at
+the two or three axes worth it. Round zero is only the deterministic core **plus the
+perception channel** (`HARNESS.md`); the judging apparatus comes after the slice —
+building the judge before the artifact is the same mistake in better clothes.
 
 ---
 
 ## 7. The human
 
-Not an inspector. **The one who sets the bar and breaks ties** — the only one who knows
-what the thing is supposed to be.
+Not an inspector. The one who sets the bar and breaks ties — and the method's most
+sensitive instrument, in two roles:
 
-**Call when:**
-- there is a direction call (kill or continue; is this about X or about Y)
-- the critic ties on a subjective axis
-- a slice is complete
-- 2–3 judged pairs have accumulated
+**Director — when choosing.** Binary, batched: "A or B?", both samples attached, one line
+on what differs. Call when: direction call · critic tie · slice complete · 2–3 judged
+pairs waiting. Do not call when: a test answers it · `TASTE.md` settles it · rungs 1–3
+not cleared. Never synchronous per round — interruption trains rubber-stamping.
 
-**Do not call when:**
-- a test would answer it
-- it is already settled in `TASTE.md`
-- rungs 1–3 have not been cleared
+**Sensor — when something feels off.** The imprecise report ("something odd about the
+back") is the highest-sensitivity, lowest-resolution instrument in the building: near
+perfect on *that*, almost never right on *where*. Treat it as raw data and hunt the root
+— never as a work order on the symptom. (Three root fixes from three non-technical
+phrases, each cause three levels from its symptom — v0.5.)
 
-**Format: binary.** "A or B?" extracts taste fast and with no effort. "What do you think?"
-produces a paragraph that will be misread. One question at a time, both samples attached,
-one line on what differs.
-
-**Never synchronous per round.** Being interrupted every iteration destroys the human's
-day and trains them to rubber-stamp without looking.
+**"I know what I want but cannot express it" → translate, do not offer a menu.** He will
+name external references; follow them. A menu only helps when the right answer is on it.
+(Every option declined, two references named, answer got better — v0.5.)
 
 ---
 
 ## 8. The taste files
 
-The purpose of the human loop is to **calibrate the cheap oracle**, not to replace it.
+The calibration targets. Human taste compiles into the distillate; verdicts into knobs
+and locks; what cannot compile lives below. Templates in `templates/`.
 
-### `DECISIONS.md` — append-only, one line per verdict
+**`DECISIONS.md`** — append-only, one line per verdict: `DATE · AXIS · WINNER · reason`.
+Failures enter with the same weight as wins — defect *families* only become visible
+because first occurrences were written (§3.8). Never prose, never edited.
 
-```
-DATE · AXIS · WINNER · short reason
-```
+**`TASTE.md`** — three sections. **§1 human taste**: ~15 lines, rewritten whole at each
+distillation — a rubric that does not fit gets ignored. **§2a agent biases**: standing
+for the human to ask *"is this you going where you like again?"*. **§2b capability
+surface**: where the ceiling is high and low and **what constraint shape raises it**;
+every entry cites a demonstrating artifact (§4) and is marked **portable or stack** — an
+unmarked surface is the next project's inherited superstition. (§2b's absence cost three
+rounds; its entries then redirected review — v0.3 ✅.)
 
-Never edit old lines. Never write prose — a decision log that becomes an essay is a
-decision log nobody rereads, including the agent.
+**`BACKLOG.md`** — what is open. Decisions are settled; mixing them kills both.
 
-### `TASTE.md` — three sections, and they are not the same kind of thing
+**Log vs state — opposite maintenance rules.** Logs (`DECISIONS.md`, learning file,
+`CHANGELOG.md`): append-only; a superseded line is not a wrong line. State (`CLAUDE.md`
+§1, `BACKLOG.md`, `TASTE.md`, this file): **re-derived** when a verdict supersedes it —
+appending to a log never flags a stale state file, hence §3.7's propagate. **A pivot
+invalidates a batch, not a line**; hunt the cluster. State lists carry *as of DATE*.
+(Three dead constraints binding for a day, believed by every session — v0.2 ✅.)
 
-**§1 Human taste** — distilled rubric, ~15 lines max. Once `DECISIONS.md` passes ~30 lines,
-distill recurring patterns into rules. The history stays for auditing; what enters the
-critic's prompt is the distillate. A rubric that does not fit is a rubric that gets ignored.
-Rewrite it whole when distilling; never accumulate.
+**A constraint proposed as a virtue records both halves** — virtue and limitation. The
+flattering half alone buries "what does this limitation make us best at?". (A restriction
+sold as identity was cover for a capability gap — v0.3 ○.)
 
-**§2a Agent biases** — tendencies the human should push back on. Its purpose is to give him
-standing to ask *"is this you going where you like again?"* and get an honest yes.
+**Loosening a constraint: declared, priced, chosen by looking.** Same samples through
+the strict path and the loosened path, side by side, cost written next to result — never
+in silence. (v0.5.)
 
-**§2b Agent capability surface** — where the ceiling is high, where it is low, and **what
-shape of constraint raises it**. This is the half that was missing until 01/08, and its
-absence cost three rounds: the constraint *"the model does not draw"* was recorded as an
-obstacle to route around and never as a question about where the ceiling is highest. The
-answer — rule-governed pixel art, which converts drawing into constraint satisfaction — was
-available the entire time.
+**Hard constraint is what makes taste verifiable.** A closed vocabulary, a fixed grid, a
+hard budget convert *making* into *satisfying constraints*: in continuous space "is it
+better?" is unanswerable; in discrete locked space half of taste becomes a count. (v0.5,
+generalizing v0.3.)
 
-**Every §2b entry must cite an artifact that demonstrated it.** Not a self-assessment. See
-section 4 on why the agent's word about its own ceiling is worth nothing on its own.
-
-### `BACKLOG.md` stays separate
-
-Backlog is what is open. Decisions are what is settled. Mixing them is how decision logs
-die.
-
-### Log files vs state files — the distinction that was missing
-
-This split was added on 01/08, after the loop failed at exactly this seam. Every file the
-project keeps is one of two kinds, and they have opposite maintenance rules:
-
-| Kind | Files | Rule | Failure if ignored |
-|---|---|---|---|
-| **Log** | `DECISIONS.md` | Append only. Never edit. A superseded line is not a wrong line. | Grows; that is fine |
-| **State** | `CLAUDE.md` §1, `BACKLOG.md`, `TASTE.md` | Must be **re-derived** whenever a verdict supersedes them | Silently declares dead constraints as binding |
-
-A log is self-maintaining. A state file is not, and nothing about appending to the log
-tells you a state file went stale. That is why section 3 has a separate *propagate* step.
-
-**A pivot invalidates a batch, not a line.** When a core falls, it takes a cluster of
-dependent constraints with it, and each one has to be hunted down by hand. On 01/08 the
-`dash+creep` core fell; `CLAUDE.md` §1 kept declaring *geometric primitives only*, *8 fixed
-directions* and *i-frames until the end of the next dash* as binding for a full day after
-all three were dead. Nobody noticed, because every new session read that file first and
-took it at its word.
-
-State files should say **as of DATE** on any list they call binding. A date is the cheapest
-possible staleness signal: it does not prove the list is current, but it makes "when was
-this last checked" answerable without archaeology.
-
-### A constraint proposed as a virtue must be split
-
-When either party proposes a constraint and argues it as a design virtue, record **both
-halves**: which part is virtue, and which part is limitation.
-
-> *"Only geometric primitives — the restriction becomes identity; it denies the crutch of
-> pretty assets."* — 31/07
-
-That was true. It was also a cover story for *the agent cannot draw*, and only the flattering
-half reached the decision log as the headline. Recording one half buried the question
-"what else does this limitation make us good at?" for three rounds.
-
-Both halves are usually true. The virtue half is the one that feels like insight, which is
-exactly why it is the one that gets written down alone.
-
-### Disagreement outranks agreement
-
-A round where the critic picks A, the human picks B, and the reason is recorded teaches
-more than ten rounds of agreement. Do not soften the critic's pick toward the expected
-answer — that makes the loop dumber.
+**Disagreement outranks agreement.** Critic picks A, human picks B, reason recorded —
+worth more than ten agreements. Do not soften the critic's pick.
 
 ---
 
-## 9. Critic packet
+## 9. Critic packet — the rung-4 niche
 
-The complete input to the blind critic. Nothing else.
-
-```md
-# Judgment: <axis>
-
-## Reference bar
-<external reference for this axis>
-Why this is the bar: <one line>
-
-## Rubric
-<contents of TASTE.md>
-
-## Variant A
-<sample>
-<objective metrics, if any>
-
-## Variant B
-<sample>
-<objective metrics, if any>
-
-## Task
-Judge only <axis>. Ignore everything else present in the samples.
-Pick A or B, or declare a tie. State the single most important reason in one sentence.
-If neither clears the reference bar, say so — a winner is not required.
-```
-
-Two rules keep this honest:
+For the residue that stays subjective after the locks speak. Template in
+`templates/CRITIC-PACKET.md`; the complete input: axis, reference bar, `TASTE.md`
+rubric, variants A and B with samples and metrics, task line. Nothing else.
 
 - **The critic never learns which variant is new.** Recency bias is the primary failure
-  mode of LLM-as-judge. Randomize order; keep the mapping in a file the critic cannot see.
-- **"Neither" is a valid verdict.** A loop that must produce a winner will manufacture one,
-  and that is how a project drifts sideways for ten rounds while appearing to improve.
+  mode of LLM-as-judge: randomize order, hide the mapping.
+- **"Neither" is a valid verdict.** A loop that must produce a winner will manufacture
+  one — and drift sideways for ten rounds while appearing to improve.
+
+Rung 4 is **unexercised** to date: taste has compiled to rung 2 before an LLM critic was
+needed. Trigger stands — the same subjective axis judged more than twice a week; if no
+project ever fires it, this is the section that retires.
 
 ---
 
@@ -332,77 +287,74 @@ Two rules keep this honest:
 
 | Symptom | Cause |
 |---|---|
-| Costs a lot, improves little | Rung 4 used where rung 2 would do |
+| Costs a lot, improves little | Rung 4–5 used where rung 2 would do |
 | Everything looks good, feels wrong | Coherence axes were parallelized |
-| Human is exhausted by round 5 | Called synchronously, or for things tests resolve |
+| Human exhausted by round 5 | Called synchronously, or for things tests resolve |
 | Critic always picks the newer variant | Ordering not randomized |
 | Improvement stalls after passing the bar | Bar too general, or no "neither" option |
-| New session repeats settled arguments | Verdicts not written down the same turn |
+| New session repeats settled arguments | Verdicts not written the same turn |
 | Polish that gets thrown away | Loop started before the vertical slice |
-| New session works from constraints that are dead | Verdict recorded in the log but never propagated to the state files |
-| Backlog describes a game that no longer exists | Same cause; a pivot invalidates a batch and nothing sweeps for it |
-| Rounds improve the thing, the loop never improves | No round-close step; the method is never itself under review |
-| Agent is confident about work it cannot see | Axis has no artifact the agent can actually inspect — see section 12 |
-| A fresh session picks up the wrong work, or cannot find the current state | No cycle-open reconciliation — see section 3b |
+| New session works from dead constraints | Verdict logged, never propagated to state |
+| Backlog describes a dead product | Pivot invalidated a batch; nobody swept |
+| The thing improves, the loop never does | No round close; method never under review |
+| Agent confident about work it cannot see | No perception channel on that axis (§3c) |
+| Fresh session picks up the wrong work | No cycle open (§3b) |
+| A measurement is convincing and false | Instrument never ran the null case (§2) |
+| Same defect fixed for the fourth time | Family never generalized into one lock (§3.8) |
+| Last week's judgment is gone | It stayed prose — never compiled (§3.7) |
 
 ---
 
 ## 11. Porting to a new domain
 
-Before the first round, answer the three questions in section 4. Concretely:
+Answer §4's three questions **in writing** — core, sample, bar; whichever has no answer
+is the first thing to build. Then round zero — `HARNESS.md`: deterministic core plus
+perception channel, before any content.
 
-- **Core** — what is the deterministic, re-runnable unit? If nothing can be re-run
-  identically, build that first; there is no cheap loop without it.
-- **Sample** — what can a judge consume in under a minute that actually contains the axis?
-  If the axis only shows up over twenty minutes of engagement, either find a proxy or
-  accept that this axis is human-only.
-- **Bar** — what real-world artifact plays the role of the standard, per axis?
+**A gate, before anything else.** One reading that says whether the thesis is alive,
+taken from *behaviour*, with the number of consecutive negatives that kills it. A project
+that cannot fail is being decorated, not steered. The counter has an owner in a state
+file (§3b.5); when the core changes the gate usually changes with it, and a replacement
+that cannot kill is not a replacement.
 
-Then build the harness that produces samples automatically. That harness is round zero,
-and it comes before any content.
+**A gate must be able to SURPRISE the person who owns the kill decision** — otherwise it is
+a commitment device wearing a sensor's clothes, and it costs attention every session to
+tell that person what they already knew. Test it by asking who can produce the reading: if
+the owner produces it alone, by using the thing, it is not a gate. Prefer a reading only an
+outsider can generate; then its attention cost on ordinary days is zero, which is what
+keeps a gate from pulling every session toward itself. (A gate counted three judgments its
+owner had said out loud, was removed for pulling focus, and was replaced the same day by an
+outsider reading — v0.7 ○.)
+
+**Install: copy `core/` — and only `core/` — into the new repo.** The package's
+`CHANGELOG.md` and `examples/` stay home: evidence and instances read as requirements to
+a cold session, and a project inherited another domain's residue exactly this way (v0.6).
+**Then the first session runs cycle zero — `INTAKE.md`** — which fills the brackets:
+direction, constraints, the pleasure boundary, the collaboration contract, the gate.
+Declared taste enters as `[declared]`, outranked by any later verdict on a sample (v0.7 ○).
+
 ---
 
 ## 12. Evolving the loop
 
-This document is not settled. It is the first iteration of a method, and it has already
-been wrong twice in two days. Treat it as the project treats the game: something that gets
-a verdict each round.
+This file is under the same regime as the product: a verdict each round.
 
-**Rule: the loop is reviewed at the close of every round**, in the same turn, out loud.
-Three questions, and the answers are cheap:
+- **Round close (§3.9), every round, out loud.** Loop verdicts → `DECISIONS.md`, `LOOP`
+  axis — decisions about how the project decides: dearest to get wrong, cheapest to forget.
+- **Raw material in `TASTE-LOOP-LEARNING.md`**: cases, evidence, numbered proposals. A
+  change graduates only with the human's verdict, same turn: edit here, entry in
+  `CHANGELOG.md`, line in `DECISIONS.md` — §8's log/state split applied to the method.
+- **`CHANGELOG.md` carries the burden of proof.** Every rule: dated entry, incident,
+  *Validated* status. ○ is a hypothesis wearing the formatting of a result — on purpose.
+  §3b.8 keeps the column alive; the ceiling is enforced at §3b.6.
 
-1. **Did this round produce a gate reading?** If not, say so plainly. A round that
-   improved something real but measured nothing is not a failed round — but it is a round
-   where the gate counter does not move, and pretending otherwise is how a project drifts
-   sideways while appearing to advance.
-2. **Where did the loop itself fail?** Not the work — the method. A rule that was followed
-   and still let something through is worth more than a rule that was skipped.
-3. **Does this file need to change?** If yes, change it in the same turn, and log it below.
+### Known gaps, as of v0.5
 
-Loop verdicts go in `DECISIONS.md` like any other, on the `LOOP` axis. They are decisions
-about how the project decides, which makes them the most expensive ones to get wrong and
-the cheapest ones to forget.
-
-**Raw material lives in `TASTE-LOOP-LEARNING.md`.** Cases, evidence and proposals go there
-first; a change graduates into this file only when the human accepts it. Keeping the two
-apart is what stops this document from turning into a diary of half-tested ideas — and it
-is the same log-versus-state split as section 8, applied to the method itself.
-
-### Changelog
-
-| Date | What changed | What went wrong that caused it |
-|---|---|---|
-| 31/07 | Bar per axis, not one bar overall (§4) | A general "be as good as X" gave no gradient; the dash was approved with no bar declared and it did not scale to the next axis |
-| 31/07 | Restart must use its own key, not the action key | The gate measured a reflex instead of an intention: the human pressed the shared key 2.9s after dying and did not mean to continue |
-| 01/08 | Log vs state files, and the *propagate* step (§3.8, §8) | Three constraints stayed declared as binding for a day after the core that implied them fell |
-| 01/08 | Round close, and this section (§3.9, §12) | The method was never itself under review; every round improved the game and none improved the loop |
-| 01/08 | "Agent is confident about work it cannot see" as a named failure mode (§10) | Five real visual defects survived code review and a green test suite; only rendering the output found them. If an axis has no artifact the agent can inspect, the agent's confidence on that axis is worth nothing |
-| 01/08 | Frontier probe as step 0 (§3) | The agent's strongest visual idiom sat unused for three rounds; the human discovered it by dissatisfaction, which is the most expensive detector available |
-| 01/08 | The bar becomes negotiated (§4) | The human set a bar outside the reachable set, because the agent's capability surface is invisible to him and undocumented |
-| 01/08 | Agent self-report is a hypothesis, not a fact (§4) | "The real jump is a WebGL shader" went into the decision log as fact and was wrong about the direction |
-| 01/08 | `TASTE.md` §2 splits into biases and capability surface (§8) | §2 collected tendencies but never boundaries or maxima, so nothing ever asked where the ceiling was highest |
-| 01/08 | Fourth round-close question: did we operate below a named ceiling? (§3.9) | Nothing in the loop detected three rounds spent below the frontier |
-| 01/08 | Constraints proposed as virtues must be split (§8) | "Only geometric primitives — the restriction becomes identity" was virtue and limitation; only the virtue half was recorded |
-| 02/08 | A new instrument passes the null case (§2) | A pixel-difference test built to prove a crowd was animating reported ~50% of pixels changing; with the crowd switched off, 96.6% still changed. The instrument measured the background, and its number was convincing |
-| 02/08 | Baselines in state files carry their reproducing command (§3b) | `BACKLOG.md` held two contradictory baselines for the same bot measurement, fourteen lines apart; the stale one was quoted into a wrong conclusion that a sweep later contradicted |
-| 02/08 | Cycle open: the reconciliation pass (§3b) | A deliberate handoff to a clean session still shipped four state defects — the session ordering did not include the file holding the round, one item was both struck out and reopened, two different "next rounds" were declared, and the gate counter existed only inside the append-only log. Rounds had a close and cycles had no open |
+- **No stopping rule at any scope** — round, batch, axis, project. The agent has no
+  fatigue; "when are we done" cannot be left to the party with the incentive to continue.
+  (P6, unratified.)
+- **No per-request check that the agent understood.** Cycle zero's readings check covers
+  day zero (`INTAKE.md`); the per-request half of P9 stays open.
+- **No criterion for which axes deserve a frontier probe**, and **rung 4 still has zero
+  observations** (§9) — retirement is on the table.
+- **The gate measures direction, not joint maximum.** Only the first is instrumented.

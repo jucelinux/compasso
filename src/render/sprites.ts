@@ -9,7 +9,6 @@ import {
   RAMP_LEU,
   RAMP_MEMBRANE,
   RAMP_NUC,
-  RAMP_ORG,
   RAMP_SAL,
   RAMP_SHI,
   RAMP_SPECULAR,
@@ -26,8 +25,6 @@ import {
   EST0,
   INF1,
   INF3,
-  ORG1,
-  ORG2,
   SAL2,
   SAL3,
   WHITE,
@@ -418,40 +415,6 @@ export function pathogenSheet(form: string, px: number): Sheet {
 }
 
 // ------------------------------------------------------------ outros corpos
-
-/**
- * Célula do organismo. Translúcida — e em pixel art translúcido é dither, não
- * alpha. O interior é xadrez; só a membrana é sólida, o que a mantém legível
- * mesmo com dez patógenos por cima.
- */
-export function organSheet(px: number, hpMax: number): Sheet {
-  const R = px / 2
-  const S = Math.ceil((R * 2.6) / 2) * 2 + PAD
-  const c = S / 2
-  const PH = 6
-  return buildSheet(S, S, hpMax, 1, PH, (tier, _d, phase) => {
-    const b = makeBuf(S, S)
-    const ph = (phase / PH) * TAU
-    const health = (tier + 1) / hpMax
-    const r = R * (1 + Math.sin(ph) * 0.05)
-
-    disc(b, c, c, r * 0.94, RAMP_ORG)
-    ditherMask(b, 0.35 + 0.25 * health)
-    ring(b, c, c, r, 2, ORG2)
-    // O anel interno usa cosseno: com os dois em seno, as fases opostas do
-    // respiro caíam no mesmo desenho e metade dos quadros era cópia.
-    ring(b, c, c, r * 0.78 + Math.cos(ph) * R * 0.07, 1, ORG1, 0.5)
-
-    // rachaduras quando ferida: dano vira desenho, não só alpha menor
-    const cracks = hpMax - 1 - tier
-    for (let i = 0; i < cracks; i++) {
-      const a = (i / Math.max(1, cracks)) * TAU + 0.7
-      line(b, c + Math.cos(a) * r * 0.2, c + Math.sin(a) * r * 0.2, c + Math.cos(a) * r, c + Math.sin(a) * r, INK2, 1)
-    }
-    outline(b, INK)
-    return b
-  })
-}
 
 /** Cápsula de poder: hexágono pulsante na cor do poder. */
 export function dropSheet(ramp: Ramp): Sheet {

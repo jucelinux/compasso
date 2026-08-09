@@ -364,6 +364,62 @@ number reads fine.
 it and the date it was taken.** Then a suspicious number is one command away from being
 checked, instead of an argument between two lines of the same file.
 
+### P12 — Portão: o custo de FOCO não está no método, nem na v0.7 · ABERTA, precisa do veredito dele
+
+Em 08/08 o H removeu o portão deste projeto (`DECISIONS.md`, 08/08). Ao propagar a remoção
+pelos arquivos de estado, apareceu um buraco — e a v0.7 do pacote, lida na mesma sessão,
+fecha metade dele e deixa a outra metade aberta.
+
+**A metade que a v0.7 já fechou.** A versão que este projeto tinha citava portão em §3.9,
+§12.1 e §3b.5 sempre PRESSUPONDO que o projeto tem um, e nunca dizia o que era. A v0.7 §11 e
+o `INTAKE.md` §6 definem: *uma leitura de COMPORTAMENTO que diz se a tese está viva, com o
+número de negativos seguidos que a mata*, e — decisivo — **o agente propõe uma ou duas
+leituras e o HUMANO escolhe**. Pelo padrão da própria v0.7, o portão daqui era defeituoso na
+origem: foi invenção do modelo em 31/07, sem escolha do H, e ficou oito dias sendo cobrado
+dele. Isso não é argumento para reinstalar; é o registro de que a peça saiu errada de fábrica
+e a fábrica já foi consertada.
+
+**A metade que continua aberta, e é a queixa do H:** *portão permanente puxa o foco de toda
+sessão para si*. A v0.7 não trata disso e em um ponto agrava — `INTAKE.md` §4 põe strike de
+portão como a ÚNICA coisa autorizada a interromper imediatamente. Nenhuma regra diz quando um
+portão deixa de valer o que custa em atenção.
+
+**A evidência de que a peça saiu malfeita**, e vale mais que o argumento: a métrica nunca
+detectou nada. Os três "não" que derrubaram o core em 01/08 eram julgamentos do próprio H,
+ditos por ele antes de o contador chegar a três. O portão os CONTOU. Um portão que só sabe o
+que o dono da decisão já sabe é dispositivo de compromisso, não sensor — e vale só o que
+valer o pré-compromisso, que num humano que já matou core, formato, métrica e fila em oito
+dias é pouco.
+
+**Segundo sintoma, e é ele que o H nomeou:** métrica de morte permanente puxa o foco de toda
+sessão para si. Aconteceu na própria sessão que a removeu — ele pediu para discutir o
+`BACKLOG.md` e o agente abriu com o portão.
+
+**O critério que faltava, e que este caso oferece:** um portão só se paga se puder
+SURPREENDER quem é dono da decisão. Os três "não" de 31/07 eram julgamentos do próprio H,
+ditos por ele antes de o contador fechar; o portão os contou e não descobriu nada. Portão que
+só sabe o que o dono já sabe é dispositivo de compromisso, não sensor — e vale só o que valer
+o pré-compromisso, que num humano que matou core, formato, métrica e fila em oito dias é
+pouco, contra um custo de atenção que é cobrado toda sessão.
+
+Duas saídas para o método, e nenhuma é minha para escolher:
+
+1. **Condicionar o portão** na §11 e no `INTAKE.md` §6: obrigatório quando o dono da decisão
+   pode ser surpreendido (jogador externo, uso em campo, métrica de adoção); dispensável, com
+   linha registrada, quando a leitura de vida já é o julgamento direto de quem decide. Hoje
+   o `INTAKE.md` diz que sair sem portão é intake incompleto, sem exceção prevista.
+2. **Generalizar o fechamento de rodada** (§3.9/§12.1) de *"leitura de portão?"* para *"esta
+   rodada produziu alguma leitura de direção, ou nenhuma?"* — que é o que aquele passo quer
+   de fato, e continua funcionando em projeto sem portão.
+
+Recomendação do modelo: as duas, e a 2 é independente da 1. Ressalva de parte interessada:
+foi o modelo que inventou o portão daqui, então o modelo tem incentivo em concluir que a
+culpa era da regra e não do uso que fez dela.
+
+O `TASTE-LOOP.md` **não foi tocado**: §12 diz que mudança no método só gradua com aceite
+dele. A pergunta aberta *"o portão ainda é a métrica certa?"* na §7 abaixo foi respondida por
+esta decisão, e continua ali como registro do que se perguntava antes.
+
 ---
 
 ## 6. Learning log

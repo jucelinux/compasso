@@ -9,7 +9,6 @@ import {
   necroticTile,
   dropSheet,
   macrophageSheet,
-  organSheet,
   pathogenSheet,
   playerSheet,
   shockRings,
@@ -220,10 +219,6 @@ const pecas: Peca[] = [
   ),
   daFolha("macrofago", macrophageSheet(tuning.powers.macrophageRadius)),
   daFolha("gota", dropSheet(RAMP_GLD), "rampa dourada só de amostra — o atlas escolhe por poder"),
-  {
-    ...daFolha("orgao", organSheet(tuning.player.size * 2, 3)),
-    nota: "ATENÇÃO: `organSheet` não é chamado por `atlas.ts` nem por nada em src/. Assado por ninguém.",
-  },
   {
     nome: "hemacia",
     nota: "a multidão: linha é necrose, coluna é variante",

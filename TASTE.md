@@ -52,13 +52,47 @@ ambição, eu reporto o alcançável com amostra, ele escolhe o ponto — `TASTE
 | escalada em run curta | Devil Daggers | modelo, 31/07 |
 | escalada de recompensa | Candy Crush | **H**, 31/07 |
 | primor técnico da arte | os melhores jogos de SNES | **H**, 01/08 |
-| curva de tensão | **VAZIO** | — |
+| curva de tensão | **Tetris** | modelo, 08/08 — provisório até ele ver amostra |
 
-**O eixo que está falhando é o único sem bar.** É a dívida mais antiga aberta com ele, e
-`TASTE-LOOP.md` §4 diz o que acontece sem isso: o loop degrada para "perguntar toda rodada".
+**A dívida mais antiga do projeto foi paga em 08/08**, e o H pediu explicitamente que eu
+escolhesse porque não tinha opção própria. O bar é **provisório**: `TASTE-LOOP.md` §4 diz que
+bar se negocia com AMOSTRA, e ele ainda não viu nenhuma.
+
+**Por que Tetris, e o que está sendo copiado.** Não é a estética nem o gênero — é uma
+PROPRIEDADE, e é a que faltava:
+
+- **Uma quantidade visível só.** A pilha. Aqui: a infecção do tecido.
+- **A pressão sobe sozinha se você não agir.** Não existe estado em que a pilha para.
+- **Equilíbrio é IMPOSSÍVEL por construção** — e era exatamente o defeito de 02/08 (716,4s,
+  3.799 abates, campo nem limpo nem estourado) e o de 05/08 (dois atratores, a seed
+  escolhendo qual). A necrose de 05/08 foi o primeiro passo nessa direção.
+- **A derrota é legível do outro lado da sala**, sem número e sem HUD.
+- **A dificuldade vem de encolher a folga**, nunca de somar inimigos (§1, primeira linha).
+
+Segundo lugar, e por que perdeu: **Missile Command** tem a curva certa e a perda por acúmulo
+que ele pede — cidade que cai não volta — mas ADMITE equilíbrio numa onda fácil, e é o
+equilíbrio que este projeto precisa tornar impossível.
 
 Aposentado: *primitiva como identidade / Geometry Wars* — a restrição caiu em 31/07 e a
 arte virou pixel art em 01/08.
+
+---
+
+## 1c. Como LER o que ele diz
+
+_Importado do `TASTE-LOOP.md` v0.8 §7 em 08/08. Não é gosto dele: é instrução de uso do
+instrumento mais sensível do prédio. As duas regras têm cicatriz aqui._
+
+- **Relato impreciso é DADO BRUTO, nunca ordem de serviço sobre o sintoma.** Ele é quase
+  perfeito no *quê* e quase nunca certo no *onde* — a causa costuma estar três níveis abaixo
+  da frase. Funcionou em 02/08: "não consegui perceber a efetividade da aura" virou
+  instrumentação do replay e a resposta foi "0,4%, e o defeito é meu" — e em 05/08 a mesma
+  queixa levou à necrose, três níveis abaixo do número que ela parecia pedir. Falhou três
+  vezes com "o jogo acontece DENTRO do cenário", que eu li como ordem de desenho nas três.
+- **"Sei o que quero mas não consigo expressar" → TRADUZIR, não oferecer menu.** Menu só
+  ajuda quando a resposta certa está nele; fora disso ele declina tudo e a rodada foi gasta.
+  A via que funciona com ele é referência externa e proposta de mecanismo, que é como ele
+  mesmo chega (§1). Eu ofereci menu de três opções pelo menos duas vezes.
 
 ---
 
@@ -117,18 +151,21 @@ _Onde o teto é alto, onde é baixo, e **que formato de restrição o levanta**.
 01/08 (`TASTE-LOOP.md` §8). Toda entrada cita o artefato que a demonstrou — autoavaliação
 minha não vale, porque já errei a direção com confiança total._
 
-| | Capacidade | Evidência |
-|---|---|---|
-| ⛔ | **Não desenho.** Sem ferramenta de imagem. Arte à mão exige outra pessoa. | 31/07, `DECISIONS` |
-| ⛔ | **Não sou juiz confiável do meu próprio teto.** Registrei "o salto é shader WebGL" como fato; o salto era animação, que o jogo tinha em quantidade zero. | 01/08, `DECISIONS` |
-| ⛔ | **Não julgo o que acabei de produzir sem olhar.** 5 defeitos visuais passaram por revisão de código e 65 testes verdes. | 01/08, capturas |
-| ⛔ | **Meus defeitos visuais são de POSIÇÃO e ORDEM, quase nunca de lógica.** Seis achados por captura em 02/08 e todos do mesmo tipo: véu da tela errada, moldura desenhada na frente do bicho que ela apresentava, pontuação colidindo com as vidas, aura vazando para o painel vizinho, painel translúcido deixando o jogador aparecer por dentro, glifo inexistente descartado em silêncio. Nenhum era regra errada. **Consequência:** revisar composição — quem cobre quem, quem encosta em quem — é onde olhar rende mais, e é o que código nunca denuncia. | 02/08, seis capturas |
-| ⛔ | **Olhar pega o que está ERRADO, não o que está AUSENTE.** Uma camada inteira foi assada, atualizada 60x por segundo e nunca posta em cena; ela não deixa rastro na captura, então a captura a aprovou. Contra ausência, a verificação é reler a lista de montagem — não a imagem. | 02/08, `frontSprite` |
-| ⛔ | **O instrumento de olhar tem os MESMOS defeitos que eu, e mente na direção mais cara.** Os três do `npm run olho`: escada de luminância invertida (contorno saía branco, buraco saía marcado — vazio parecia corpo), redução de 3:1 que fazia as OITO direções do jogador aparecerem idênticas, e tira que supunha quadros do mesmo tamanho. Nenhum era de lógica, todos de amostragem e composição, e os três faziam o olho APROVAR o que ele existe para denunciar. **Consequência:** instrumento novo de verificação se verifica contra um caso onde já se sabe a resposta, antes de acreditar nele. Convenção herdada de outro projeto não é convenção verificada. | 04/08, `olho.ts` |
-| ✅ | **Sistema visual regido por regra é onde meu teto é mais alto.** Paleta travada, grade inteira, dither ordenado, matriz de quadros, silhueta dentro da hitbox — converte desenho em satisfação de restrição. | 01/08, primeiro veredito de "qualidade de mercado" |
-| ✅ | **Construo a minha própria verificação bem.** Buffer indexado sem DOM fez a arte inteira rodar sob teste e pegou 3 defeitos que leitura não pegaria. | 01/08, `pixelart.test.ts` |
-| ✅ | **Instrumento derruba a minha própria hipótese sem dó.** Apontei o buraco dos i-frames como causa da dificuldade; escrevi o bot que o explora; ele morreu mais rápido. | 01/08, `bot.ts` |
-| ✅ | **Volume mecânico sem fadiga.** 456 quadros assados, fonte bitmap com acento composto, 71 testes. Consistência não cansa. | 01/08 |
+**Cada linha é marcada `portável` ou `stack`** desde 08/08 (`TASTE-LOOP.md` v0.8 §8):
+superfície sem marca é a superstição que o próximo projeto herda sem saber que herdou.
+
+| | Capacidade | Onde vale | Evidência |
+|---|---|---|---|
+| ⛔ | **Não desenho.** Sem ferramenta de imagem. Arte à mão exige outra pessoa. | **portável** — é do modelo | 31/07, `DECISIONS` |
+| ⛔ | **Não sou juiz confiável do meu próprio teto.** Registrei "o salto é shader WebGL" como fato; o salto era animação, que o jogo tinha em quantidade zero. | **portável** | 01/08, `DECISIONS` |
+| ⛔ | **Não julgo o que acabei de produzir sem olhar.** 5 defeitos visuais passaram por revisão de código e 65 testes verdes. | **portável** | 01/08, capturas |
+| ⛔ | **Meus defeitos visuais são de POSIÇÃO e ORDEM, quase nunca de lógica.** Seis achados por captura em 02/08 e todos do mesmo tipo: véu da tela errada, moldura desenhada na frente do bicho que ela apresentava, pontuação colidindo com as vidas, aura vazando para o painel vizinho, painel translúcido deixando o jogador aparecer por dentro, glifo inexistente descartado em silêncio. Nenhum era regra errada. **Consequência:** revisar composição — quem cobre quem, quem encosta em quem — é onde olhar rende mais, e é o que código nunca denuncia. | **portável** no tipo, **stack** nos exemplos | 02/08, seis capturas |
+| ⛔ | **Olhar pega o que está ERRADO, não o que está AUSENTE.** Uma camada inteira foi assada, atualizada 60x por segundo e nunca posta em cena; ela não deixa rastro na captura, então a captura a aprovou. Contra ausência, a verificação é reler a lista de montagem — não a imagem. | **portável** | 02/08, `frontSprite` |
+| ⛔ | **O instrumento de olhar tem os MESMOS defeitos que eu, e mente na direção mais cara.** Os três do `npm run olho`: escada de luminância invertida (contorno saía branco, buraco saía marcado — vazio parecia corpo), redução de 3:1 que fazia as OITO direções do jogador aparecerem idênticas, e tira que supunha quadros do mesmo tamanho. Nenhum era de lógica, todos de amostragem e composição, e os três faziam o olho APROVAR o que ele existe para denunciar. **Consequência:** instrumento novo de verificação se verifica contra um caso onde já se sabe a resposta, antes de acreditar nele. Convenção herdada de outro projeto não é convenção verificada. | **portável** | 04/08, `olho.ts` |
+| ✅ | **Sistema visual regido por regra é onde meu teto é mais alto.** Paleta travada, grade inteira, dither ordenado, matriz de quadros, silhueta dentro da hitbox — converte desenho em satisfação de restrição. | **portável** | 01/08, primeiro veredito de "qualidade de mercado" |
+| ✅ | **Construo a minha própria verificação bem.** Buffer indexado sem DOM fez a arte inteira rodar sob teste e pegou 3 defeitos que leitura não pegaria. | **portável** | 01/08, `pixelart.test.ts` |
+| ✅ | **Instrumento derruba a minha própria hipótese sem dó.** Apontei o buraco dos i-frames como causa da dificuldade; escrevi o bot que o explora; ele morreu mais rápido. | **portável** | 01/08, `bot.ts` |
+| ✅ | **Volume mecânico sem fadiga.** 456 quadros assados, fonte bitmap com acento composto, 71 testes. Consistência não cansa. | **portável** | 01/08 |
 
 **Como usar isto:** quando um eixo travar, a pergunta não é *"como contorno minha
 limitação?"* — é *"que idioma deste eixo é maximizado pelo formato da minha limitação?"*.

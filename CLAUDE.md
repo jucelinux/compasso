@@ -13,33 +13,37 @@ write code before that.
 `BACKLOG.md` was added to this list on 02/08: the round being handed off lives there, and a
 session that skipped it would never read the work it was supposed to do.
 
-**The gate — the project's single direction metric.** Voluntary second-run rate; three
-consecutive "no" kill the thesis (`DECISIONS.md`, 31/07). Counter reset on 01/08 when the
-core changed. **It counts STRIKES: zero is the best state, not the worst.** A "yes" holds
-it at zero — there is nothing to climb. **Standing at 0 strikes of 3 as of 02/08**, on four
-readings: two "yes" from H (one against the tissue core, one against the phase format) and
-two nulls, both from someone stopping for an outside reason rather than deciding not to
-play. Current count is kept at the top of `BACKLOG.md`; update it there the same turn a
-reading comes in.
+**The gate — "the dilation is read without explanation". H's pick, 08/08.**
 
-**RATIFICADA em 05/08 — a fase seguinte, sem ajuda.** *(as of 05/08)*
+An outsider plays, with nobody explaining anything. The reading is whether they demonstrate
+or say that time responds to their movement. **"No" = they finish the session without
+getting it, or somebody had to explain it.** Null is still someone stopping for an outside
+reason, by the same 02/08 criterion. Three consecutive "no" kill the thesis, because the
+thesis *is* "time only moves when you move" — a game whose one binding line is invisible to
+everyone who plays it does not have that line.
 
-A métrica ficou "em revisão" de 02/08 a 05/08 esperando ratificação, e nesse intervalo o
-portão não podia registrar leitura nenhuma: o formato tinha mudado e a régua não. Em 05/08
-o H passou a direção para o modelo — *"assuma o controle, não consigo lidar com as decisões
-acumuladas"* — e esta é uma das decisões acumuladas. Chamada minha, sob delegação explícita,
-e o H reverte com uma linha.
+**It counts STRIKES: zero is the best state, not the worst.** Counter at the top of
+`BACKLOG.md`; update it the same turn a reading arrives. **Standing at 0 of 3 as of 08/08**,
+with nothing carried over.
 
-**A régua:** o jogador atravessa a fase 1 sem ninguém explicar e entra na fase 2 por ato
-próprio. **"Não"** é largar dentro da fase 1, ou precisar que expliquem para seguir. Nula
-continua sendo parada por motivo externo, pelo mesmo critério de 02/08.
+**This supersedes the gate ratified on 05/08** — *"the next phase, unaided"* — which was the
+model's call under delegation while H was away from the decisions. On 08/08 H reopened the
+whole concept, considered removing it outright, and picked this one from two proposals. The
+05/08 line was not wrong; it was made without him.
 
-**Ela PODE matar**, que é a condição inegociável: três "não" seguidos derrubam a tese. Um
-projeto que troca a métrica de morte por uma que não falha parou de poder falhar.
+**The criterion that chose it, and the one to reuse:** a gate only pays for itself if it can
+**surprise the person who owns the kill decision.** H cannot produce this reading by playing,
+because he already knows. *"The next phase, unaided"* fails that test — he produces it alone,
+and knows the answer before the counter counts. This one has already surprised once: his son,
+02/08, read the organism, the disease and the dash unaided and did **not** read the dilation.
+His wife did read it, but she watched instead of playing, so the question is genuinely open.
 
-**O contador ZERA com a ratificação.** As quatro leituras de 02/08 mediam a régua velha
-contra um formato que já tinha mudado; carregá-las para a nova seria somar medições de
-coisas diferentes. Partindo de **0 strikes de 3**, sem nenhuma leitura ainda.
+**Its attention cost is zero on ordinary days, and that is the point.** The reading only
+exists when an outsider plays. Nothing to check, no counter to touch, nothing to raise at the
+start of a session where that did not happen. The gate removed on 08/08 was removed partly
+for pulling every session toward itself; do not let this one do the same.
+
+Weakness, named: readings are rare — two in eight days — so verdicts are slow.
 
 ---
 

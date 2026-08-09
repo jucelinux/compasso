@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest"
+import { readdirSync } from "node:fs"
 import { resolve } from "node:path"
 import { loadReplay, loadTuning, projectRoot } from "../src/harness/loadTuning.ts"
 import { runReplay } from "../src/harness/runReplay.ts"
@@ -253,6 +254,69 @@ describe("determinismo", () => {
   it("hash evolui — não é constante", () => {
     const { hashes } = runReplay(smoke(), tuning())
     expect(new Set(hashes).size).toBeGreaterThan(100)
+  })
+})
+
+/**
+ * PROCEDÊNCIA — 08/08.
+ *
+ * Nasceu de um defeito real: `replays/` tem catorze arquivos e a suíte conhecia
+ * CINCO. Os outros nove são as leituras humanas de 02/08, gravadas contra
+ * `73f423d`, e nada travava coisa nenhuma sobre elas.
+ *
+ * O custo apareceu na mesma hora em que se olhou. O `BACKLOG.md` cita "0,4% de
+ * cura contra veneno" e "3.799 abates em 716,4s de run VIVA" como se fossem
+ * números do jogo. Rodando `humano-aura-02-08.json` contra o HEAD, a run morre
+ * aos 133,8s com 248 abates. O número existe — só que em `73f423d`, e em mais
+ * lugar nenhum. É o baseline-boato do `TASTE-LOOP.md` §3b.4.
+ *
+ * A trava NÃO exige que replay antigo reproduza; exige que ele esteja DECLARADO,
+ * com o build em que foi gravado. Arquivo novo em `replays/` quebra isto até
+ * alguém dizer o que ele é.
+ */
+const PROCEDENCIA: ReadonlyArray<readonly [string, string, string]> = [
+  ["smoke.json", "7c952a6", "sintética, regenerável byte a byte por `npm run smoke`"],
+  ["core-atual.json", "029eaac", "sintética, VIVA — regravar com `npm run rec`"],
+  ["run-01.json", "7c952a6", "humana, core do dash; hoje só âncora de determinismo"],
+  ["run-02.json", "7c952a6", "humana, core do dash; hoje só âncora de determinismo"],
+  ["run-03.json", "7c952a6", "humana, core do dash; hoje só âncora de determinismo"],
+  ["filho-02-08.json", "73f423d", "1º jogador externo; a dilatação NÃO foi lida"],
+  ["humano-02-08.json", "73f423d", "H, core do tecido"],
+  ["humano-aura-02-08.json", "73f423d", "H, 716,4s — a run do PONTO FIXO e da medição de 0,4%"],
+  ["humano-concluiu-02-08.json", "73f423d", "H, fase concluída"],
+  ["humano-escolha-02-08.json", "73f423d", "H, card de escolha"],
+  ["humano-fase1-02-08.json", "73f423d", "H, fase 1"],
+  ["humano-foco-02-08.json", "73f423d", "H, foco plantado"],
+  ["humano-ondas-02-08.json", "73f423d", "H, ondas"],
+  ["humano-venceu-02-08.json", "73f423d", "H, morreu e rejogou 3,2s depois"],
+]
+
+describe("procedência dos replays", () => {
+  it("todo arquivo em replays/ está declarado, e com o build em que foi gravado", () => {
+    const dir = resolve(projectRoot, "replays")
+    const noDisco = readdirSync(dir).filter((f) => f.endsWith(".json")).sort()
+    const declarados = PROCEDENCIA.map(([nome]) => nome).sort()
+    expect(noDisco, "replay não declarado em PROCEDENCIA — diga o que ele é").toEqual(declarados)
+
+    for (const [nome, sha] of PROCEDENCIA) {
+      const replay = loadReplay(resolve(dir, nome))
+      expect(replay.gitSha, `${nome} mudou de build sem atualizar a declaração`).toBe(sha)
+    }
+  })
+
+  it("existe exatamente UMA fixture declarada viva", () => {
+    // As outras treze são históricas por natureza: input humano não se regrava.
+    // Se um dia houver duas vivas, alguém precisa dizer qual é a âncora.
+    const viva = PROCEDENCIA.filter(([, , nota]) => nota.includes("VIVA"))
+    expect(viva.length).toBe(1)
+  })
+
+  it("o caso nulo: a lista reprova um arquivo não declarado", () => {
+    // `TASTE-LOOP.md` §2 — instrumento novo passa pelo caso nulo. Sem isto, uma
+    // comparação frouxa passaria verde sem comparar nada.
+    const declarados = PROCEDENCIA.map(([nome]) => nome).sort()
+    const comIntruso = [...declarados, "replay-que-ninguem-declarou.json"].sort()
+    expect(comIntruso).not.toEqual(declarados)
   })
 })
 

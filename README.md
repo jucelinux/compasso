@@ -50,8 +50,8 @@ key.
 
 The impulse has a cooldown and **two verbs decided by context**: above the speed threshold
 it is reach, below it plants a healing focus that works without you (cap of 2). `R` is a
-separate key from `space` because the project's gate measures the intent to replay, and a
-restart bound to the action button becomes a reflex.
+separate key from `space` because a restart bound to the action button is a reflex, not an
+intent — and what a player meant to do is the only thing worth reading off a replay.
 
 ---
 
@@ -122,7 +122,7 @@ npm run test                       # headless sim + determinism
 npm run typecheck                  # tsc --noEmit
 npm run build                      # production build
 npm run replay <file.json>         # run a replay, print the hash, write out/<label>/metrics.csv
-npm run gate <file.json>           # gate reading: after the run ended, did another one start?
+npm run gate <file.json>           # run boundaries in an F9 dump: when each run ended, kills, wave, time on the death screen
 npm run pace                       # pacing bot — a constant player, measures wave and run length
 npm run sweep <path> <v1> <v2>     # sweep one tuning parameter and rank by metric
 npm run shot [seed]                # stills of the current build, into shots/
@@ -181,11 +181,18 @@ code — they are the state of the project, and the next session starts by readi
 | `TASTE-LOOP.md` | the method: how a round runs and when to call the human |
 | `TASTE-LOOP-LEARNING.md` | input for evolving the method itself |
 
-**The gate** is the project's direction metric, and it counts *strikes*, not successes —
-zero is the best possible state. The current count lives at the top of `BACKLOG.md`, the
-definition in `DECISIONS.md`. The metric is **under revision** as of 02/08: with the phase
-format, "a second run" measures repeating when success became advancing. The standing
-proposal is *"the next phase, unaided"*, and it has not been ratified.
+**The gate** is the one reading that can kill the thesis, and it counts *strikes*, not
+successes — zero is the best possible state. Since 08/08 it is **"the dilation is read
+without explanation"**: an outsider plays with nobody explaining, and "no" means they finish
+without ever getting that time responds to their movement. Three consecutive "no" and the
+thesis falls. Count at the top of `BACKLOG.md`, definition in `CLAUDE.md`.
+
+It replaced *"the next phase, unaided"*, ratified three days earlier, and the reason for the
+swap is the criterion the swap produced: **a gate only pays for itself if it can surprise the
+person who owns the kill decision.** The old rulers counted judgments their owner had already
+made. This one needs someone who is not him.
+
+`npm run gate` is a tool, not a verdict: it reads run boundaries out of an F9 dump.
 
 ## Project don'ts
 

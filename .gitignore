@@ -9,3 +9,8 @@ out/
 
 # capturas: ferramenta de leitura, nao artefato de projeto
 shots/
+
+# O pacote do método é FONTE, não parte deste repo. O README dele (v0.6) diz por quê:
+# CHANGELOG.md e examples/ lidos por uma sessão fria viram requisito, e um projeto já
+# herdou o resíduo de outro domínio exatamente assim.
+taste-loop/
