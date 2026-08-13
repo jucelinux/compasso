@@ -245,8 +245,15 @@ export function playRun(
      * segundos em que o bot não decide nada, e contá-los afundaria toda média
      * por tick em ~5% por onda contida.
      */
-    if (s.phase === "card" || s.phase === "intervalo") {
-      sim.step(s.phase === "intervalo" || s.cardLock > 0 ? IN() : IN({ action: true }))
+    if (s.phase === "hub" || s.phase === "card" || s.phase === "intervalo") {
+      /*
+       * O HUB entrou em 13/08 e o bot atravessa igual ao card: ele não escolhe
+       * vilão, aceita o que estiver selecionado. Medir a escolha exigiria uma
+       * política de META-jogo, e o bot mede a arena — misturar os dois faria
+       * `npm run pace` responder a duas perguntas e nenhuma bem.
+       */
+      const pedeTecla = s.phase === "hub" || (s.phase === "card" && s.cardLock === 0)
+      sim.step(pedeTecla ? IN({ action: true }) : IN())
       continue
     }
 

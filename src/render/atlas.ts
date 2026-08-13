@@ -1,8 +1,10 @@
 import type { Texture } from "pixi.js"
 import {
   CROWD_VARIANTS,
+  brainLayerBuf,
   crowdLayout,
   crowdShape,
+  neuronShape,
   layerBuf,
   plasmaBuf,
   type CrowdCell,
@@ -42,8 +44,10 @@ import {
   playerSheet,
   bloodCell,
   CELL_LEVELS,
+  coinSheet,
   colonyTile,
   haloSheet,
+  neuronSheet,
   pulseSheet,
   necroticTile,
   TISSUE_LEVELS,
@@ -147,6 +151,14 @@ export interface Atlas {
   readonly dropsByKind: ReadonlyMap<string, TexSheet>
   /** Anel multicolorido piscante: a identidade de "isto é item". */
   readonly halo: TexSheet
+  /** A moeda: memória imunológica caída no chão. */
+  readonly coin: TexSheet
+  /** Layout da multidão de neurônios do hub. Mesma máquina das hemácias. */
+  readonly brainCrowd: ReadonlyArray<CrowdCell>
+  /** Uma folha por variante de neurônio. */
+  readonly neurons: ReadonlyArray<TexSheet>
+  /** Parallax do cérebro: corpos distantes, axônios, faíscas. */
+  readonly brainLayers: ReadonlyArray<Texture>
   /** Onda do efeito consumido, verde do limo. */
   readonly pulseLimo: TexSheet
   /** Onda do efeito consumido, na cor do patógeno. */
@@ -242,6 +254,37 @@ export function buildAtlas(tuning: Tuning, crowdArea?: number): Atlas {
   }
 
   const halo = bake(haloSheet())
+  const coin = bake(coinSheet())
+
+  /*
+   * O CÉREBRO: multidão de neurônios e três camadas de parallax.
+   *
+   * A multidão reusa `crowdLayout` com área MAIOR por corpo — neurônio é maior
+   * e mais esparso que hemácia, e o que precisa caber entre eles é a sinapse.
+   * Multidão apertada não tem onde desenhar ligação.
+   */
+  /*
+   * Área por neurônio: ~29x a da hemácia, e o número veio da CAPTURA.
+   *
+   * Eu tinha calculado 560 no papel — "6x a hemácia, sobra espaço" — e a
+   * primeira imagem do hub mostrou 411 neurônios de 48px empilhados sem um vão
+   * sequer: as sinapses não apareciam, o texto não se lia, e o fundo virava
+   * primeiro plano. O erro foi confundir área por CENTRO com espaço entre
+   * CORPOS; a 560 os centros ficam a ~24px e o sprite tem 48.
+   *
+   * Em 2600 os centros ficam a ~51px, um pouco mais que a largura do corpo, e é
+   * isso que abre o vão onde a ligação existe. O H pediu neurônios de FUNDO —
+   * fundo que cobre a tela deixou de ser fundo.
+   */
+  const NEURON_AREA = 2600
+  const brainCrowd = crowdLayout(tuning.arena.width, tuning.arena.height, 909, NEURON_AREA)
+  const neurons = Array.from({ length: CROWD_VARIANTS }, (_, v) => {
+    const sh = neuronShape(v)
+    return bake(neuronSheet(sh.r, sh.dendritos, sh.tilt, v))
+  })
+  const brainLayers = (["corpos", "axonios", "faiscas"] as const).map((kind, i) =>
+    toTexture(brainLayerBuf(tuning.arena.width, tuning.arena.height, kind, 4200 + i)),
+  )
   /*
    * Uma onda por rampa de efeito. Assadas no boot como todo o resto — a
    * alternativa seria compor o anel em tempo de execução, que é exatamente o
@@ -298,6 +341,10 @@ export function buildAtlas(tuning: Tuning, crowdArea?: number): Atlas {
     dropLimo,
     dropsByKind,
     halo,
+    coin,
+    brainCrowd,
+    neurons,
+    brainLayers,
     pulseLimo,
     pulsesByKind,
     macrophage: bake(macrophageSheet(tuning.powers.macrophageRadius)),

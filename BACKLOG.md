@@ -480,3 +480,47 @@ exatamente onde eu erro.
 É o quarto ingrediente óbvio do estalo e ficou de fora por ser decisão de SIM: congelar o
 mundo por alguns quadros muda o hash e, nesta cadência de abate, engasga o jogo. Se o H
 quiser, o desenho é congelar só o ABATE GRANDE — a mãe, não a filha — e aí o custo se paga.
+
+---
+
+## O CÉREBRO e as moedas, 13/08 — o que ficou aberto
+
+### Os upgrades ainda não existem — e isso é o pedido dele, não um corte meu
+
+O H foi explícito: a moeda *"será usado posteriormente nessa tela inicial para upgrades
+persistentes"*. Então o que entrou foi a ECONOMIA (moeda cai, é coletada, vai para o banco,
+o banco aparece no hub) e não o gasto. O banco cresce e não tem onde ser gasto.
+
+**A pergunta que o próximo passo precisa responder antes de qualquer número:** o upgrade
+melhora a ESTRUTURA do glóbulo (velocidade, vidas, raio de cura) ou desbloqueia AÇÕES novas?
+Ele disse "upgrades persistentes na estrutura do glóbulo branco", o que aponta para a
+primeira — mas a segunda é o que costuma dar identidade a um roguelite.
+
+### A persistência ENTRE SESSÕES não foi feita, e o custo tem nome
+
+O banco vive na sim e some quando a aba fecha. Salvar em `localStorage` é fácil e quebra
+uma coisa cara: **o mesmo replay passaria a divergir entre duas máquinas**, porque o estado
+inicial deixaria de vir só da seed. O rig inteiro assume o contrário — `npm run rec` compara
+browser contra node, e os cinco baselines de determinismo pressupõem que a seed basta.
+
+A saída existe e é conhecida: tratar o saldo como ENTRADA declarada do replay, do mesmo jeito
+que a seed. Não é difícil; é uma decisão sobre o formato de replay, e não cabia junto com o
+resto de hoje.
+
+### A identidade dos itens (comprimido, seringa) ficou para depois, a pedido dele
+
+Ele mesmo adiou: *"é o nível de detalhe que mostra que o jogo foi desenvolvido com carinho"*.
+Hoje os dois itens são hexágonos coloridos com halo. O pipeline aceita a troca sem mexer em
+nada da sim — `dropSheet` é uma função por rampa.
+
+### O hub não foi jogado, e o bot não pode julgá-lo
+
+Ele atravessa o hub aceitando o vilão selecionado, porque medir a escolha exigiria uma
+política de meta-jogo. É a terceira coisa da mesma família — aura, COMPLEMENTO, e agora o
+hub — que só uma leitura humana resolve.
+
+### O que aprendi hoje e vale para a próxima tela
+
+**O `app.ticker` está parado e quem desenha é a chamada no fim do `draw`.** Qualquer atalho
+que saia antes dela monta a cena e não a mostra. Custou seis diagnósticos e a resposta veio
+de um retângulo magenta — quando nem ele apareceu, sobrou uma explicação só.

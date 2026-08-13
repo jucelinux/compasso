@@ -12,7 +12,7 @@ import type { Tuning } from "../src/sim/types.ts"
  */
 
 const SMOKE = resolve(projectRoot, "replays", "smoke.json")
-const BASELINE_HASH = "fe57b9ac"
+const BASELINE_HASH = "0ffd6bfe"
 
 /**
  * Run real do humano, 7,6 min de input de verdade, do core do dash (`7c952a6`).
@@ -22,7 +22,7 @@ const BASELINE_HASH = "fe57b9ac"
  * leitura de ritmo, e não como cobertura de morte.
  */
 const RUN_01 = resolve(projectRoot, "replays", "run-01.json")
-const RUN_01_HASH = "6996f4b9"
+const RUN_01_HASH = "efaaf337"
 
 /**
  * Segunda run real: 5 min, 10 ondas, uma morte. Gravada antes da tecla de
@@ -30,7 +30,7 @@ const RUN_01_HASH = "6996f4b9"
  * Vale como determinismo sobre input humano longo.
  */
 const RUN_02 = resolve(projectRoot, "replays", "run-02.json")
-const RUN_02_HASH = "b7774bbe"
+const RUN_02_HASH = "1a13885c"
 
 /**
  * Terceira run real: 5,7 min de input humano, gravada quando os modificadores
@@ -39,7 +39,7 @@ const RUN_02_HASH = "b7774bbe"
  * Com os patógenos reais este input voltou a morrer, na onda 6.
  */
 const RUN_03 = resolve(projectRoot, "replays", "run-03.json")
-const RUN_03_HASH = "813d06f7"
+const RUN_03_HASH = "ee17c6fa"
 
 /**
  * Fixture do core contínuo, gravada por `npm run rec`. Sintética, não humana:
@@ -61,7 +61,7 @@ const RUN_03_HASH = "813d06f7"
  * isso, um baseline nascido no browser seria verdade só do Node.
  */
 const CORE_ATUAL = resolve(projectRoot, "replays", "core-atual.json")
-const CORE_ATUAL_HASH = "a85188cf"
+const CORE_ATUAL_HASH = "37f49a04"
 
 const smoke = () => loadReplay(SMOKE)
 const tuning = () => loadTuning()
@@ -164,6 +164,19 @@ const tuning = () => loadTuning()
  * câmera não tocam um byte do estado, então o feel dá para afinar quantas vezes
  * for preciso sem regravar fixture nenhuma. Vale como regra e não como sorte:
  * quando o efeito couber no render, ponha no render.
+ *
+ * DÉCIMA VEZ, ainda em 13/08: o CÉREBRO e as MOEDAS.
+ *
+ * Entrou a fase `hub`, e com ela `villain`, `coins`, `bank` e a lista de moedas
+ * no campo — todos no hash. Mudou também o SIGNIFICADO de `runIndex`: ele passou
+ * a contar runs TERMINADAS em vez de começadas, porque com o hub no boot a
+ * contagem antiga faria a primeira run nascer com 1 e o verificador de reinício
+ * deste gravador aprovaria qualquer gravação.
+ *
+ * Vale notar o que ESTA fixture passou a cobrir e as anteriores não cobriam: o
+ * caminho morte → cérebro → run nova. É um estado a mais entre os dois que o
+ * teste "atravessa morte E reinício" já media, e ele é atravessado de verdade
+ * — o gravador aperta espaço até voltar a `run`, e voltou.
  */
 
 /**
@@ -276,7 +289,25 @@ describe("determinismo", () => {
      * grava.
      */
     expect(reaches(SMOKE), "smoke não morre: input sintético mal se move").toBe(false)
-    expect(reaches(RUN_01)).toBe(true)
+    /*
+     * `run-01` deixou de chegar ao JOGO em 13/08, e isto não é regressão.
+     *
+     * O hub acrescentou uma tela antes do card, e o input gravado em `7c952a6`
+     * não tem as teclas nos instantes que atravessam DUAS telas — ele passa o
+     * hub e fica parado na apresentação até o log acabar. Medido: as fases que
+     * ele visita hoje são `hub, card`, e mais nenhuma.
+     *
+     * É o preço declarado de acrescentar tela, e ele cai sempre no replay mais
+     * antigo. `run-01` continua valendo pelo que este arquivo já dizia dele —
+     * determinismo sobre input humano longo, mesma seed e mesmo hash — e deixou
+     * de valer como cobertura de morte, que ele também já não era desde 01/08.
+     *
+     * As outras duas ainda atravessam e ainda morrem; quando pararem, esta
+     * asserção vira `false` para elas e o comentário explica por quê. O que não
+     * pode acontecer é o teste continuar AFIRMANDO uma cobertura que sumiu, que
+     * é exatamente o defeito que ele foi escrito para impedir.
+     */
+    expect(reaches(RUN_01), "run-01 não passa mais do card: o hub é uma tela a mais").toBe(false)
     expect(reaches(RUN_02)).toBe(true)
     expect(reaches(RUN_03)).toBe(true)
   })
@@ -333,7 +364,7 @@ describe("determinismo", () => {
  */
 const PROCEDENCIA: ReadonlyArray<readonly [string, string, string]> = [
   ["smoke.json", "7c952a6", "sintética, regenerável byte a byte por `npm run smoke`"],
-  ["core-atual.json", "0654368", "sintética, VIVA — regravar com `npm run rec`"],
+  ["core-atual.json", "b05a1da", "sintética, VIVA — regravar com `npm run rec`"],
   ["run-01.json", "7c952a6", "humana, core do dash; hoje só âncora de determinismo"],
   ["run-02.json", "7c952a6", "humana, core do dash; hoje só âncora de determinismo"],
   ["run-03.json", "7c952a6", "humana, core do dash; hoje só âncora de determinismo"],

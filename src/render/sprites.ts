@@ -9,6 +9,7 @@ import {
   RAMP_LEU,
   RAMP_MEMBRANE,
   RAMP_NUC,
+  RAMP_GLD,
   RAMP_SAL,
   RAMP_SHI,
   RAMP_SPECULAR,
@@ -30,6 +31,8 @@ import {
   SHI1,
   GLD2,
   ECO3,
+  NUC0,
+  NUC1,
   WHITE,
   type Ramp,
 } from "./palette.ts"
@@ -748,6 +751,83 @@ export function pulseSheet(ramp: Ramp, steps: number, maxR: number): Sheet {
     const grossura = t < 0.4 ? 3 : t < 0.75 ? 2 : 1
     ring(b, c, c, r, grossura, ramp[ramp.length - 1]!, 1 - t * 0.55)
     if (grossura > 1) ring(b, c, c, r - grossura, 1, ramp[ramp.length - 2]!, 0.5 - t * 0.3)
+    return b
+  })
+}
+
+/**
+ * NEURÔNIO da multidão do hub. Soma, núcleo e dendritos, respirando.
+ *
+ * Uma folha por variante, como a hemácia — o corpo que se vê tem que ser o
+ * corpo que ocupa espaço, senão a multidão parece ter fantasmas (lição da
+ * `crowdShape`, e ela vale igual aqui).
+ *
+ * Os dendritos são ASSADOS no sprite e não desenhados em runtime. Poderiam ser
+ * linhas de `Graphics` por cima, e seriam mais fáceis — e seriam a única coisa
+ * do jogo fora da grade de pixel, com espessura de subpixel e antialias. A
+ * regra de 01/08 não abre exceção para o que é difícil.
+ */
+export function neuronSheet(r: number, dendritos: number, tilt: number, seed: number): Sheet {
+  const S = Math.ceil((r * 4.2) / 2) * 2 + PAD
+  const c = S / 2
+  const PH = 6
+  return buildSheet(S, S, 1, 1, PH, (_t, _d, phase) => {
+    const b = makeBuf(S, S)
+    const ph = (phase / PH) * TAU
+    /*
+     * Dendritos PRIMEIRO, corpo depois: eles saem de dentro do soma, então a
+     * ordem de desenho é o que faz a raiz deles sumir sob a membrana em vez de
+     * cruzar por cima dela. É defeito de ORDEM, que é a minha classe.
+     */
+    for (let k = 0; k < dendritos; k++) {
+      const a = tilt + (k / dendritos) * TAU + Math.sin(ph + k) * 0.06
+      const reach = r * (1.5 + hashNoise(k, seed, 31) * 0.9)
+      const x2 = c + Math.cos(a) * reach
+      const y2 = c + Math.sin(a) * reach
+      line(b, c, c, x2, y2, NUC1, 1)
+      // Ramificação na ponta: é o que separa neurônio de estrela do mar.
+      const sub = a + (hashNoise(k, seed, 37) - 0.5) * 1.2
+      line(b, x2, y2, x2 + Math.cos(sub) * r * 0.5, y2 + Math.sin(sub) * r * 0.5, NUC0, 1)
+    }
+    // O soma, com respiro próprio — a mesma respiração da hemácia, e é ela que
+    // faz a multidão parecer viva em vez de um mosaico parado.
+    const pulso = 1 + 0.05 * Math.sin(ph)
+    body(b, c, c, r * pulso, RAMP_LEU, (th) => r * pulso * (1 + 0.06 * Math.sin(3 * th + ph)))
+    disc(b, c - r * 0.15, c - r * 0.15, r * 0.36, RAMP_NUC)
+    disc(b, c - r * 0.32, c - r * 0.34, r * 0.13, RAMP_SPECULAR)
+    outline(b, INK)
+    return b
+  })
+}
+
+/**
+ * A MOEDA — memória imunológica caída no chão.
+ *
+ * Disco dourado girando: seis fases que estreitam e voltam, que é como pixel
+ * art faz rotação sem rotacionar. Girar o sprite em runtime destruiria a grade,
+ * e um disco achatando lê como giro melhor do que um disco girado de verdade.
+ *
+ * Dourado (`RAMP_GLD`) porque é a única rampa quente que não pertence a nenhum
+ * patógeno nem ao limo — a moeda precisa não ser confundida com nada em campo,
+ * e o campo inteiro já é vermelho, verde e amarelo-bacilo.
+ */
+export function coinSheet(): Sheet {
+  const S = 12
+  const c = S / 2
+  const PH = 6
+  return buildSheet(S, S, 1, 1, PH, (_t, _d, phase) => {
+    const b = makeBuf(S, S)
+    // Largura em degraus INTEIROS: 3,2,1,2,3,3. Uma senoide contínua daria
+    // meio pixel e o giro sairia borrado.
+    const larguras = [3, 2, 1, 2, 3, 3]
+    const wx = larguras[phase % larguras.length]!
+    body(b, c, c, 3.4, RAMP_GLD, (th) => {
+      const s = Math.sin(th)
+      const k = wx / 3.4
+      return 3.4 / Math.sqrt(1 + (1 / (k * k) - 1) * (1 - s * s))
+    })
+    if (wx >= 3) plot(b, Math.round(c - 1), Math.round(c - 1), WHITE)
+    outline(b, INK)
     return b
   })
 }

@@ -361,6 +361,28 @@ export interface Tuning {
      */
     readonly intervalSeconds: number
   }
+  /**
+   * A MOEDA: o que o abate deixa para a próxima run. 13/08.
+   *
+   * Memória imunológica adaptada a roguelite, como o H nomeou — o organismo não
+   * guarda o combate, guarda o que aprendeu dele, e o aprendizado sobrevive à
+   * morte da célula.
+   */
+  readonly coin: {
+    /**
+     * Ticks REAIS até a moeda sumir do campo.
+     *
+     * Reais e não de mundo: recompensa não pertence ao relógio da doença. Com a
+     * dilatação religada, uma moeda em tempo de mundo duraria vinte vezes mais
+     * para quem ficasse parado, e ficar parado passaria a render.
+     */
+    readonly lifeTicks: number
+    /** Raio em que ela começa a voar até você. Maior que o da cápsula. */
+    readonly magnetRadius: number
+    readonly magnetSpeed: number
+    /** Teto no campo. Estouro descarta a mais VELHA, nunca a recém-caída. */
+    readonly maxOnField: number
+  }
   readonly enemy: {
     readonly size: number
     readonly spawnIntervalSeconds: number
@@ -516,6 +538,10 @@ export interface Tuning {
  * ensinou o objetivo, e é disso que a memória do jogo é feita.
  */
 /**
+ * `hub`       — O CÉREBRO. Ponto de partida e de retorno, e o único lugar do
+ *               jogo onde nada te ataca. Escolhe-se o vilão e conta-se a
+ *               memória imunológica. Chamada do H em 13/08: *"será a safezone
+ *               do usuário, onde ele irá voltar sempre que morrer"*.
  * `card`      — apresentação da doença. Identidade, não estratégia.
  * `intervalo` — o respiro entre ondas, com a contagem de 3 segundos. Não pede
  *               nada e não oferece nada: o próximo tabuleiro JÁ ESTÁ montado
@@ -529,7 +555,7 @@ export interface Tuning {
  * AUSÊNCIA de escolha — a onda passou a pagar em dificuldade, não em poder.
  * Detalhe e desdobramentos no `DECISIONS.md`.
  */
-export type Phase = "card" | "intervalo" | "closed" | "run" | "dead"
+export type Phase = "hub" | "card" | "intervalo" | "closed" | "run" | "dead"
 
 export interface Enemy {
   id: number
@@ -551,6 +577,22 @@ export interface Enemy {
   tumble: number
   /** Veneno acumulado por ESTE corpo, na taxa da espécie dele. */
   poisonAcc: number
+}
+
+/**
+ * MOEDA largada por um patógeno abatido.
+ *
+ * Objeto no campo e não um contador que sobe sozinho, e a diferença é o que o
+ * H pediu na leva anterior: o abate precisa PRODUZIR alguma coisa visível. O
+ * estalo diz "acertei"; a moeda diz "ganhei", e as duas leituras são
+ * diferentes.
+ */
+export interface Coin {
+  id: number
+  x: number
+  y: number
+  /** Ticks REAIS até sumir. Real, não de mundo: recompensa não é do relógio da doença. */
+  life: number
 }
 
 /** Cápsula largada por um patógeno. Encostar liga o poder. */
@@ -741,6 +783,35 @@ export interface SimState {
   lastPickPower: number
   lastPickX: number
   lastPickY: number
+  /**
+   * Qual doença está selecionada no HUB. Índice em `tuning.phases`.
+   *
+   * Separado de `phaseIndex` de propósito: um é a ESCOLHA e sobrevive à morte,
+   * o outro é onde a run está agora e zera a cada run. Com uma doença na lista
+   * os dois valem 0 sempre, e é justamente por isso que uni-los passaria em
+   * silêncio até a segunda doença voltar.
+   */
+  villain: number
+  /**
+   * MOEDAS da run corrente. Cada patógeno abatido larga uma.
+   *
+   * Zera ao começar uma run e é depositada no `bank` ao terminar — morrendo ou
+   * limpando. O H chamou de memória imunológica adaptada a roguelite, e a
+   * analogia é boa: o organismo não guarda o combate, guarda o que APRENDEU
+   * dele, e o aprendizado sobrevive à morte da célula.
+   */
+  coins: number
+  /**
+   * O BANCO: moedas acumuladas entre runs. É o que os upgrades vão gastar.
+   *
+   * Vive na sim e não fora dela porque tudo que decide jogo precisa estar no
+   * hash — um saldo lido de `localStorage` faria o mesmo replay divergir entre
+   * duas máquinas, e o rig inteiro assume o contrário. A persistência ENTRE
+   * SESSÕES é uma decisão separada, com custo próprio, e não foi tomada aqui.
+   */
+  bank: number
+  /** Moedas soltas no campo, esperando o ímã. */
+  pickups: Coin[]
   /** Ticks restantes de trava do card. Zero libera a dispensa. */
   cardLock: number
   /**

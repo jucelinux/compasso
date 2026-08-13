@@ -15,6 +15,7 @@ import {
   KIND_TINT,
   ORG2,
   PALETTE,
+  NUC0,
   SAL2,
   SHI1,
   WHITE,
@@ -244,7 +245,23 @@ export async function createRenderer(
   const world = new Container()
   const hud = new Container()
   const overlay = new Container()
-  app.stage.addChild(world, hud, overlay)
+  /*
+   * O CÉREBRO entra AQUI, na mesma chamada das outras camadas.
+   *
+   * A primeira versão criava o container junto com os filhos dele, lá embaixo, e
+   * o enfiava na cena com `addChildAt(brain, 1)`. O display list ficava certo em
+   * toda medição — `stage=4`, `brainIdx=1`, `visible=true`, 411 filhos — e a
+   * tela saía PRETA. Até um retângulo magenta sólido desenhado direto nele não
+   * aparecia.
+   *
+   * Não perdi tempo descobrindo o que o Pixi faz de diferente com um filho
+   * inserido depois: a lição é outra e é mais barata. Montar a cena em UM lugar,
+   * na ordem final, é o que torna a ordem verificável por leitura — e ordem foi
+   * a classe de defeito que este arquivo mais produziu (`TASTE.md` §2b).
+   */
+  const brain = new Container()
+  brain.visible = false
+  app.stage.addChild(world, brain, hud, overlay)
 
   // --------------------------------------------------------------- camadas
   const bgPlasma = new Sprite(atlas.plasma[0]!)
@@ -317,6 +334,107 @@ export async function createRenderer(
   const flashVeil = new Sprite()
   flashVeil.visible = false
   world.addChild(flashVeil)
+
+  /*
+   * ------------------------------------------------------------- O CÉREBRO
+   *
+   * Container PRÓPRIO, irmão do mundo, e visível só na fase `hub`.
+   *
+   * Podia ser um estado a mais dentro das camadas da arena — e seria o caminho
+   * curto para o defeito que este arquivo mais comete: tecido, multidão de
+   * hemácias e parallax de sangue continuariam existindo por trás, gastando
+   * quadro e vazando pelas bordas do que o hub desenhasse por cima. Dois
+   * lugares, duas cenas; quem não está em cena não é desenhado.
+   */
+  const brainBack = new Container()
+  const brainCrowdLayer = new Container()
+  const brainFxLayer = new Graphics()
+  brain.addChild(brainBack, brainFxLayer, brainCrowdLayer)
+
+  const brainDrift = atlas.brainLayers.flatMap((tex, i) =>
+    [0, 1].map((slot) => {
+      const sp = new Sprite(tex)
+      brainBack.addChild(sp)
+      // Mesmas velocidades da arena: fundo devagar, frente rápida. É o que dá
+      // profundidade, e copiar a razão em vez do número é o que mantém as duas
+      // telas com o mesmo caráter de movimento.
+      return { sprite: sp, speed: 6 + i * 13, slot }
+    }),
+  )
+
+  /*
+   * Os neurônios: um sprite por corpo, como as hemácias.
+   *
+   * Eles NÃO se movem em corrente — o cérebro é a safezone, e uma safezone que
+   * escorre não descansa. O que se move aqui é só a respiração de cada um e o
+   * parallax atrás, e a diferença de comportamento é metade do que faz o hub
+   * parecer outro lugar.
+   */
+  const neuronSprites: Sprite[] = []
+  for (const c of atlas.brainCrowd) {
+    const folha = atlas.neurons[c.variant % atlas.neurons.length]!
+    const sp = new Sprite(folha.frames[0]!)
+    sp.anchor.set(0.5)
+    sp.position.set(Math.round(c.hx), Math.round(c.hy))
+    neuronSprites.push(sp)
+    brainCrowdLayer.addChild(sp)
+  }
+
+  /*
+   * SINAPSES: as ligações, sorteadas UMA vez e fixas.
+   *
+   * Cada neurônio liga no vizinho mais próximo à direita dentro de um raio.
+   * Sorteadas no boot e não por quadro porque a topologia de um cérebro não
+   * muda de quadro em quadro — o que pulsa é o SINAL correndo nela, e isso é
+   * fase, não geometria. Recalcular vizinhança a cada quadro custaria O(n²) por
+   * quadro para produzir exatamente a mesma imagem.
+   */
+  /*
+   * Raio da ligação, e ele saiu da CAPTURA e não do papel.
+   *
+   * Comecei em 46 quando os neurônios estavam empilhados. Ao abrir a multidão
+   * para 2600 de área — centros a ~51px — o raio antigo passou a não alcançar
+   * quase nenhum vizinho, e a primeira imagem do hub arrumado tinha neurônios
+   * soltos sem uma linha entre eles. "Conectados e produzindo sinapses" é o
+   * pedido literal do H, e metade dele tinha sumido junto com o conserto da
+   * outra metade.
+   *
+   * 84 alcança de dois a quatro vizinhos por corpo, que é o que faz a rede ler
+   * como REDE em vez de pares isolados.
+   */
+  const SINAPSE_R = 84
+  /** Até quantos vizinhos cada neurônio liga. Um só desenha pares, não rede. */
+  const SINAPSE_MAX = 2
+  const sinapses: Array<{ ax: number; ay: number; bx: number; by: number; fase: number }> = []
+  for (let i = 0; i < atlas.brainCrowd.length; i++) {
+    const a1 = atlas.brainCrowd[i]!
+    /*
+     * Só liga para FRENTE na lista (`j > i`), e isso evita a ligação dupla sem
+     * precisar de um conjunto de pares já vistos: cada par nasce uma vez só,
+     * pelo índice menor.
+     */
+    const perto: Array<{ j: number; d2: number }> = []
+    for (let j = i + 1; j < atlas.brainCrowd.length; j++) {
+      const b1 = atlas.brainCrowd[j]!
+      const dx = b1.hx - a1.hx
+      const dy = b1.hy - a1.hy
+      const d2 = dx * dx + dy * dy
+      if (d2 <= SINAPSE_R * SINAPSE_R) perto.push({ j, d2 })
+    }
+    perto.sort((p, q) => p.d2 - q.d2)
+    for (const { j } of perto.slice(0, SINAPSE_MAX)) {
+      const b1 = atlas.brainCrowd[j]!
+      sinapses.push({
+        ax: Math.round(a1.hx),
+        ay: Math.round(a1.hy),
+        bx: Math.round(b1.hx),
+        by: Math.round(b1.hy),
+        // Fase própria por ligação: sem ela o cérebro inteiro pisca junto, que
+        // lê como pisca-pisca de natal em vez de atividade.
+        fase: hashNoise(i * 31 + j, 909, 41),
+      })
+    }
+  }
 
   /*
    * O tecido: um sprite por tile, posicionado uma vez e com a textura trocada
@@ -467,6 +585,11 @@ export async function createRenderer(
    * aqui porque a lição é do modelo, não do código; o código está em
    * `git show 0663754:src/render/renderer.ts` se a recompensa voltar.
    */
+  /** A moeda desenhada na faixa do hub, ao lado do número da memória. */
+  const hubCoin = new Sprite()
+  hubCoin.anchor.set(0.5)
+  hubCoin.scale.set(2)
+  overlay.addChild(hubCoin)
   const cardBicho = new Sprite()
   cardBicho.anchor.set(0.5)
   // Escala INTEIRA: o pixel art nativo não tolera meio pixel, e o card é a
@@ -517,6 +640,8 @@ export async function createRenderer(
   let selfClock = 0
   let worldClock = 0
   let driftX = 0
+  /** Relógio do parallax do cérebro. Separado: o hub não tem tempo de mundo. */
+  let brainDriftX = 0
   let lastFrame = performance.now()
 
   // Trilha do borrão: as últimas posições, para os fantasmas de velocidade.
@@ -630,7 +755,81 @@ export async function createRenderer(
       sp.position.set(Math.round(d.x), Math.round(d.y))
       sp.visible = aceso
     }
+    /*
+     * As MOEDAS. Depois das cápsulas no pool, então por cima delas.
+     *
+     * Ordem escolhida e não herdada: a cápsula é decisão e a moeda é
+     * recompensa, mas a moeda é MENOR e muito mais numerosa — embaixo, ela
+     * sumiria sob a primeira cápsula que caísse perto, e o jogador leria como
+     * moeda que não caiu.
+     *
+     * A fase do giro é `id`-dependente: sem isso todas as moedas do campo
+     * giram em sincronia e o punhado lê como um objeto só, articulado.
+     */
+    for (const c of cur.pickups) {
+      const sp = powerPool.next(frameOf(atlas.coin, 0, 0, phase + c.id))
+      sp.position.set(Math.round(c.x), Math.round(c.y))
+      // Prestes a sumir, pisca — mesma convenção da cápsula, e convenção
+      // repetida é o que o jogador aprende uma vez e usa para sempre.
+      sp.visible = c.life >= 60 || (cur.tick & 4) === 0
+    }
     powerPool.end()
+  }
+
+  /**
+   * O CÉREBRO, desenhado. Parallax, respiração e sinapses correndo.
+   *
+   * Tudo aqui anda no relógio de PAREDE, não no do mundo: o hub não tem mundo.
+   * É a consequência direta de ele ser safezone — nenhuma doença avança, então
+   * não há escala de tempo para herdar, e o único relógio honesto é o do olho.
+   */
+  const drawBrain = (cur: SimState, dt: number): void => {
+    brainDriftX -= dt
+    for (const d of brainDrift) {
+      const span = tuning.arena.width
+      const base = ((((brainDriftX * d.speed) % span) + span) % span) - span
+      // Inteiro, como na arena: camada de fundo em subpixel treme e denuncia.
+      d.sprite.position.set(Math.round(base) + d.slot * span, 0)
+    }
+
+    // Respiração: cada neurônio na fase dele. Mesma ideia da hemácia, e é o que
+    // separa multidão viva de mosaico parado.
+    for (let i = 0; i < neuronSprites.length; i++) {
+      const c = atlas.brainCrowd[i]!
+      const folha = atlas.neurons[c.variant % atlas.neurons.length]!
+      const fase = Math.floor(selfClock * 3 + c.variant * 0.7 + i * 0.11) % folha.frames.length
+      neuronSprites[i]!.texture = folha.frames[fase]!
+    }
+
+    /*
+     * O SINAL correndo pela ligação — a sinapse propriamente dita.
+     *
+     * Não é a linha que acende: é um PONTO que percorre a linha. Ligação inteira
+     * piscando lê como cabo com mau contato; um ponto viajando de um soma ao
+     * outro lê como informação indo de um lugar para outro, que é o que uma
+     * sinapse faz e o que o H pediu ao dizer "produzindo sinapses".
+     */
+    brainFxLayer.clear()
+    for (const li of sinapses) {
+      brainFxLayer
+        .moveTo(li.ax, li.ay)
+        .lineTo(li.bx, li.by)
+        .stroke({ width: 1, color: col(NUC0), alpha: 0.5 })
+    }
+    for (const li of sinapses) {
+      const t = (selfClock * 0.55 + li.fase) % 1
+      // Só a metade do ciclo tem sinal: a ligação passa mais tempo quieta que
+      // acesa, senão o cérebro inteiro vira ruído branco.
+      if (t > 0.5) continue
+      const u = t * 2
+      const x = Math.round(li.ax + (li.bx - li.ax) * u)
+      const y = Math.round(li.ay + (li.by - li.ay) * u)
+      // 3px e não 2: contra o dendrito pálido do soma, dois pixels somem. O
+      // sinal é o que o H chamou de "produzindo sinapses" — ele precisa ganhar
+      // do corpo que o produz.
+      brainFxLayer.rect(x - 1, y - 1, 3, 3).fill(col(FAST1))
+    }
+    void cur
   }
 
   /** A doença em cena. O item de patógeno veste a rampa dela. */
@@ -1265,11 +1464,97 @@ export async function createRenderer(
     cardBlurb.hide()
   }
 
+  /**
+   * A tela do HUB: quem você é, quanto você guardou, e quem vai enfrentar.
+   *
+   * Sem moldura escura por cima do cérebro, ao contrário das outras telas. O
+   * véu existe nas outras porque elas interrompem um jogo em andamento e
+   * precisam separar-se dele; aqui não há jogo por baixo — o cérebro É a tela.
+   * Cobri-lo apagaria justamente o que o H pediu para desenhar.
+   */
+  const drawHub = (cur: SimState, phase: number): void => {
+    const cx = tuning.arena.width / 2
+    const spec = tuning.phases[Math.min(cur.villain, tuning.phases.length - 1)]!
+    const kind = tuning.enemy.kinds[spec.disease]
+    const sheet = atlas.pathogens.get(spec.disease)
+    const tint = col(KIND_TINT[spec.disease] ?? WHITE)
+
+    /*
+     * TODO texto do hub tem CHÃO. A captura é que cobrou isso.
+     *
+     * A primeira versão soltava "MEMÓRIA IMUNOLÓGICA" e "QUEM VOCÊ VAI
+     * ENFRENTAR" direto sobre a multidão de neurônios, contando com a sombra de
+     * letra que entrou hoje. Sombra resolve texto sobre fundo IRREGULAR de
+     * contraste médio; contra corpos pálidos de 48px ela some junto. O tecido da
+     * arena é escuro e uniforme o bastante para a sombra dar conta — o cérebro
+     * não é, e supor que a mesma solução serve para os dois foi meu erro.
+     *
+     * Três faixas, uma por função: o que você ACUMULOU, o que vai ENFRENTAR, e o
+     * que fazer agora. O cérebro continua visível em toda a volta, que é o que o
+     * H pediu ao querer os neurônios ao fundo.
+     */
+    rewardPanels.clear()
+
+    // FAIXA DE CIMA: a memória imunológica, com a moeda ao lado do número.
+    rewardPanels
+      .rect(0, 10, tuning.arena.width, 26)
+      .fill({ color: col(INK), alpha: 0.86 })
+    cardLines[0]!.set("MEMÓRIA IMUNOLÓGICA", NUC0, cx - 34, 14, 1, true, true)
+    cardLines[1]!.set(`${cur.bank}`, GLD2, cx + 62, 15, 2, true, true)
+    // A moeda DESENHADA, e não a palavra "moedas": o jogador vê no chão o mesmo
+    // objeto que vê aqui, e a ligação entre juntar e acumular fica sem texto.
+    hubCoin.texture = frameOf(atlas.coin, 0, 0, phase)
+    hubCoin.position.set(Math.round(cx + 38), 23)
+    hubCoin.visible = true
+
+    // O PAINEL do vilão.
+    const W = 214
+    const H = 148
+    const x0 = Math.round(cx - W / 2)
+    const y0 = 74
+    rewardPanels
+      .rect(x0, y0, W, H)
+      .fill({ color: col(INK), alpha: 0.9 })
+      .stroke({ width: 1, color: tint, alignment: 0 })
+      .rect(x0, y0, W, 16)
+      .fill({ color: tint, alpha: 0.22 })
+    cardLines[2]!.set("QUEM VOCÊ VAI ENFRENTAR", DIM0, cx, y0 + 5, 1, true)
+
+    if (sheet !== undefined) {
+      cardBicho.texture = frameOf(sheet, 0, Math.floor(phase * 0.18) & 7, phase)
+      cardBicho.position.set(cx, y0 + 62)
+      cardBicho.visible = true
+    } else {
+      cardBicho.visible = false
+    }
+    cardPicks[0]!.set((kind?.real ?? spec.disease).toUpperCase(), WHITE, cx, y0 + 104, 2, true)
+    cardPicks[1]!.set(`${spec.waves} ONDAS`, GLD2, cx, y0 + 128, 1, true)
+    /*
+     * As setas só aparecem quando há PARA ONDE ir.
+     *
+     * Com uma doença na lista, desenhar "◄ ►" prometeria um catálogo que não
+     * existe — e promessa que a tela não cumpre é pior que tela pobre. Quando o
+     * segundo patógeno entrar, elas aparecem sozinhas.
+     */
+    const varios = tuning.phases.length > 1
+    cardPicks[2]!.set(varios ? "◄        ►" : "", DIM0, cx, y0 + 62, 1, true)
+
+    // FAIXA DE BAIXO: o que fazer agora.
+    rewardPanels
+      .rect(0, y0 + H + 10, tuning.arena.width, 18)
+      .fill({ color: col(INK), alpha: 0.86 })
+    cardLines[3]!.set(prompt.comecar, SHI1, cx, y0 + H + 15, 1, true, true)
+    for (const l of cardBlurbs) l.hide()
+    for (const l of cardCusto) l.hide()
+    cardBlurb.hide()
+  }
+
   const drawOverlay = (cur: SimState, phase: number): void => {
+    const isHub = cur.phase === "hub"
     const isCard = cur.phase === "card"
     const isIntervalo = cur.phase === "intervalo"
     const isClosed = cur.phase === "closed"
-    const telaDeCima = isCard || isIntervalo || isClosed
+    const telaDeCima = isHub || isCard || isIntervalo || isClosed
     const on = cur.phase === "dead" || telaDeCima
     overlay.visible = on
     cardVeil.visible = telaDeCima
@@ -1282,10 +1567,13 @@ export async function createRenderer(
      * proteger, e o que ele serve para mostrar é justamente o tabuleiro atrás.
      * Escurecer aqui seria apagar a razão de os 3 segundos existirem.
      */
+    // O HUB não leva véu: o cérebro é a tela, não um fundo a esconder.
+    cardVeil.visible = telaDeCima && !isHub
     cardVeil.texture = atlas.veil(INK, isClosed ? 2 : 1)
-    cardBicho.visible = isCard
+    cardBicho.visible = isCard || isHub
+    hubCoin.visible = isHub
     for (const l of cardLines) if (!telaDeCima) l.hide()
-    if (!isClosed) {
+    if (!isClosed && !isHub) {
       for (const l of cardPicks) l.hide()
       for (const l of cardBlurbs) l.hide()
       for (const l of cardCusto) l.hide()
@@ -1295,6 +1583,10 @@ export async function createRenderer(
     for (const l of deadLines) if (telaDeCima) l.hide()
     deadVeil.visible = cur.phase === "dead"
     if (!on) return
+    if (isHub) {
+      drawHub(cur, phase)
+      return
+    }
     if (isCard) {
       drawCard(cur, phase)
       return
@@ -1520,6 +1812,53 @@ export async function createRenderer(
       const pyi = lerp(prev.player.y, cur.player.y, t)
       // Posição INTERPOLADA, não a do tick: com a do tick a multidão abriria em
       // degraus de 60Hz enquanto o corpo desliza suave.
+      /*
+       * DOIS LUGARES, e só um em cena por vez.
+       *
+       * No hub o mundo inteiro sai — tecido, multidão de hemácias, parallax de
+       * sangue, corpos. Deixá-lo ligado por trás custaria quadro e vazaria pelas
+       * bordas do painel, que é a classe de defeito que este arquivo mais comete
+       * (`TASTE.md` §2b: posição e ordem, o que o código não denuncia).
+       */
+      const noHub = cur.phase === "hub"
+      brain.visible = noHub
+      world.visible = !noHub
+      if (noHub) {
+        if (!frozen) drawBrain(cur, dt)
+        drawOverlay(cur, worldPhase)
+        /*
+         * Sai antes de tudo que é da ARENA: corpos, partículas, tremor e HUD.
+         *
+         * O HUD some junto de propósito — vidas, infecção e pontuação são da
+         * run, e no cérebro não há run. Mostrá-los zerados seria pior que não
+         * mostrá-los: um HUD que diz "0 vidas" num lugar onde nada te mata é
+         * informação errada.
+         */
+        hud.visible = false
+        overlay.visible = true
+        /*
+         * APRESENTA o quadro antes de sair, e este `app.render()` é o conserto
+         * de um defeito que custou seis diagnósticos.
+         *
+         * O ticker do Pixi está PARADO (`app.ticker.stop()`, lá em cima) e quem
+         * desenha é a chamada no fim desta função. Meu atalho para o hub saía
+         * antes dela — então o cérebro inteiro era montado, posicionado e
+         * atualizado a cada quadro, e nunca ia para a tela. Preto absoluto, zero
+         * erro no console, 65 testes verdes.
+         *
+         * É a mesma classe do `frontSprite` de 02/08: peça correta, assada e
+         * atualizada 60x por segundo, que nunca entrou em cena. O olhar pega o
+         * que está ERRADO e não o que está AUSENTE — e o que estava ausente aqui
+         * era o próprio ato de desenhar.
+         *
+         * Fica UM `return` com UM `app.render()` ao lado em vez de um `if`
+         * embrulhando duzentas linhas de arena: o custo é esta chamada duplicada,
+         * e o comentário é o que impede a próxima sessão de "limpar" a duplicata.
+         */
+        app.render()
+        return
+      }
+      hud.visible = true
       if (!frozen) drawCrowd(cur, pxi, pyi, dt, worldClock, doente)
       drawTissue(cur)
       drawAuras(cur)

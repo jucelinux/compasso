@@ -229,6 +229,12 @@
     "maxOnField": 6,
     "instantEverySeconds": 18.0
   },
+  "coin": {
+    "lifeTicks": 420,
+    "magnetRadius": 96,
+    "magnetSpeed": 260,
+    "maxOnField": 90
+  },
   "field": {
     "cols": 32,
     "rows": 18,

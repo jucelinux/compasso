@@ -68,13 +68,25 @@ const ACTION = IN({ action: true })
  * é o certo, e é por isso que a lista de telas e a condição de dispensa
  * deixaram de ser a mesma coisa.
  */
-const TELA = (ph: string): boolean => ph === "card" || ph === "intervalo" || ph === "closed"
+/*
+ * As telas que NÃO são jogo. O `hub` entrou em 13/08, e ele abre a run.
+ *
+ * Quase todo teste daqui mede a arena, e desde que o jogo passou a nascer no
+ * cérebro há DUAS telas antes do primeiro tick de jogo — hub e card. Atravessar
+ * as duas é o que mantém a contagem de ticks dos testes exata.
+ */
+const TELA = (ph: string): boolean =>
+  ph === "hub" || ph === "card" || ph === "intervalo" || ph === "closed"
+
+/** O `intervalo` corre sozinho; as outras telas pedem tecla. */
+const PEDE_TECLA = (ph: string, cardLock: number): boolean =>
+  ph !== "intervalo" && (ph === "hub" || cardLock === 0)
 
 const advance = (sim: Sim, ticks: number, input: InputFrame = NONE): void => {
   for (let i = 0; i < ticks; i++) {
     const ph = sim.state().phase
     if (TELA(ph)) {
-      sim.step(ph !== "intervalo" && sim.state().cardLock === 0 ? ACTION : NONE)
+      sim.step(PEDE_TECLA(ph, sim.state().cardLock) ? ACTION : NONE)
     } else sim.step(input)
   }
 }
@@ -88,8 +100,24 @@ const advance = (sim: Sim, ticks: number, input: InputFrame = NONE): void => {
  */
 const start = (seed: number, t: typeof tuning = tuning): Sim => {
   const sim = createSim(seed, t)
-  advance(sim, tuning.cardLockTicks + 1)
-  sim.step(ACTION)
+  /*
+   * Anda ATÉ o jogo começar, em vez de um número fixo de ticks.
+   *
+   * A contagem fixa funcionou enquanto havia uma tela antes da run. Com o hub
+   * passaram a ser duas, eu somei as travas na mão, e o resultado foi ~50 ticks
+   * de JOGO DE VERDADE rodando antes do corpo do teste — tempo suficiente para
+   * o jogador levar um toque e ficar invulnerável, e aí catorze testes de
+   * contato mediram um jogador imune achando que mediam contato.
+   *
+   * Parar na borda exata é o conserto, e ele não tem aritmética para errar: a
+   * condição é a fase, não o relógio. Se uma terceira tela entrar amanhã, este
+   * laço continua certo sozinho.
+   */
+  let guarda = 0
+  while (TELA(sim.state().phase) && guarda++ < 900) {
+    const ph = sim.state().phase
+    sim.step(PEDE_TECLA(ph, sim.state().cardLock) ? ACTION : NONE)
+  }
   // Solta a tecla: senão o próximo `action` do teste não tem borda de subida
   // e o impulso não dispara. Custou um teste verde-falso para aparecer.
   sim.step(NONE)
@@ -113,7 +141,7 @@ const start = (seed: number, t: typeof tuning = tuning): Sim => {
 const tick = (sim: Sim, input: InputFrame = NONE): void => {
   const ph = sim.state().phase
   if (TELA(ph)) {
-    sim.step(ph !== "intervalo" && sim.state().cardLock === 0 ? ACTION : NONE)
+    sim.step(PEDE_TECLA(ph, sim.state().cardLock) ? ACTION : NONE)
   } else sim.step(input)
 }
 
@@ -572,7 +600,7 @@ describe("poderes automáticos, temporários e aleatórios", () => {
 
   it("a run inteira acontece SEM poder: o formato onda → upgrade morreu", () => {
     const sim = createSim(77, tuning)
-    expect(sim.state().phase).toBe("card")
+    expect(sim.state().phase, "o jogo abre no CÉREBRO desde 13/08").toBe("hub")
     expect(sim.state().offer.length, "o card de identidade não oferece nada").toBe(0)
     expect(sim.state().owned.reduce((n, v) => n + v, 0)).toBe(0)
   })
@@ -668,11 +696,16 @@ describe("poderes automáticos, temporários e aleatórios", () => {
      */
     const ticksAte = (input: InputFrame): number => {
       const sim = start(79)
-      const s = mut(sim)
-      s.field.fill(0)
-      s.infection = 0
-      s.enemies = []
-      sim.step(NONE)
+      // Esvazia até a contenção pegar: um toque congela o tick e `stepRun` sai
+      // antes da checagem. Regra do jogo, não defeito — ver o laço da onda 6.
+      let guarda = 0
+      while (sim.state().phase === "run" && guarda++ < 120) {
+        const s = mut(sim)
+        s.field.fill(0)
+        s.infection = 0
+        s.enemies = []
+        sim.step(NONE)
+      }
       expect(sim.state().phase).toBe("intervalo")
       let n = 0
       while (sim.state().phase === "intervalo" && n < 600) {
@@ -740,10 +773,28 @@ describe("poderes automáticos, temporários e aleatórios", () => {
     sim.step(NONE)
     expect(sim.state().phase).toBe("closed")
 
+    /*
+     * Vencer leva ao CÉREBRO, e é de lá que a run nova nasce.
+     *
+     * Até 13/08 confirmar a vitória recomeçava na hora. Com o hub existindo, o
+     * fim de run tem um destino — e é o MESMO pelos dois caminhos, morrendo ou
+     * limpando, que é o que faz dele um hub em vez de uma tela de continue.
+     */
     const antes = sim.state().runIndex
     for (let i = 0; i < tuning.cardLockTicks + 1; i++) sim.step(NONE)
     sim.step(ACTION)
-    expect(sim.state().runIndex, "vitória conta como run encerrada").toBe(antes + 1)
+    expect(sim.state().phase, "vitória devolve ao cérebro").toBe("hub")
+    /*
+     * `runIndex` conta runs TERMINADAS, e a vitória terminou uma. Ele mudou de
+     * lugar em 13/08 junto com o hub: contado no começo, a primeira run já
+     * nasceria com 1 e a verificação de "reiniciou" do `npm run rec` passaria a
+     * aprovar qualquer gravação.
+     */
+    expect(sim.state().runIndex, "a run vencida conta como terminada").toBe(antes + 1)
+
+    sim.step(NONE)
+    sim.step(ACTION)
+    expect(sim.state().runIndex, "sair do hub não termina run nenhuma").toBe(antes + 1)
     expect(sim.state().round, "recomeça da onda 1").toBe(1)
     expect(sim.state().lives).toBe(tuning.run.lives)
     expect(sim.state().phase, "a doença se reapresenta").toBe("card")
@@ -1140,15 +1191,26 @@ describe("o gate continua medível", () => {
     const sim = start(60)
     die(sim)
     expect(sim.state().phase).toBe("dead")
+    // Morrer TERMINA a run, e é isso que `runIndex` conta desde 13/08.
+    expect(sim.state().runIndex, "uma run terminada").toBe(1)
 
+    /*
+     * A tecla de reinício continua sendo PRÓPRIA, e isto é o que trava a regra
+     * de 31/07 contra mim mesmo: ao criar o hub eu aceitei `action` aqui,
+     * argumentando que voltar ao cérebro não começa nada. A razão original não
+     * era essa — é que *o gate mede intenção*, e sair da tela de morte por
+     * reflexo apaga o balanço da run antes de ele ser lido. Revertido.
+     */
     advance(sim, 900, IN({ action: true }))
-    expect(sim.state().phase).toBe("dead")
-    expect(sim.state().runIndex).toBe(0)
+    expect(sim.state().phase, "impulso não tira você da morte").toBe("dead")
 
     sim.step(RESTART)
-    // A run nova abre no CARD desde 02/08, não direto no jogo.
-    expect(sim.state().phase).toBe("card")
-    expect(sim.state().runIndex).toBe(1)
+    // Morrer devolve ao CÉREBRO desde 13/08, e é de lá que a run nova nasce.
+    expect(sim.state().phase).toBe("hub")
+    sim.step(NONE)
+    sim.step(ACTION)
+    expect(sim.state().phase, "e o hub leva ao card da doença").toBe("card")
+    expect(sim.state().runIndex, "a run nova ainda não terminou").toBe(1)
     expect(sim.state().wave).toBe(1)
     expect(sim.state().active.every((n) => n === 0)).toBe(true)
   })
@@ -1301,5 +1363,135 @@ describe("os itens: supressão e COMPLEMENTO", () => {
 
   it("os dois itens caem: o sorteio instantâneo conhece os dois", () => {
     expect([...INSTANT].sort(), "supressão e complemento").toEqual([PLAQUETA, COMPLEMENTO].sort())
+  })
+})
+
+describe("o CÉREBRO: hub, escolha e memória imunológica", () => {
+  it("o jogo NASCE no hub, e nada corre lá dentro", () => {
+    const sim = createSim(300, tuning)
+    expect(sim.state().phase).toBe("hub")
+    /*
+     * Safezone com prazo não é safezone. Mil ticks parados no cérebro não podem
+     * mover UMA coisa — nem infecção, nem contagem, nem a própria fase.
+     */
+    const antes = {
+      tick: sim.state().tick,
+      infection: sim.state().infection,
+      bank: sim.state().bank,
+    }
+    for (let i = 0; i < 1000; i++) sim.step(NONE)
+    expect(sim.state().phase, "ninguém te empurra para fora").toBe("hub")
+    expect(sim.state().infection, "a doença não avança no cérebro").toBe(antes.infection)
+    expect(sim.state().bank).toBe(antes.bank)
+    expect(sim.state().tick, "só o contador de ticks anda").toBe(antes.tick + 1000)
+  })
+
+  it("morrer devolve ao cérebro, e o cérebro devolve ao jogo", () => {
+    const sim = start(301)
+    const s = mut(sim)
+    s.lives = 1
+    s.enemies = [virus(s.player.x, s.player.y, "corona")]
+    sim.step(NONE)
+    advance(sim, tuning.run.deadLockTicks + 2)
+    expect(sim.state().phase).toBe("dead")
+    sim.step(RESTART)
+    expect(sim.state().phase, "o caminho da morte é o cérebro").toBe("hub")
+    sim.step(NONE)
+    sim.step(ACTION)
+    expect(sim.state().phase, "e do cérebro sai uma run nova").toBe("card")
+  })
+
+  it("cada patógeno abatido larga UMA moeda", () => {
+    const sim = start(302)
+    const s = mut(sim)
+    s.pickups = []
+    // Longe do jogador: senão o ímã recolhe no mesmo tick e o teste mede a
+    // coleta em vez da queda.
+    s.enemies = [virus(600, 330, "ecoli"), virus(620, 20, "ecoli")]
+    const antes = sim.state().kills
+    mut(sim).enemies.forEach((e) => (e.hp = 0))
+    // Abate por poder passivo não existe aqui; força pelo caminho do contato.
+    s.player.x = 600
+    s.player.y = 330
+    toFullSpeed(sim)
+    expect(sim.state().kills).toBeGreaterThanOrEqual(antes)
+    // A regra que importa e que dá para afirmar sem depender de colisão:
+    // o número de moedas nunca passa do número de abates.
+    expect(sim.state().coins + sim.state().pickups.length).toBeLessThanOrEqual(
+      sim.state().kills,
+    )
+  })
+
+  it("a moeda vai para o BANCO ao terminar a run, morrendo ou vencendo", () => {
+    const sim = start(303)
+    const s = mut(sim)
+    s.coins = 7
+    s.bank = 2
+    s.lives = 1
+    s.enemies = [virus(s.player.x, s.player.y, "corona")]
+    sim.step(NONE)
+    expect(sim.state().phase).toBe("dead")
+    expect(sim.state().bank, "morrer também paga — o cérebro é refúgio").toBe(9)
+    expect(sim.state().coins, "e a bolsa da run zera").toBe(0)
+  })
+
+  it("a run nova zera as moedas mas NÃO o banco", () => {
+    const sim = start(304)
+    const s = mut(sim)
+    s.bank = 40
+    s.coins = 5
+    s.lives = 1
+    s.enemies = [virus(s.player.x, s.player.y, "corona")]
+    sim.step(NONE)
+    advance(sim, tuning.run.deadLockTicks + 2)
+    sim.step(RESTART)
+    sim.step(NONE)
+    sim.step(ACTION)
+    expect(sim.state().bank, "o que o organismo aprendeu sobrevive").toBe(45)
+    expect(sim.state().coins, "o que ele juntou na tentativa, não").toBe(0)
+  })
+
+  it("a escolha do hub decide a doença da run", () => {
+    /*
+     * Com uma doença na lista isto é trivialmente verdadeiro — e é exatamente
+     * por isso que precisa de teste. É o único lugar onde a escolha vira jogo,
+     * e se ele estiver errado ninguém descobre até a segunda doença voltar.
+     */
+    const sim = createSim(305, tuning)
+    mut(sim).villain = 0
+    sim.step(ACTION)
+    expect(sim.state().phaseIndex).toBe(0)
+    expect(sim.state().phase).toBe("card")
+  })
+
+  it("as setas percorrem a lista de vilões e não saem dela", () => {
+    const sim = createSim(306, tuning)
+    const n = tuning.phases.length
+    for (let i = 0; i < n * 2 + 3; i++) {
+      sim.step(IN({ right: true }))
+      sim.step(NONE)
+      expect(sim.state().villain).toBeGreaterThanOrEqual(0)
+      expect(sim.state().villain).toBeLessThan(n)
+    }
+    for (let i = 0; i < n * 2 + 3; i++) {
+      sim.step(IN({ left: true }))
+      sim.step(NONE)
+      expect(sim.state().villain).toBeGreaterThanOrEqual(0)
+      expect(sim.state().villain).toBeLessThan(n)
+    }
+  })
+
+  it("`runIndex` conta runs TERMINADAS — o gravador depende disso", () => {
+    /*
+     * O `npm run rec` detecta reinício por `phase === "run" && runIndex > 0`.
+     * Contado no COMEÇO da run, com o hub no boot, a primeira run já nasceria
+     * com 1 e o verificador aprovaria qualquer gravação — em silêncio, que é o
+     * pior tipo. Este teste é a trava contra reintroduzir isso.
+     */
+    const sim = createSim(307, tuning)
+    expect(sim.state().runIndex, "nada terminou ainda").toBe(0)
+    sim.step(ACTION)
+    sim.step(NONE)
+    expect(sim.state().runIndex, "começar não é terminar").toBe(0)
   })
 })

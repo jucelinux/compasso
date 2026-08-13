@@ -1,4 +1,19 @@
-import { FIB0, FIB1, HEM2, PLASMA0, PLASMA1, PLASMA2, PLASMA3, RAMP_HEM } from "./palette.ts"
+import {
+  FAST1,
+  FIB0,
+  FIB1,
+  HEM2,
+  LEU1,
+  LEU2,
+  NUC0,
+  NUC1,
+  PLASMA0,
+  PLASMA1,
+  PLASMA2,
+  PLASMA3,
+  RAMP_HEM,
+  RAMP_NUC,
+} from "./palette.ts"
 import { bayer, body, hashNoise, line, makeBuf, plot, shadeAt, type Buf } from "./pixelbuf.ts"
 
 /**
@@ -191,4 +206,130 @@ export function layerBuf(w: number, h: number, kind: LayerKind, seed: number): B
   }
 
   return b
+}
+
+/**
+ * O CÉREBRO: as camadas de fundo do hub. 13/08.
+ *
+ * O H pediu a mesma riqueza do parallax da arena, e a arena tem três camadas
+ * com papéis distintos — profundidade, direção e nitidez. Aqui são as mesmas
+ * três funções com outro corpo, porque o que dá riqueza não é a quantidade de
+ * coisa desenhada, é cada camada resolver um problema diferente.
+ *
+ * A PALETA é a travada, sem cor nova: o cérebro usa a rampa do leucócito e a do
+ * núcleo, que são frias e pálidas, contra o mesmo `INK`. Isso não é economia —
+ * é o que faz o hub LER como outro lugar sem inventar tinta. A arena é vermelha
+ * e quente; o cérebro sai azul e parado, e a diferença aparece antes de qualquer
+ * texto ser lido.
+ */
+export type BrainLayerKind = "corpos" | "axonios" | "faiscas"
+
+export function brainLayerBuf(w: number, h: number, kind: BrainLayerKind, seed: number): Buf {
+  const b = makeBuf(w, h)
+  const wrap = (draw: (x: number) => void, x: number): void => {
+    draw(x - w)
+    draw(x)
+    draw(x + w)
+  }
+
+  if (kind === "corpos") {
+    /*
+     * Somas distantes: a PROFUNDIDADE, equivalente aos discos de hemácia.
+     *
+     * Pequenos, escuros e de baixo contraste pela mesma razão de lá — fundo que
+     * disputa atenção não é fundo. O dither agressivo no fim é o que os empurra
+     * para trás; sem ele a camada lê como se estivesse no mesmo plano dos
+     * neurônios vivos da multidão.
+     */
+    for (let i = 0; i < 16; i++) {
+      const cy = hashNoise(i, seed, 2) * h
+      const r = 7 + hashNoise(i, seed, 3) * 13
+      wrap((cx) => {
+        body(b, cx, cy, r, RAMP_NUC, () => r)
+        // Dendritos curtos saindo do soma: é o que faz a mancha virar neurônio.
+        for (let k = 0; k < 5; k++) {
+          const a = hashNoise(i * 7 + k, seed, 4) * Math.PI * 2
+          const reach = r * (1.3 + hashNoise(i * 7 + k, seed, 6) * 0.9)
+          line(b, cx, cy, cx + Math.cos(a) * reach, cy + Math.sin(a) * reach, NUC0, 1)
+        }
+      }, hashNoise(i, seed, 1) * w)
+    }
+    for (let y = 0; y < h; y++) {
+      for (let x = 0; x < w; x++) {
+        if (b.d[y * w + x] !== 0 && bayer(x, y) > 0.42) b.d[y * w + x] = 0
+      }
+    }
+  } else if (kind === "axonios") {
+    /*
+     * Feixes de axônio: a DIREÇÃO, equivalente à fibrina.
+     *
+     * Mais retos e mais longos que a fibrina de propósito. Fibra de sangue
+     * ondula porque flutua; axônio corre em feixe porque liga dois pontos, e a
+     * diferença de curvatura é o que diz ao olho que este não é o mesmo lugar.
+     */
+    for (let i = 0; i < 16; i++) {
+      const y0 = hashNoise(i, seed, 7) * h
+      const amp = 4 + hashNoise(i, seed, 8) * 16
+      const idx = hashNoise(i, seed, 9) > 0.5 ? LEU1 : NUC1
+      wrap(() => {
+        let px = -w
+        let py = y0
+        for (let k = 1; k <= 30; k++) {
+          const qx = -w + (k / 30) * w * 3
+          const qy = y0 + Math.sin((k / 30) * Math.PI * 2 + i) * amp
+          line(b, px, py, qx, qy, idx, 1)
+          px = qx
+          py = qy
+        }
+      }, 0)
+    }
+    for (let y = 0; y < h; y++) {
+      for (let x = 0; x < w; x++) {
+        if (b.d[y * w + x] !== 0 && bayer(x, y) > 0.55) b.d[y * w + x] = 0
+      }
+    }
+  } else {
+    /*
+     * Faíscas: a NITIDEZ, equivalente aos detritos.
+     *
+     * Único plano sem dither, e por isso o único que lê como "na frente". São
+     * os potenciais de ação viajando — o que faz o cérebro parecer LIGADO em
+     * vez de um desenho de cérebro.
+     */
+    for (let i = 0; i < 110; i++) {
+      const y = hashNoise(i, seed, 12) * h
+      const big = hashNoise(i, seed, 13) > 0.82
+      const idx = big ? FAST1 : LEU2
+      wrap((x) => {
+        plot(b, x, y, idx)
+        if (big) {
+          plot(b, x + 1, y, idx)
+          plot(b, x, y + 1, idx)
+        }
+      }, hashNoise(i, seed, 11) * w)
+    }
+  }
+
+  return b
+}
+
+/**
+ * A MULTIDÃO DE NEURÔNIOS: o mesmo esquema das hemácias, pedido do H.
+ *
+ * Reusa `crowdLayout` de propósito, e isso não é preguiça: a multidão da arena
+ * já resolveu o problema difícil — distribuir corpos sem grade visível, dar a
+ * cada um raio e variante próprios, e deixar o empurrão acontecer no lugar
+ * certo. Trocar só a FORMA mantém tudo isso e garante que as duas telas se
+ * movam com o mesmo caráter.
+ *
+ * O que muda é o raio: neurônio é maior e mais esparso que hemácia, porque o
+ * que precisa caber entre eles são as SINAPSES. Multidão apertada não tem onde
+ * desenhar ligação.
+ */
+export function neuronShape(v: number): { r: number; dendritos: number; tilt: number } {
+  return {
+    r: 7 + hashNoise(v, 909, 17) * 4.5,
+    dendritos: 4 + Math.floor(hashNoise(v, 909, 19) * 3),
+    tilt: hashNoise(v, 909, 23) * Math.PI,
+  }
 }

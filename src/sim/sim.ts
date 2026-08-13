@@ -29,6 +29,7 @@ import {
 } from "./field.ts"
 import { createRng } from "./rng.ts"
 import type {
+  Coin,
   Enemy,
   InputFrame,
   KindSpec,
@@ -197,6 +198,10 @@ export function createSim(seed: number, tuning: Tuning): Sim {
     instantAcc: 0,
     fissionAcc: 0,
     fissionStun: 0,
+    villain: 0,
+    coins: 0,
+    bank: 0,
+    pickups: [],
     lastPickTick: -1000,
     lastPickPower: -1,
     lastPickX: 0,
@@ -228,6 +233,9 @@ export function createSim(seed: number, tuning: Tuning): Sim {
     const list = tuning.phases
     return list[Math.min(s.phaseIndex, list.length - 1)]!
   }
+
+  /** Quantas doenças o HUB oferece. Uma só hoje; a lista é que manda. */
+  const villainCount = (): number => Math.max(1, tuning.phases.length)
 
   const rollKind = (): string => phaseSpec().disease
 
@@ -424,7 +432,18 @@ export function createSim(seed: number, tuning: Tuning): Sim {
 
   const startRun = (): void => {
     s.wave = 1
-    s.phaseIndex = 0
+    /*
+     * A run começa no vilão ESCOLHIDO no hub, não no primeiro da lista.
+     *
+     * Com uma doença só os dois são zero e isto parece decoração. É o oposto:
+     * é o único lugar onde a escolha do hub vira jogo, e escrevê-lo agora é o
+     * que faz o segundo patógeno ser uma linha de tuning em vez de uma caçada.
+     */
+    s.phaseIndex = Math.min(s.villain, tuning.phases.length - 1)
+    // As moedas da run zeram; o BANCO não. É o que separa "o que você fez
+    // nesta tentativa" de "o que o organismo aprendeu".
+    s.coins = 0
+    s.pickups = []
     s.round = 1
     s.kills = 0
     s.score = 0
@@ -476,12 +495,43 @@ export function createSim(seed: number, tuning: Tuning): Sim {
     s.cardLock = tuning.cardLockTicks
   }
 
+  /**
+   * DEPOSITA as moedas da run no banco. Chamado nos DOIS fins possíveis.
+   *
+   * Morrer também deposita, e isso é a decisão: se só a vitória pagasse, a run
+   * perdida seria tempo jogado fora e o hub viraria punição em vez de refúgio.
+   * O H chamou o cérebro de safezone — o lugar para onde se volta ao morrer — e
+   * voltar de mãos vazias contradiz a palavra.
+   *
+   * As moedas ainda no chão, não coletadas, NÃO entram. Pegar é o gesto.
+   */
+  const bankCoins = (): void => {
+    s.bank += s.coins
+    s.coins = 0
+    s.pickups = []
+    /*
+     * `runIndex` conta runs TERMINADAS, e ele mudou de lugar em 13/08.
+     *
+     * Antes era incrementado ao COMEÇAR uma run nova, e com o hub no boot isso
+     * teria feito a primeira run já nascer com `runIndex` 1. Parece detalhe e
+     * não é: o `npm run rec` detecta "reiniciou" por `phase === "run" &&
+     * runIndex > 0`, e a condição passaria a ser verdadeira desde o primeiro
+     * quadro — o verificador que existe para provar que a fixture cobre morte
+     * E reinício passaria a aprovar qualquer coisa, em silêncio.
+     *
+     * Contado no FIM, ele volta a significar o que o nome diz, e a checagem do
+     * gravador volta a significar o que ela pergunta.
+     */
+    s.runIndex++
+  }
+
   const endRun = (byTissue: boolean): void => {
     if (s.kills > s.bestKills) s.bestKills = s.kills
     s.lostByTissue = byTissue
     s.phase = "dead"
     s.deadLock = tuning.run.deadLockTicks
     s.frozen = 0
+    bankCoins()
   }
 
   /** Liga um poder. Instantâneos agem na hora e não ficam ativos. */
@@ -878,6 +928,33 @@ export function createSim(seed: number, tuning: Tuning): Sim {
         d.y += (gy / gd) * tuning.drops.magnetSpeed * dt
       }
     }
+    /*
+     * As MOEDAS: mesmo ímã das cápsulas, raio maior e mais rápidas.
+     *
+     * Maior de propósito — cápsula é decisão (vale desviar por ela), moeda é
+     * recompensa e não pode virar tarefa. Se o jogador tiver que caçar cada
+     * moeda, o loop do jogo vira varredura, que é exatamente o fim de fase que
+     * este projeto já recusou em 02/08.
+     *
+     * O tempo de vida corre em tick REAL: recompensa não pertence ao relógio da
+     * doença, e em tempo de mundo a moeda duraria vinte vezes mais para quem
+     * ficasse parado.
+     */
+    const keptCoins: Coin[] = []
+    for (const c of s.pickups) {
+      const cx = p.x - c.x
+      const cy = p.y - c.y
+      const cd = Math.sqrt(cx * cx + cy * cy)
+      if (cd < tuning.coin.magnetRadius && cd > 0.5) {
+        c.x += (cx / cd) * tuning.coin.magnetSpeed * dt
+        c.y += (cy / cd) * tuning.coin.magnetSpeed * dt
+      }
+      c.life--
+      if (cd <= half + 8) s.coins++
+      else if (c.life > 0) keptCoins.push(c)
+    }
+    s.pickups = keptCoins
+
     const keptDrops = []
     for (const d of s.drops) {
       const gx = p.x - d.x
@@ -911,6 +988,20 @@ export function createSim(seed: number, tuning: Tuning): Sim {
       }
       s.kills++
       s.waveKills++
+      /*
+       * A MOEDA que o patógeno larga. Uma por corpo, chamada do H em 13/08.
+       *
+       * Objeto no campo e não um contador que sobe sozinho: o abate precisa
+       * PRODUZIR algo visível, e "ganhei" é uma leitura diferente de "acertei"
+       * — que é o que o estalo já diz.
+       *
+       * Estourando o teto sai a MAIS VELHA, nunca a que acabou de cair. Com
+       * `shift` a moeda do abate mais recente sobreviveria à custa da que o
+       * jogador está indo pegar, e o descarte apareceria como moeda sumindo na
+       * frente dele.
+       */
+      if (s.pickups.length >= tuning.coin.maxOnField) s.pickups.shift()
+      s.pickups.push({ id: nextId++, x: e.x, y: e.y, life: tuning.coin.lifeTicks })
       s.combo++
       // Multiplicador por SEQUÊNCIA: 1× até 3 seguidos, depois um degrau a
       // cada 3. É o mesmo escalão que o render já usa para colorir o combo, e
@@ -1407,8 +1498,17 @@ export function createSim(seed: number, tuning: Tuning): Sim {
       return
     }
     if ((bits & ~s.prevBits & BIT_RESTART) !== 0) {
-      s.runIndex++
-      startRun()
+      /*
+       * Morrer devolve ao CÉREBRO, não ao jogo — chamada do H em 13/08.
+       *
+       * A TECLA CONTINUA SENDO SÓ A DE REINÍCIO, e isso é uma reversão minha.
+       * Eu tinha aceitado `action` aqui argumentando que o hub não começa nada
+       * e portanto reflexo não custa. Mas a regra de 31/07 diz que a tecla é
+       * própria porque *o gate mede intenção*, e sair da tela de morte por
+       * reflexo apaga o balanço da run antes de ele ser lido — o destino mudou,
+       * a razão não. Decisão registrada não se reabre de passagem.
+       */
+      s.phase = "hub"
     }
   }
 
@@ -1420,6 +1520,21 @@ export function createSim(seed: number, tuning: Tuning): Sim {
    * ninguém leria nome nenhum. Vale ainda mais aqui do que na morte, porque a
    * transição de fase chega no meio do gesto.
    */
+  /**
+   * O CÉREBRO: escolher o vilão e partir. Nada ataca aqui.
+   *
+   * É a única fase do jogo sem relógio nenhum correndo — sem doença, sem
+   * contagem, sem trava. O H pediu safezone, e safezone com prazo não é
+   * safezone. Ficar aqui não custa e não rende.
+   */
+  const stepHub = (bits: number): void => {
+    const novo = bits & ~s.prevBits
+    const n = villainCount()
+    if ((novo & BIT_LEFT) !== 0) s.villain = (s.villain + n - 1) % n
+    if ((novo & BIT_RIGHT) !== 0) s.villain = (s.villain + 1) % n
+    if ((novo & (BIT_ACTION | BIT_RESTART)) !== 0) startRun()
+  }
+
   const stepCard = (bits: number): void => {
     if (s.cardLock > 0) {
       s.cardLock--
@@ -1441,8 +1556,10 @@ export function createSim(seed: number, tuning: Tuning): Sim {
       return
     }
     if (((bits & ~s.prevBits) & (BIT_ACTION | BIT_RESTART)) !== 0) {
-      s.runIndex++
-      startRun()
+      // Vencer também volta ao cérebro. É o mesmo lugar pelos dois caminhos, e
+      // é o que faz dele um HUB em vez de uma tela de continue.
+      bankCoins()
+      s.phase = "hub"
     }
   }
 
@@ -1482,6 +1599,7 @@ export function createSim(seed: number, tuning: Tuning): Sim {
   const step = (input: InputFrame): void => {
     const bits = bitsOf(input)
     if (s.phase === "run") stepRun(bits)
+    else if (s.phase === "hub") stepHub(bits)
     else if (s.phase === "card") stepCard(bits)
     else if (s.phase === "intervalo") stepIntervalo()
     else if (s.phase === "closed") stepClosed(bits)
@@ -1496,7 +1614,9 @@ export function createSim(seed: number, tuning: Tuning): Sim {
       .reset()
       .u32(s.tick)
       .u8(
-        s.phase === "run"
+        s.phase === "hub"
+          ? 5
+          : s.phase === "run"
           ? 0
           : s.phase === "card"
             ? 1
@@ -1526,7 +1646,7 @@ export function createSim(seed: number, tuning: Tuning): Sim {
       .f64(s.worldScale)
       .u32(s.frozen)
       .u32(s.deadLock)
-      .u32(s.cardLock).u32(s.countdown).f64(s.fissionStun).u32(s.auraTicks).f64(s.instantAcc).u32(s.pick).u32(s.phaseIndex).u32(s.round)
+      .u32(s.villain).u32(s.coins).u32(s.bank).u32(s.pickups.length).u32(s.cardLock).u32(s.countdown).f64(s.fissionStun).u32(s.auraTicks).f64(s.instantAcc).u32(s.pick).u32(s.phaseIndex).u32(s.round)
       .f64(s.fissionAcc)
       .u32(s.infection)
       .u32(s.necrosed)
@@ -1555,6 +1675,7 @@ export function createSim(seed: number, tuning: Tuning): Sim {
     for (let i = 0; i < s.field.length; i++) packer.u8(s.field[i]!)
     for (let i = 0; i < s.necrose.length; i++) packer.u8(s.necrose[i]!)
     for (const d of s.drops) packer.u32(d.id).u32(d.power).f64(d.x).f64(d.y).u32(d.life)
+    for (const c of s.pickups) packer.u32(c.id).f64(c.x).f64(c.y).u32(c.life)
     for (const n of s.active) packer.u32(n)
     for (const n of s.owned) packer.u32(n)
     for (const n of s.buildOrder) packer.u32(n)
@@ -1579,8 +1700,16 @@ export function createSim(seed: number, tuning: Tuning): Sim {
    * medir qualquer coisa.
    */
   startWave()
-  s.phase = "card"
-  s.cardLock = tuning.cardLockTicks
+  /*
+   * O jogo abre no CÉREBRO desde 13/08, não na apresentação da doença.
+   *
+   * A onda continua sendo montada aqui no boot para que o estado nasça
+   * coerente — `startRun` remonta tudo quando o jogador parte do hub, e um
+   * estado inicial pela metade seria o tipo de resto que só aparece meses
+   * depois, num teste que lê o campo antes da primeira run.
+   */
+  s.phase = "hub"
+  s.cardLock = 0
 
   return {
     step,
