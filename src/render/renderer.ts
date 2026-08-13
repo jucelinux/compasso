@@ -85,28 +85,59 @@ class Label {
     this.atlas = atlas
   }
 
-  /** `x`,`y` é o canto da célula. Devolve a largura em pixels desenhada. */
-  set(text: string, idx: number, x: number, y: number, scale = 1, center = false): number {
+  /**
+   * `x`,`y` é o canto da célula. Devolve a largura em pixels desenhada.
+   *
+   * `shadow` desenha uma cópia em `INK` deslocada de UM pixel nativo, atrás.
+   *
+   * Ela existe porque este jogo escreve por cima do organismo, e o organismo
+   * não é fundo — é a arena, com hemácia, cicatriz e bicho passando debaixo da
+   * letra. Sem contorno o texto some em cima do tecido claro e vira mancha em
+   * cima do escuro, e o H apontou exatamente isso. A regra de 01/08 continua
+   * valendo: o deslocamento é `1 × scale`, INTEIRO, senão a sombra cai em meio
+   * pixel e a letra fica borrada — que é o defeito que ela deveria consertar.
+   *
+   * Sombra ANTES do corpo no pool, sempre. A ordem de desenho aqui é a ordem
+   * de criação dos filhos, então preencher os índices baixos com a sombra é o
+   * que a mantém atrás — e é por isso que os dois passes moram na mesma função
+   * em vez de em duas chamadas.
+   */
+  set(
+    text: string,
+    idx: number,
+    x: number,
+    y: number,
+    scale = 1,
+    center = false,
+    shadow = false,
+  ): number {
     const up = text.toUpperCase()
     const w = textWidth(up) * scale
     const x0 = Math.round(center ? x - w / 2 : x)
     const y0 = Math.round(y)
+    const off = scale
     let used = 0
-    for (let i = 0; i < up.length; i++) {
-      const tex = this.atlas.glyph(up[i]!, idx)
-      if (tex === null) continue
-      let sp = this.pool[used]
-      if (sp === undefined) {
-        sp = new Sprite()
-        this.pool[used] = sp
-        this.parent.addChild(sp)
+
+    const escreve = (cor: number, dx: number, dy: number): void => {
+      for (let i = 0; i < up.length; i++) {
+        const tex = this.atlas.glyph(up[i]!, cor)
+        if (tex === null) continue
+        let sp = this.pool[used]
+        if (sp === undefined) {
+          sp = new Sprite()
+          this.pool[used] = sp
+          this.parent.addChild(sp)
+        }
+        sp.visible = true
+        sp.texture = tex
+        sp.scale.set(scale)
+        sp.position.set(x0 + i * (GLYPH_W + 1) * scale + dx, y0 + dy)
+        used++
       }
-      sp.visible = true
-      sp.texture = tex
-      sp.scale.set(scale)
-      sp.position.set(x0 + i * (GLYPH_W + 1) * scale, y0)
-      used++
     }
+
+    if (shadow) escreve(INK, off, off)
+    escreve(idx, 0, 0)
     for (let i = used; i < this.pool.length; i++) this.pool[i]!.visible = false
     return w
   }
@@ -876,12 +907,16 @@ export async function createRenderer(
      * jogador não sabe se está na metade ou no começo.
      */
     const total = tuning.phases[Math.min(cur.phaseIndex, tuning.phases.length - 1)]!.waves
+    // Com sombra: o HUD fica em cima da arena desde 05/08 (a tela preenchida
+    // tirou a tarja preta), e ali o tecido vai de quase branco a quase preto ao
+    // longo de uma run. Nenhuma cor chapada é legível contra as duas pontas.
     waveLabel.set(
       `ONDA ${cur.round}/${total}   INFECÇÃO ${Math.ceil(infFrac * 100)}%`,
       infFrac > tuning.field.loseFraction * 0.7 ? HURT1 : WHITE,
       tuning.arena.width / 2,
       4,
       1,
+      true,
       true,
     )
     /*
@@ -997,12 +1032,17 @@ export async function createRenderer(
     const grande = scorePulse > 0.45 || mult > 1
     const escala = grande ? 2 : 1
     const cor = mult > 1 ? COMBO_TIERS[tier]! : scorePulse > 0.45 ? GLD2 : WHITE
+    // Pontuação e multiplicador também moram na arena, e o multiplicador é o
+    // que mais brilha por desenho — sem contorno ele se dissolve contra tecido
+    // claro justamente no momento em que existe para ser visto.
     scoreLabel.set(
       String(cur.score).padStart(6, "0"),
       cor,
       tuning.arena.width - 6 - 6 * 7 * escala,
       18,
       escala,
+      false,
+      true,
     )
     if (mult > 1) {
       multLabel.set(
@@ -1011,6 +1051,8 @@ export async function createRenderer(
         tuning.arena.width - 6 - 3 * 7 * (scorePulse > 0.3 ? 3 : 2),
         18 + 16 * escala,
         scorePulse > 0.3 ? 3 : 2,
+        false,
+        true,
       )
     } else {
       multLabel.hide()
@@ -1101,16 +1143,21 @@ export async function createRenderer(
      * Ele estava em `cy - 34` e o corpo da célula mora em `cy`, com 20px de
      * lado: a 4x o dígito descia até `cy - 6` e os dois se sobrepunham em seis
      * linhas. Na captura isso aparece como um borrão quadriculado sob o número
-     * — legível, mas sujo, e sujo por acidente. Em `cy - 52` o dígito acaba em
-     * `cy - 24` e sobra folga de 14px até a cabeça dela.
+     * — legível, mas sujo, e sujo por acidente.
      *
      * Subir em vez de escurecer o véu é o que preserva a razão da tela: ela
-     * existe para o tabuleiro ser visto, e o jogador é parte do tabuleiro.
+     * existe para o tabuleiro ser visto, e o jogador é parte do tabuleiro. As
+     * três linhas levam SOMBRA pela mesma razão — a resposta do H para a
+     * sobreposição foi contorno e cor forte, não véu mais pesado.
+     *
+     * `CONTIDA` em escala 2, a pedido dele: é a frase que premia a onda que
+     * acabou, e ela estava do tamanho de legenda. Em escala 2 são 14px de
+     * altura, então ela mora em `cy - 88` e o dígito começa 22px abaixo.
      */
     rewardPanels.clear()
-    cardLines[0]!.set(`ONDA ${cur.round - 1} CONTIDA`, GLD2, cx, cy - 78, 1, true)
-    cardLines[1]!.set(String(segundos), WHITE, cx, cy - 52, 4, true)
-    cardLines[2]!.set(`ONDA ${cur.round} DE ${total}`, WHITE, cx, cy + 30, 2, true)
+    cardLines[0]!.set(`ONDA ${cur.round - 1} CONTIDA`, GLD2, cx, cy - 88, 2, true, true)
+    cardLines[1]!.set(String(segundos), WHITE, cx, cy - 52, 4, true, true)
+    cardLines[2]!.set(`ONDA ${cur.round} DE ${total}`, SHI1, cx, cy + 30, 2, true, true)
     cardLines[3]!.hide()
   }
 
@@ -1204,8 +1251,25 @@ export async function createRenderer(
     }
     const cy = tuning.arena.height / 2
     const cx = tuning.arena.width / 2
-    deadLines[0]!.set(cur.lostByTissue ? "O TECIDO MORREU" : "A INFECÇÃO VENCEU", HURT1, cx, cy - 40, 2, true)
-    deadLines[1]!.set(`${cur.score} PONTOS · ${cur.kills} PATÓGENOS`, WHITE, cx, cy - 4, 1, true)
+    /*
+     * SOMBRA nas quatro, e o prompt sai do `DIM0`.
+     *
+     * A captura da morte mostrou "R OU ENTER PRA OUTRA" quase invisível: `DIM0`
+     * é 0x7a4450, e o campo no fim de uma run perdida é tecido morto, quase da
+     * mesma cor. Texto dim só funciona sobre painel opaco — sobre o organismo
+     * ele vira a mesma tinta. Aqui a regra passa a ser: linha desenhada DIRETO
+     * no campo leva sombra e cor da rampa clara.
+     */
+    deadLines[0]!.set(
+      cur.lostByTissue ? "O TECIDO MORREU" : "A INFECÇÃO VENCEU",
+      HURT1,
+      cx,
+      cy - 40,
+      2,
+      true,
+      true,
+    )
+    deadLines[1]!.set(`${cur.score} PONTOS · ${cur.kills} PATÓGENOS`, WHITE, cx, cy - 4, 1, true, true)
     deadLines[2]!.set(
       cur.bestMult > 1 ? `MELHOR MULTIPLICADOR ${cur.bestMult}×` : "",
       GLD2,
@@ -1213,8 +1277,9 @@ export async function createRenderer(
       cy + 10,
       1,
       true,
+      true,
     )
-    deadLines[3]!.set(prompt.outra, DIM0, cx, cy + 34, 1, true)
+    deadLines[3]!.set(prompt.outra, SHI1, cx, cy + 34, 1, true, true)
   }
 
   return {

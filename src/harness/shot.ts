@@ -20,6 +20,32 @@ mkdirSync(dir, { recursive: true })
 
 const d = await drive(seed)
 try {
+  const fase = async (): Promise<string> =>
+    (await d.page.locator("#hud").textContent())?.match(/fase (\w+)/)?.[1] ?? "?"
+
+  /*
+   * DISPENSA O CARD antes de qualquer captura — e isto é conserto, não passo
+   * novo.
+   *
+   * A run abre na apresentação da doença desde 02/08, e nada aqui a dispensava:
+   * as setas não dispensam card. As duas primeiras capturas vinham mostrando a
+   * MESMA tela de identidade, com os nomes "parada" e "a toda" mentindo sobre o
+   * conteúdo — exatamente o defeito que o comentário da captura de morte, logo
+   * abaixo, existe para não deixar acontecer. Passou dez dias porque ninguém
+   * comparou o arquivo com o nome dele.
+   *
+   * Achado em 13/08, olhando as capturas do respiro: o pano de fundo escuro que
+   * eu tomei por "HUD apagado" era o VÉU do card, e o véu não deveria estar ali.
+   */
+  let tentativas = 0
+  while ((await fase()) !== "run" && tentativas < 20) {
+    await d.hold([" "], 150)
+    tentativas++
+  }
+  if ((await fase()) !== "run") throw new Error("não saiu do card — as capturas mentiriam")
+  // Freia até parar de verdade: `1-parada` promete a célula em repouso, e o
+  // arranque do card ainda escorre por alguns quadros.
+  await d.page.waitForTimeout(900)
   await d.shot(resolve(dir, "1-parada.png"))
 
   await d.hold(["ArrowRight"], 700)
@@ -44,8 +70,6 @@ try {
     [["ArrowLeft"], 1200],
     [["ArrowUp"], 1000],
   ]
-  const fase = async (): Promise<string> =>
-    (await d.page.locator("#hud").textContent())?.match(/fase (\w+)/)?.[1] ?? "?"
 
   /*
    * O laço tolera o INTERVALO, e aproveita para capturá-lo.
