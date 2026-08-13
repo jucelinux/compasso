@@ -47,17 +47,55 @@ try {
   const fase = async (): Promise<string> =>
     (await d.page.locator("#hud").textContent())?.match(/fase (\w+)/)?.[1] ?? "?"
 
+  /*
+   * O laço tolera o INTERVALO, e aproveita para capturá-lo.
+   *
+   * Até 13/08 ele saía em qualquer fase que não fosse `run` e o `throw` logo
+   * abaixo acusava "não morreu" — o mesmo defeito que o gravador teve quando a
+   * necrose fez o passeio começar a CONTER ondas: sintoma apontando para o
+   * lugar errado. Aqui a diferença é que sair cedo faz a captura de morte
+   * mentir, e captura com nome mentiroso é o que este arquivo existe para não
+   * produzir.
+   *
+   * A captura do respiro é BEST-EFFORT de propósito: ela só existe se o passeio
+   * contiver uma onda, e conter depende da seed. Prometer uma tela que pode não
+   * acontecer seria a mesma mentira ao contrário — então o script diz quando
+   * não conseguiu, em vez de falhar ou de calar.
+   */
   let n = 0
-  while (n < 4 * 40 && (await fase()) === "run") {
+  let viuIntervalo = false
+  let f = await fase()
+  while (n < 4 * 40 && f !== "dead") {
+    if (f === "intervalo") {
+      if (!viuIntervalo) {
+        viuIntervalo = true
+        await d.shot(resolve(dir, "4-intervalo.png"))
+      }
+      await d.page.waitForTimeout(250)
+      f = await fase()
+      continue
+    }
+    if (f !== "run") {
+      // `card` e `closed` pedem tecla; sem isto o laço gira até o teto.
+      await d.hold([" "], 150)
+      f = await fase()
+      continue
+    }
     const [keys, ms] = passo[n % passo.length]!
     await d.hold(keys, ms)
     n++
+    f = await fase()
   }
-  if ((await fase()) !== "dead") throw new Error("não morreu — a captura de morte mentiria")
+  if (f !== "dead") throw new Error(`não morreu (parou em "${f}") — a captura de morte mentiria`)
   await d.page.waitForTimeout(600)
   await d.shot(resolve(dir, "3-morte.png"))
 
   console.log(`capturas em ${dir}`)
+  console.log(
+    viuIntervalo
+      ? "  respiro capturado em 4-intervalo.png"
+      : "  SEM respiro nesta seed: o passeio não conteve nenhuma onda",
+  )
   if (d.errors.length > 0) console.error(`ERROS NO BROWSER:\n${d.errors.join("\n")}`)
   else console.log("nenhum erro de browser")
 } finally {

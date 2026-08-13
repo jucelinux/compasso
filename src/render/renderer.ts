@@ -171,14 +171,10 @@ class Pool {
 const PROMPTS = {
   teclado: {
     comecar: "ESPAÇO PRA COMEÇAR",
-    escolher: "SETAS ESCOLHEM · ESPAÇO CONFIRMA",
-    proxima: "ESPAÇO PRA PRÓXIMA DOENÇA",
     outra: "R OU ENTER PRA OUTRA",
   },
   toque: {
     comecar: "TOQUE PRA COMEÇAR",
-    escolher: "ARRASTE ESCOLHE · TOQUE CONFIRMA",
-    proxima: "TOQUE PRA PRÓXIMA DOENÇA",
     outra: "TOQUE PRA OUTRA",
   },
 } as const
@@ -430,29 +426,15 @@ export async function createRenderer(
   const rewardPanels = new Graphics()
   overlay.addChild(rewardPanels)
   /*
-   * PREVIEW do poder: o jogador com o efeito ligado, como ele aparece em jogo.
+   * O PREVIEW do poder saiu em 13/08, com a tela de recompensa.
    *
-   * Substituiu um emblema geométrico que eu tinha inventado alegando "não
-   * desenho". O H desmontou o argumento na hora, e com razão: o glóbulo JÁ é
-   * desenhado com o poder aplicado durante a partida — pedir preview não era
-   * pedir arte nova, era pedir para eu reusar o que já está na tela. Eu tinha
-   * invocado uma limitação onde ela não se aplicava.
+   * Ele desenhava o jogador com o efeito ligado, reusando as texturas da
+   * partida — e substituiu um emblema geométrico que eu tinha inventado
+   * alegando "não desenho", argumento que o H desmontou na hora e com razão
+   * (`TASTE.md` §2a: usei limitação declarada como ESCUDO). Fica registrado
+   * aqui porque a lição é do modelo, não do código; o código está em
+   * `git show 0663754:src/render/renderer.ts` se a recompensa voltar.
    */
-  const previewLayer = new Container()
-  overlay.addChild(previewLayer)
-  /*
-   * Máscara: o preview é recortado ao painel.
-   *
-   * As auras têm RAIO DE JOGO, não de card — o anel da FEBRE vazava para fora
-   * da moldura e cobria o painel vizinho. Recortar preserva a honestidade do
-   * preview (é o mesmo pixel da partida, no mesmo tamanho) e ainda comunica
-   * magnitude: efeito que estoura a moldura é efeito grande. Encolher o sprite
-   * seria mentir sobre o alcance e quebrar a grade de pixel junto.
-   */
-  const previewMask = new Graphics()
-  overlay.addChild(previewMask)
-  previewLayer.mask = previewMask
-  const previewPool = new Pool(previewLayer)
   const cardBicho = new Sprite()
   cardBicho.anchor.set(0.5)
   // Escala INTEIRA: o pixel art nativo não tolera meio pixel, e o card é a
@@ -884,8 +866,18 @@ export async function createRenderer(
     const max = tuning.field.maxInfection
     const teto = tuning.field.cols * tuning.field.rows * max
     const infFrac = cur.infection / teto
+    /*
+     * `ONDA 3/10` e não `FASE 1·3`.
+     *
+     * O rótulo antigo tinha dois contadores porque havia duas hierarquias —
+     * cinco doenças, quatro ondas cada. Com uma doença e dez ondas o
+     * `phaseIndex` é sempre 1 e sobra ruído, e o `round` sozinho não diz quanto
+     * falta. O denominador é o que transforma o número em PROGRESSO: sem ele o
+     * jogador não sabe se está na metade ou no começo.
+     */
+    const total = tuning.phases[Math.min(cur.phaseIndex, tuning.phases.length - 1)]!.waves
     waveLabel.set(
-      `FASE ${cur.phaseIndex + 1}·${cur.round}   INFECÇÃO ${Math.ceil(infFrac * 100)}%`,
+      `ONDA ${cur.round}/${total}   INFECÇÃO ${Math.ceil(infFrac * 100)}%`,
       infFrac > tuning.field.loseFraction * 0.7 ? HURT1 : WHITE,
       tuning.arena.width / 2,
       4,
@@ -1057,7 +1049,16 @@ export async function createRenderer(
       .rect(x0, y0, W, 18)
       .fill({ color: tint, alpha: 0.22 })
 
-    cardLines[0]!.set(`FASE ${cur.phaseIndex + 1}`, DIM0, cx, y0 + 6, 1, true)
+    /*
+     * O cabeçalho diz o TAMANHO da luta, não um índice.
+     *
+     * Era `FASE ${phaseIndex + 1}` e virou ruído em 13/08: com uma doença na
+     * lista o número é sempre 1, e um contador que não conta é pior que
+     * nenhum. `10 ONDAS` é a única coisa que o jogador ainda não sabe ao ver
+     * esta tela, e é o que a progressão nova precisa dizer de cara — sem isso
+     * ele descobre que a run tem fim só quando ela acaba.
+     */
+    cardLines[0]!.set(`${spec.waves} ONDAS`, DIM0, cx, y0 + 6, 1, true)
 
     if (sheet !== undefined) {
       // Cambaleia em 8 direções, como ele faz em campo. Parado no card o bicho
@@ -1077,128 +1078,37 @@ export async function createRenderer(
   }
 
   /**
-   * A tela de RECOMPENSA. Um card por habilidade, não uma lista de nomes.
+   * O RESPIRO entre ondas. Três segundos, um número grande, e nada para apertar.
    *
-   * O H reprovou a lista em 02/08 — "queria um card demonstrando o que a
-   * habilidade faz". Nome grande, o que ela faz por extenso, e a cor própria
-   * do poder, que é a mesma que ele usa em campo.
+   * A tela de recompensa que morava aqui morreu em 13/08 com o formato onda →
+   * upgrade. O que entrou não é um menu mais barato — é o oposto de um menu: o
+   * tabuleiro da onda seguinte JÁ ESTÁ montado atrás desta contagem, com os
+   * focos semeados e os corpos em cena, e os 3 segundos existem para você
+   * OLHAR. Por isso o véu aqui é o leve, o mesmo do card de identidade: o de
+   * menu (nível 2) escondia justamente o que a contagem serve para mostrar.
    */
-  /**
-   * Desenha o jogador com UM poder ligado, com as mesmas texturas da partida.
-   *
-   * Cada caso aqui espelha um trecho de `drawPowers`/`drawPlayer`. Não é
-   * ilustração: é o mesmo pixel que o jogador vai ver quando o poder estiver
-   * ativo, que é exatamente o que o H pediu.
-   */
-  const drawPreview = (id: number, ex: number, ey: number, sel: boolean): void => {
-    const a = sel ? 1 : 0.35
-    const orbita = Math.floor(selfClock * 2) % 8
-    if (id === 0) previewPool.next(atlas.trail).position.set(ex, ey)
-    if (id === 4) previewPool.next(atlas.cloud).position.set(ex, ey)
-    if (id === 5) previewPool.next(atlas.interferon).position.set(ex, ey)
-    if (id === 1) {
-      const sh = atlas.shock[Math.floor(selfClock * 6) % atlas.shock.length]
-      if (sh !== undefined) previewPool.next(sh).position.set(ex, ey)
-    }
-    // O corpo, sempre. Escalão 3 no SURTO, porque é o que o poder faz.
-    const corpo = previewPool.next(frameOf(atlas.player, id === 7 ? 3 : 0, 0, orbita))
-    corpo.position.set(ex, ey)
-    if (id === 2) {
-      for (let k = 0; k < 2; k++) {
-        const ang = ((orbita + k * 4) / 8) * TAU
-        previewPool
-          .next(atlas.orbiter)
-          .position.set(Math.round(ex + Math.cos(ang) * 15), Math.round(ey + Math.sin(ang) * 15))
-      }
-    }
-    if (id === 3) {
-      previewPool.next(frameOf(atlas.macrophage, 0, 2, orbita)).position.set(ex + 17, ey + 4)
-    }
-    if (id === 6) previewPool.next(atlas.hatch).position.set(ex + 15, ey - 9)
-    if (id === 8) {
-      previewPool.next(atlas.dot(SHI1, 3)).position.set(ex - 9, ey - 10)
-      previewPool.next(atlas.dot(SHI1, 3)).position.set(ex + 9, ey - 10)
-    }
-    for (let i = previewPool.count - 1; i >= 0; i--) previewPool.at(i).alpha = a
-  }
-
-  const drawReward = (cur: SimState): void => {
+  const drawIntervalo = (cur: SimState): void => {
     const cx = tuning.arena.width / 2
     const cy = tuning.arena.height / 2
-    const pronto = cur.cardLock === 0
-    previewPool.begin()
-    previewMask.clear()
+    const total = tuning.phases[Math.min(cur.phaseIndex, tuning.phases.length - 1)]!.waves
+    // Arredonda para CIMA: com 180 ticks o jogador tem que ver 3, 2, 1 — nunca
+    // um 0 pendurado, e nunca um 3 que dura um quadro.
+    const segundos = Math.max(1, Math.ceil(cur.countdown / tuning.sim.hz))
 
-    cardLines[0]!.set(`ONDA ${cur.round} CONTIDA`, GLD2, cx, cy - 96, 2, true)
-    cardLines[1]!.set("ESCOLHA O QUE LEVA DAQUI", DIM0, cx, cy - 66, 1, true)
-    cardLines[2]!.hide()
-    cardLines[3]!.set(pronto ? prompt.escolher : "", WHITE, cx, cy + 116, 1, true)
-
-    /*
-     * TRÊS PAINÉIS, mesmo tamanho.
-     *
-     * A primeira versão era uma linha de nomes com o escolhido em escala 2, e
-     * duas coisas quebravam: a linha ficava torta, e o jogador e os patógenos
-     * apareciam DESENHADOS POR CIMA da opção do meio — só a captura pegou. O H
-     * já tinha pedido "um card demonstrando o que a habilidade faz"; nome solto
-     * não é card. Aqui cada poder tem moldura, nome e o que faz, e a seleção é
-     * moldura acesa em vez de tamanho diferente.
-     */
-    const W = 186
-    const H = 92
-    const top = cy - 22
     rewardPanels.clear()
-    for (let i = 0; i < 3; i++) {
-      const id = cur.offer[i]
-      if (id === undefined) {
-        cardPicks[i]!.hide()
-        cardBlurbs[i]!.hide()
-        continue
-      }
-      const power = POWERS[id]!
-      const sel = i === cur.pick
-      const tem = cur.owned[id] === 1
-      const x = Math.round(cx + (i - 1) * (W + 12) - W / 2)
-      rewardPanels
-        .rect(x, top, W, H)
-        // Opaco nos três: a 0.8 o jogador aparecia POR DENTRO do painel não
-        // selecionado, e painel que deixa o jogo passar não é card.
-        .fill({ color: col(INK), alpha: 0.96 })
-        .stroke({ width: 1, color: sel ? power.color : col(DIM1), alignment: 0 })
-
-      // PREVIEW: o jogador com o efeito, exatamente como aparece em jogo.
-      const ex = x + W / 2
-      const ey = top + 32
-      // Recorta na METADE DE CIMA do painel: o texto mora embaixo e não pode
-      // ser coberto por aura nenhuma.
-      previewMask.rect(x + 1, top + 1, W - 2, 60).fill({ color: 0xffffff })
-      drawPreview(power.id, ex, ey, sel)
-
-      cardPicks[i]!.set(power.name, sel ? WHITE : DIM1, ex, top + 52, 1, true)
-      cardBlurbs[i]!.set(power.blurb, sel ? GLD2 : DIM1, ex, top + 72, 1, true)
-
-      // Custo explícito: com o build cheio, levar este DERRUBA aquele.
-      const cheio = cur.buildOrder.length >= tuning.run.buildSlots
-      const sai = cheio && !tem ? cur.buildOrder[0] : undefined
-      cardCusto[i]!.set(
-        sai === undefined ? (tem ? "JÁ É SEU" : "") : `SAI: ${POWERS[sai]!.name}`,
-        sel ? HURT1 : DIM1,
-        ex,
-        top + 92,
-        1,
-        true,
-      )
-    }
-    cardBlurb.hide()
-    previewPool.end()
+    cardLines[0]!.set(`ONDA ${cur.round - 1} CONTIDA`, GLD2, cx, cy - 62, 1, true)
+    cardLines[1]!.set(String(segundos), WHITE, cx, cy - 34, 4, true)
+    cardLines[2]!.set(`ONDA ${cur.round} DE ${total}`, WHITE, cx, cy + 26, 2, true)
+    cardLines[3]!.hide()
   }
 
   /**
-   * FECHAMENTO da doença. Balanço, sem escolha.
+   * FECHAMENTO da doença — e hoje, com uma doença na lista, a VITÓRIA da run.
    *
-   * O H apontou que oferecer poder depois da ÚLTIMA onda não faz sentido: a
-   * fase acabou, não há próxima onda para se preparar. O que cabe é o que a
-   * fase produziu.
+   * O H apontou em 02/08 que oferecer poder depois da última onda não faz
+   * sentido: a fase acabou, não há próxima onda para se preparar. O que cabe é
+   * o que a fase produziu. Com as 10 ondas de 13/08 isso passou a ser a única
+   * tela do jogo que diz que você GANHOU — até aqui só existia perder.
    */
   const drawClosed = (cur: SimState): void => {
     const cx = tuning.arena.width / 2
@@ -1229,16 +1139,8 @@ export async function createRenderer(
       1,
       true,
     )
-    const build = cur.buildOrder.map((p) => POWERS[p]!.name).join(" + ")
-    cardLines[3]!.set(build.length > 0 ? build : "SEM PODERES", DIM1, cx, y0 + 92, 1, true)
-    cardPicks[0]!.set(
-      cur.cardLock > 0 ? "" : prompt.proxima,
-      WHITE,
-      cx,
-      y0 + 122,
-      1,
-      true,
-    )
+    cardLines[3]!.set("O ORGANISMO SEGUE DE PÉ", GLD2, cx, y0 + 92, 1, true)
+    cardPicks[0]!.set(cur.cardLock > 0 ? "" : prompt.outra, WHITE, cx, y0 + 122, 1, true)
     cardPicks[1]!.hide()
     cardPicks[2]!.hide()
     for (const l of cardBlurbs) l.hide()
@@ -1248,26 +1150,30 @@ export async function createRenderer(
 
   const drawOverlay = (cur: SimState, phase: number): void => {
     const isCard = cur.phase === "card"
-    const isReward = cur.phase === "reward"
+    const isIntervalo = cur.phase === "intervalo"
     const isClosed = cur.phase === "closed"
-    const telaDeCima = isCard || isReward || isClosed
+    const telaDeCima = isCard || isIntervalo || isClosed
     const on = cur.phase === "dead" || telaDeCima
     overlay.visible = on
     cardVeil.visible = telaDeCima
-    // A apresentação acontece DENTRO do organismo (véu leve); a recompensa é
-    // menu e precisa separar do jogo, senão corpo e patógeno passam por cima.
-    cardVeil.texture = atlas.veil(INK, isReward || isClosed ? 2 : 1)
+    /*
+     * Véu LEVE na apresentação e no intervalo; véu de menu só no fechamento.
+     *
+     * O de nível 2 existia para separar o menu de recompensa do jogo, senão
+     * corpo e patógeno passavam por cima dos painéis. O intervalo herdaria esse
+     * véu por ser a mesma tela, e seria o erro exato: ele não tem painel para
+     * proteger, e o que ele serve para mostrar é justamente o tabuleiro atrás.
+     * Escurecer aqui seria apagar a razão de os 3 segundos existirem.
+     */
+    cardVeil.texture = atlas.veil(INK, isClosed ? 2 : 1)
     cardBicho.visible = isCard
     for (const l of cardLines) if (!telaDeCima) l.hide()
-    if (!isReward) {
+    if (!isClosed) {
       for (const l of cardPicks) l.hide()
       for (const l of cardBlurbs) l.hide()
       for (const l of cardCusto) l.hide()
       cardBlurb.hide()
-      rewardPanels.clear()
-      previewPool.begin()
-      previewPool.end()
-      previewMask.clear()
+      if (!isIntervalo) rewardPanels.clear()
     }
     for (const l of deadLines) if (telaDeCima) l.hide()
     deadVeil.visible = cur.phase === "dead"
@@ -1276,8 +1182,8 @@ export async function createRenderer(
       drawCard(cur, phase)
       return
     }
-    if (isReward) {
-      drawReward(cur)
+    if (isIntervalo) {
+      drawIntervalo(cur)
       return
     }
     if (isClosed) {

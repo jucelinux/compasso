@@ -36,7 +36,8 @@
     "lives": 3,
     "hitFreezeTicks": 12,
     "deadLockTicks": 45,
-    "buildSlots": 2
+    "buildSlots": 2,
+    "intervalSeconds": 3.0
   },
   "enemy": {
     "size": 16,
@@ -260,39 +261,19 @@
       "fissionSeconds": 3.0,
       "tissueSpread": 0.0,
       "fissionCap": 18,
-      "waves": 4
-    },
-    {
-      "disease": "influenza",
-      "palette": "",
-      "fissionSeconds": 0.0,
-      "tissueSpread": 1.0,
-      "fissionCap": 18,
-      "waves": 4
-    },
-    {
-      "disease": "estafilo",
-      "palette": "",
-      "fissionSeconds": 0.0,
-      "tissueSpread": 1.0,
-      "fissionCap": 18,
-      "waves": 4
-    },
-    {
-      "disease": "salmonela",
-      "palette": "",
-      "fissionSeconds": 0.0,
-      "tissueSpread": 1.0,
-      "fissionCap": 18,
-      "waves": 4
-    },
-    {
-      "disease": "corona",
-      "palette": "",
-      "fissionSeconds": 0.0,
-      "tissueSpread": 1.0,
-      "fissionCap": 18,
-      "waves": 4
+      "waves": 10,
+      "curva": [
+        { "fissao": 1.0, "teto": 1.0, "focos": 1.0, "abertura": 1.0, "fonte": 1.0 },
+        { "fissao": 0.9, "teto": 1.0, "focos": 1.0, "abertura": 1.25, "fonte": 1.1 },
+        { "fissao": 0.8, "teto": 1.111, "focos": 1.25, "abertura": 1.25, "fonte": 1.2 },
+        { "fissao": 0.733, "teto": 1.222, "focos": 1.25, "abertura": 1.5, "fonte": 1.3 },
+        { "fissao": 0.667, "teto": 1.333, "focos": 1.5, "abertura": 1.5, "fonte": 1.4 },
+        { "fissao": 0.6, "teto": 1.444, "focos": 1.75, "abertura": 1.75, "fonte": 1.55 },
+        { "fissao": 0.55, "teto": 1.556, "focos": 2.0, "abertura": 2.0, "fonte": 1.7 },
+        { "fissao": 0.5, "teto": 1.667, "focos": 2.0, "abertura": 2.0, "fonte": 1.85 },
+        { "fissao": 0.45, "teto": 1.778, "focos": 2.25, "abertura": 2.25, "fonte": 2.0 },
+        { "fissao": 0.4, "teto": 1.889, "focos": 2.5, "abertura": 2.5, "fonte": 2.2 }
+      ]
     }
   ],
   "cardLockTicks": 45

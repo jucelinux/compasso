@@ -12,7 +12,7 @@ import type { Tuning } from "../src/sim/types.ts"
  */
 
 const SMOKE = resolve(projectRoot, "replays", "smoke.json")
-const BASELINE_HASH = "9ce9d7e9"
+const BASELINE_HASH = "5e998ba9"
 
 /**
  * Run real do humano, 7,6 min de input de verdade, do core do dash (`7c952a6`).
@@ -22,7 +22,7 @@ const BASELINE_HASH = "9ce9d7e9"
  * leitura de ritmo, e não como cobertura de morte.
  */
 const RUN_01 = resolve(projectRoot, "replays", "run-01.json")
-const RUN_01_HASH = "45a9e811"
+const RUN_01_HASH = "341025c1"
 
 /**
  * Segunda run real: 5 min, 10 ondas, uma morte. Gravada antes da tecla de
@@ -30,7 +30,7 @@ const RUN_01_HASH = "45a9e811"
  * Vale como determinismo sobre input humano longo.
  */
 const RUN_02 = resolve(projectRoot, "replays", "run-02.json")
-const RUN_02_HASH = "b323ce8a"
+const RUN_02_HASH = "c23dad4a"
 
 /**
  * Terceira run real: 5,7 min de input humano, gravada quando os modificadores
@@ -39,7 +39,7 @@ const RUN_02_HASH = "b323ce8a"
  * Com os patógenos reais este input voltou a morrer, na onda 6.
  */
 const RUN_03 = resolve(projectRoot, "replays", "run-03.json")
-const RUN_03_HASH = "2c09b185"
+const RUN_03_HASH = "dfba9635"
 
 /**
  * Fixture do core contínuo, gravada por `npm run rec`. Sintética, não humana:
@@ -61,7 +61,7 @@ const RUN_03_HASH = "2c09b185"
  * isso, um baseline nascido no browser seria verdade só do Node.
  */
 const CORE_ATUAL = resolve(projectRoot, "replays", "core-atual.json")
-const CORE_ATUAL_HASH = "9fef19b4"
+const CORE_ATUAL_HASH = "882698f3"
 
 const smoke = () => loadReplay(SMOKE)
 const tuning = () => loadTuning()
@@ -107,6 +107,26 @@ const tuning = () => loadTuning()
  * commits vermelhos. Desta vez o teste da âncora caiu no primeiro `npm test`
  * depois da mudança, com o remédio escrito na mensagem, e o rebase virou passo
  * de procedimento em vez de arqueologia.
+ *
+ * SEXTA VEZ, em 13/08: a PROGRESSÃO trocou de formato.
+ *
+ * A recompensa entre ondas saiu, entrou um respiro de 3 segundos com contagem
+ * (fase `intervalo`, e o `countdown` dela entrou no hash), a E. coli passou a
+ * ter uma curva de 10 degraus, e a carência de nascimento passa a ser renovada
+ * quando a contagem solta a onda. Todo hash muda por qualquer uma dessas; por
+ * todas juntas, muda duas vezes. Deriva declarada, âncora regravada ANTES de
+ * qualquer número ser trocado, no mesmo commit da mudança.
+ *
+ * E uma armadilha do APARELHO, aprendida caro no caminho — vale a pena saber
+ * antes de acreditar num vermelho aqui: **a primeira regravação divergiu entre
+ * browser e node em 5 de 5 testemunhas, e a sim não tinha nada de errado.** Eu
+ * tinha editado `src/main.ts` com o gravador rodando, e o HMR do Vite trocou o
+ * módulo no meio da run — a página passou a rodar um código e o Node replicou
+ * outro. Três diagnósticos separados inocentaram a sim (a mesma sim nos dois
+ * motores sobre o mesmo log: 2281/2281 hashes idênticos), e regravar com a
+ * árvore parada bateu de primeira. Se este arquivo ficar vermelho logo depois
+ * de um `npm run rec`, a primeira pergunta é se alguém encostou em `src/`
+ * enquanto ele gravava, não o que quebrou na sim.
  */
 
 /**
@@ -276,7 +296,7 @@ describe("determinismo", () => {
  */
 const PROCEDENCIA: ReadonlyArray<readonly [string, string, string]> = [
   ["smoke.json", "7c952a6", "sintética, regenerável byte a byte por `npm run smoke`"],
-  ["core-atual.json", "029eaac", "sintética, VIVA — regravar com `npm run rec`"],
+  ["core-atual.json", "0663754", "sintética, VIVA — regravar com `npm run rec`"],
   ["run-01.json", "7c952a6", "humana, core do dash; hoje só âncora de determinismo"],
   ["run-02.json", "7c952a6", "humana, core do dash; hoje só âncora de determinismo"],
   ["run-03.json", "7c952a6", "humana, core do dash; hoje só âncora de determinismo"],

@@ -63,6 +63,43 @@
         "pergunta do foco plantado, mesma âncora, para as duas ajudas serem comparáveis",
         "entre si e não só cada uma consigo mesma."
       ]
+    },
+    {
+      "valor": "phases.0.curva.9.fissao",
+      "ancora": "phases.0.curva.0.fissao",
+      "fracao": 0.4,
+      "porque": [
+        "A INCLINAÇÃO da curva das 10 ondas, declarada num número só. 13/08.",
+        "",
+        "A curva inteira já nasce ancorada por construção — cada degrau é MULTIPLICADOR do",
+        "`tuning.json` medido, e a onda 1 é 1.0 em tudo. Sobra uma pergunta que multiplicador",
+        "nenhum responde sozinho: o quanto o fim aperta em relação ao começo. Esta entrada é",
+        "ela, e é o número que se discute quando o jogo estiver fácil ou impossível demais.",
+        "",
+        "0.4 = a colônia dobra 2,5x mais rápido na onda 10 do que na 1. `fissionSeconds` são",
+        "SEGUNDOS até dobrar, então este é o único multiplicador da curva que desce.",
+        "",
+        "NÃO MEDIDO acima da onda 3, e isto é o limite honesto da entrada: o bot morre na",
+        "onda 2 desde que a recompensa saiu (0,6-0,8 ondas em 4 políticas, 5 seeds), então os",
+        "degraus 4 a 10 são desenho e não medição. A primeira leitura que vale é humana."
+      ]
+    },
+    {
+      "valor": "phases.0.curva.9.fonte",
+      "ancora": "phases.0.curva.0.fonte",
+      "fracao": 2.2,
+      "porque": [
+        "O veneno que cada corpo despeja no tecido, no fim da curva contra o começo. 13/08.",
+        "",
+        "Existe separada da `fissao` porque as duas apertam por vias OPOSTAS e confundi-las",
+        "é o erro que este arquivo trava: `fissao` faz a colônia crescer, `fonte` faz cada",
+        "corpo sujar mais. Subir as duas junto sem dizer em quanto foi como `sourceRate` e",
+        "`poison` mudaram a pressão da doença em 4x em 02/08 sem nada parecer ter mudado.",
+        "",
+        "2.2 substitui a fórmula `1 + (onda-1) x sourcePerWave`, que daria 1.9 na onda 10.",
+        "A fórmula continua no código como caso nulo, e `field.sourcePerWave` continua no",
+        "tuning por isso — não é número morto."
+      ]
     }
   ]
 }

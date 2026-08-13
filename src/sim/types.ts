@@ -110,6 +110,38 @@ export interface KindSpec {
 }
 
 /**
+ * Um DEGRAU da curva de dificuldade, e ele é sempre um MULTIPLICADOR.
+ *
+ * Nunca valor absoluto, e isso é a regra das âncoras aplicada na estrutura em
+ * vez de na prosa (`tuning.anchors.json`, 08/08): a onda 1 É o `tuning.json` que
+ * já existia e foi medido, e cada onda seguinte declara em voz alta o quanto
+ * aperta em relação a ela. Cinquenta números absolutos aqui seriam cinquenta
+ * chutes com aparência de decisão — que é o defeito exato que a âncora trava.
+ *
+ * Todos sobem a folga do lado da doença. Nenhum mexe no jogador: dificuldade
+ * vem de ENCOLHER A FOLGA, não de nerfar quem joga (`TASTE.md` §1).
+ */
+export interface WaveStep {
+  /**
+   * Multiplica `fissionSeconds`. ABAIXO de 1 = a colônia dobra mais rápido.
+   *
+   * É a alavanca principal, e é a única que satisfaz a propriedade copiada do
+   * Tetris (`TASTE.md` §1b): a pressão sobe sozinha se você não agir. As outras
+   * quatro mudam a POSIÇÃO INICIAL da onda; só esta muda o quanto ela piora
+   * enquanto você decide.
+   */
+  readonly fissao: number
+  /** Multiplica `fissionCap`. O teto logístico — o quanto a onda pode piorar. */
+  readonly teto: number
+  /** Multiplica `field.seeds`. Focos de infecção no tecido ao abrir a onda. */
+  readonly focos: number
+  /** Multiplica `enemy.openingBase`. Corpos em cena ao abrir a onda. */
+  readonly abertura: number
+  /** Multiplica o veneno que cada corpo despeja no tecido. */
+  readonly fonte: number
+}
+
+/**
  * Uma fase é UMA doença. A `spawnTable` que misturava 3-5 tipos por onda saiu
  * em 02/08: com mistura, cada patógeno se sustentava no conjunto e nenhum
  * precisava ser interessante sozinho — a queixa era "não tem memória nem
@@ -155,8 +187,26 @@ export interface PhaseSpec {
    * ele caía em outra doença, e como as outras ainda não têm mecânica, não
    * dava para testar o poder recém-escolhido contra uma onda mais agressiva da
    * MESMA doença. A onda 1 é fácil de propósito; a dificuldade sobe a cada uma.
+   *
+   * **Passou de 4 para 10 em 13/08**, junto com a morte da recompensa entre
+   * ondas. Com o upgrade fora, a onda deixou de ser a unidade que paga e voltou
+   * a ser a unidade que APERTA — e quatro degraus não desenham curva nenhuma.
    */
   readonly waves: number
+  /**
+   * A curva, um degrau por onda. Vazia = o escalonamento por fórmula de antes
+   * (`seedsPerWave`, `sourcePerWave`, `openingPerWave`), que continua no código
+   * como caso nulo verificável.
+   *
+   * Curva EXPLÍCITA e não fórmula porque a fórmula não tem onde declarar
+   * intenção: `1 + (onda-1) × 0.1` é uma reta que ninguém desenhou, e a onda 9
+   * dela existe por acidente aritmético. Aqui cada degrau é uma decisão que dá
+   * para ler, discordar e medir uma por uma.
+   *
+   * Mais curta que `waves` repete o último degrau; é o único jeito de a lista
+   * nunca ser a razão de a run parar de subir — `TASTE.md` §1 recusa teto.
+   */
+  readonly curva: ReadonlyArray<WaveStep>
 }
 
 export interface Tuning {
@@ -221,10 +271,23 @@ export interface Tuning {
   }
   readonly run: {
     readonly lives: number
-    /** Quantos poderes cabem no build. Cheio, o novo substitui o mais antigo. */
+    /**
+     * Quantos poderes cabem no build. Cheio, o novo substitui o mais antigo.
+     *
+     * DORMENTE desde 13/08: sem a tela de recompensa nada preenche o build.
+     * Fica porque o mecanismo inteiro de poderes ficou — ver `SimState.owned`.
+     */
     readonly buildSlots: number
     readonly hitFreezeTicks: number
     readonly deadLockTicks: number
+    /**
+     * Segundos REAIS de contagem antes de cada onda. Reais, não de mundo: se
+     * dependessem da sua velocidade, ficar parado congelaria a contagem e o
+     * respiro viraria refúgio — que é o modo de falha que este projeto já
+     * corrigiu duas vezes em outros lugares (o piso do `idleProgress`, e o
+     * relógio próprio da necrose).
+     */
+    readonly intervalSeconds: number
   }
   readonly enemy: {
     readonly size: number
@@ -375,7 +438,6 @@ export interface Tuning {
   readonly harness: { readonly recordSeconds: number }
 }
 
-/** Só duas fases: a tela de escolha morreu junto com o powerup escolhido. */
 /**
  * `card` é a apresentação da fase, e o jogo fica PARADO nela.
  *
@@ -384,18 +446,20 @@ export interface Tuning {
  * ensinou o objetivo, e é disso que a memória do jogo é feita.
  */
 /**
- * `card`   — apresentação da doença. Identidade, não estratégia.
- * `reward` — RECOMPENSA por ter contido uma ONDA: escolha de um poder.
- * `closed` — FECHAMENTO da doença, na última onda. Não oferece poder: a fase
- *            acabou, e o que cabe ali é o balanço dela (chamada do H, 02/08).
- * `run`    — jogo.
- * `dead`   — fim.
+ * `card`      — apresentação da doença. Identidade, não estratégia.
+ * `intervalo` — o respiro entre ondas, com a contagem de 3 segundos. Não pede
+ *               nada e não oferece nada: o próximo tabuleiro JÁ ESTÁ montado
+ *               atrás da contagem, e os 3 segundos são para lê-lo.
+ * `closed`    — a doença inteira contida. Fim de run pelo lado bom.
+ * `run`       — jogo.
+ * `dead`      — fim de run pelo lado ruim.
  *
- * A recompensa vem DEPOIS de conter, e nunca antes: começar a partida já
- * escolhendo poder não faz sentido (chamada do H em 02/08). Poder é o que se
- * ganha por ter feito, não o que se recebe por ter chegado.
+ * **`reward` morreu em 13/08, por chamada do H:** o formato onda → upgrade não
+ * estava funcionando. O que entrou no lugar não é uma escolha mais barata, é a
+ * AUSÊNCIA de escolha — a onda passou a pagar em dificuldade, não em poder.
+ * Detalhe e desdobramentos no `DECISIONS.md`.
  */
-export type Phase = "card" | "reward" | "closed" | "run" | "dead"
+export type Phase = "card" | "intervalo" | "closed" | "run" | "dead"
 
 export interface Enemy {
   id: number
@@ -561,9 +625,16 @@ export interface SimState {
    * demorada". Com teto, pegar passa a CUSTAR, e escolher volta a ser escolha.
    */
   buildOrder: number[]
-  /** Os três poderes oferecidos no card desta fase. */
+  /**
+   * Os poderes oferecidos. DORMENTE desde 13/08 — nada mais preenche esta lista.
+   *
+   * Campo e mecanismo ficam porque o que o H aposentou foi o FORMATO onda →
+   * upgrade, não a existência de poder no jogo; `powers.ts`, `activeStats` e o
+   * caminho da cápsula continuam inteiros e testados. Apagar tudo agora seria
+   * decidir, no lugar dele, que poder não volta por outra porta.
+   */
   offer: number[]
-  /** Qual dos três está sob o cursor. */
+  /** Qual dos oferecidos está sob o cursor. Dormente junto com `offer`. */
   pick: number
   trails: Trail[]
   shocks: Shock[]
@@ -580,6 +651,14 @@ export interface SimState {
   deadLock: number
   /** Ticks restantes de trava do card. Zero libera a dispensa. */
   cardLock: number
+  /**
+   * Ticks REAIS restantes da contagem do `intervalo`. Zero solta a onda.
+   *
+   * Conta para baixo em tick de simulação puro, sem `worldScale` no meio — é o
+   * único relógio do jogo que a sua velocidade não toca, e é de propósito: o
+   * respiro tem que durar o mesmo para quem parou e para quem está voando.
+   */
+  countdown: number
   /**
    * Ticks restantes da AURA — o impulso usado PARADO.
    *

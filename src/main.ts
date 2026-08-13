@@ -79,7 +79,8 @@ const crowdParam = params.get("crowd")
  *
  * O botão único vira `action` ou `restart` conforme a FASE, e é aqui que essa
  * tradução mora porque é aqui que a fase é conhecida. Em `dead` só `restart`
- * faz alguma coisa; em `card`, `reward` e `closed` os dois avançam; em `run`
+ * faz alguma coisa; em `card` e `closed` os dois avançam; em `intervalo`
+ * NENHUM dos dois faz nada, porque a contagem não se pula; em `run`
  * `restart` não faz nada e `action` é o impulso. O resultado é um
  * `InputFrame` legítimo, então o F9 grava e o replay reproduz um toque com a
  * mesma fidelidade com que reproduz uma tecla.

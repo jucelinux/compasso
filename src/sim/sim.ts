@@ -30,6 +30,7 @@ import type {
   SimSnapshot,
   SimState,
   Tuning,
+  WaveStep,
 } from "./types.ts"
 
 /**
@@ -158,6 +159,7 @@ export function createSim(seed: number, tuning: Tuning): Sim {
     frozen: 0,
     deadLock: 0,
     cardLock: 0,
+    countdown: 0,
     auraTicks: 0,
     instantAcc: 0,
     fissionAcc: 0,
@@ -186,6 +188,26 @@ export function createSim(seed: number, tuning: Tuning): Sim {
   }
 
   const rollKind = (): string => phaseSpec().disease
+
+  /**
+   * O DEGRAU da onda corrente. `undefined` = a fase não tem curva, e valem as
+   * fórmulas por onda de antes.
+   *
+   * Indexado por `round` — a onda DENTRO da doença — e não pelo `wave` global,
+   * porque a curva descreve a doença e não a run. Com uma doença só os dois são
+   * iguais hoje, e é justamente por isso que escolher errado aqui passaria em
+   * silêncio até o dia em que a segunda doença voltasse.
+   *
+   * O caso nulo não é decoração: é como se mede se a curva fez alguma coisa. Foi
+   * assim que a necrose provou não ter mexido no baseline (`necroseAmount: 0`,
+   * 05/08), e é o único jeito de a próxima sessão conferir esta sem confiar em
+   * mim.
+   */
+  const degrau = (): WaveStep | undefined => {
+    const curva = phaseSpec().curva
+    if (curva.length === 0) return undefined
+    return curva[Math.min(s.round - 1, curva.length - 1)]
+  }
 
   /**
    * Vetor unitário aleatório SEM trigonometria.
@@ -290,7 +312,11 @@ export function createSim(seed: number, tuning: Tuning): Sim {
     // A doença escala por fase: mais focos iniciais e fonte mais forte. Sem
     // isto a fase 20 é idêntica à fase 1, que é a queixa de 01/08 com outra
     // roupa ("a quantidade de kills era a mesma de acordo com o nível").
-    const focos = tuning.field.seeds + Math.floor((s.wave - 1) * tuning.field.seedsPerWave)
+    const passo = degrau()
+    const focos =
+      passo === undefined
+        ? tuning.field.seeds + Math.floor((s.wave - 1) * tuning.field.seedsPerWave)
+        : Math.max(1, Math.round(tuning.field.seeds * passo.focos))
     for (let i = 0; i < focos; i++) {
       const col = rng.nextInt(0, FIELD.cols)
       const row = rng.nextInt(0, FIELD.rows)
@@ -299,45 +325,24 @@ export function createSim(seed: number, tuning: Tuning): Sim {
     s.infection = totalInfection(s.field)
   }
 
-  /**
-   * Sorteia TRÊS poderes distintos para o card, ignorando os que você já tem.
+  /*
+   * `rollOffer` saiu em 13/08, junto com a tela de recompensa.
    *
-   * Três e não dez: escolha entre dez é catálogo, escolha entre três é
-   * decisão. E sem repetir o que já é seu, senão a oferta desperdiça slot.
+   * Ela sorteava três poderes distintos para o jogador escolher ao conter uma
+   * onda. O que morreu foi o FORMATO onda → upgrade, não o poder: `POWERS`,
+   * `activeStats`, `owned`/`active` e o caminho da cápsula continuam inteiros e
+   * sob teste, esperando outra porta. Está em `git show 0663754` se voltar.
    */
-  const rollOffer = (): number[] => {
-    /*
-     * INSTANTÂNEO fora da oferta: PLAQUETA cura o tecido na hora, e escolher no
-     * card algo que dispara imediatamente não é build, é botão. O card é onde
-     * se monta a run.
-     */
-    /*
-     * O que você JÁ TEM continua na oferta desde 02/08.
-     *
-     * Com teto de build, tirar o que é seu forçaria rodízio: toda recompensa
-     * obrigaria a trocar. Deixando na mesa, "ficar como está" vira uma das
-     * escolhas possíveis — e escolha que inclui não mudar é a única que
-     * transforma o teto em decisão em vez de imposto.
-     */
-    const pool = POWERS.map((_, i) => i).filter((i) => !INSTANT.has(i))
-    const out: number[] = []
-    for (let n = 0; n < 3 && pool.length > 0; n++) {
-      out.push(pool.splice(rng.nextInt(0, pool.length), 1)[0]!)
-    }
-    return out
-  }
 
+  /**
+   * MONTA a onda. Não decide qual tela aparece — quem chama decide.
+   *
+   * A separação entrou em 13/08 e é o que permite a contagem mostrar o tabuleiro
+   * de verdade: o `intervalo` monta a onda ANTES de contar, então os 3 segundos
+   * são tempo de LER focos e corpos já em cena, e não uma tela preta com um
+   * número. Enquanto isto também trocava a fase, montar cedo era impossível.
+   */
   const startWave = (): void => {
-    /*
-     * O CARD só aparece quando a DOENÇA muda.
-     *
-     * Ele dá identidade — nome, forma, o bicho na tela — e apresentar a mesma
-     * bactéria cinco vezes seguidas transformaria apresentação em pedágio. Onda
-     * seguinte da mesma doença entra direto no jogo.
-     */
-    const apresentar = s.round === 1
-    s.phase = apresentar ? "card" : "run"
-    s.cardLock = apresentar ? tuning.cardLockTicks : 0
     s.fissionAcc = 0
     s.waveKills = 0
     s.quota = quotaFor(tuning, s.wave)
@@ -349,8 +354,26 @@ export function createSim(seed: number, tuning: Tuning): Sim {
     seedInfection()
     s.spreadTimer = 0
 
-    const opening = tuning.enemy.openingBase + (s.wave - 1) * tuning.enemy.openingPerWave
+    const passo = degrau()
+    const opening =
+      passo === undefined
+        ? tuning.enemy.openingBase + (s.wave - 1) * tuning.enemy.openingPerWave
+        : Math.max(1, Math.round(tuning.enemy.openingBase * passo.abertura))
     for (let i = 0; i < opening; i++) spawnFromTissue()
+  }
+
+  /**
+   * Monta a próxima onda e entra no RESPIRO com a contagem correndo.
+   *
+   * O intervalo não pede nada e não oferece nada, e isso é a decisão, não uma
+   * simplificação: o formato onda → upgrade caiu em 13/08 porque a escolha entre
+   * ondas não estava fazendo o trabalho dela. O que paga a onda contida agora é
+   * a onda seguinte ser pior.
+   */
+  const startInterval = (): void => {
+    startWave()
+    s.phase = "intervalo"
+    s.countdown = Math.max(1, Math.round(tuning.run.intervalSeconds * tuning.sim.hz))
   }
 
   const startRun = (): void => {
@@ -393,7 +416,18 @@ export function createSim(seed: number, tuning: Tuning): Sim {
     s.player.dashTicks = 0
     s.player.dashCooldown = 0
     s.player.invulnerable = false
+    s.countdown = 0
     startWave()
+    /*
+     * A run abre no CARD, e ele é a única tela que ainda pede uma tecla.
+     *
+     * Ele apresenta a doença — nome real, forma, o bicho — e por isso não pode
+     * ter prazo: apresentação com contagem é apresentação que ninguém leu. As
+     * ondas seguintes é que entram pela contagem, porque lá não há nada de novo
+     * para apresentar, só um tabuleiro para ler.
+     */
+    s.phase = "card"
+    s.cardLock = tuning.cardLockTicks
   }
 
   const endRun = (byTissue: boolean): void => {
@@ -902,7 +936,7 @@ export function createSim(seed: number, tuning: Tuning): Sim {
      * Com UMA doença por fase, isto é number de fase e não de bicho — a
      * primeira economia que o formato de fases pagou sozinho.
      */
-    const escala = 1 + (s.wave - 1) * tuning.field.sourcePerWave
+    const escala = degrau()?.fonte ?? 1 + (s.wave - 1) * tuning.field.sourcePerWave
     const passo = Math.max(tuning.field.idleProgress, s.worldScale) * dt
     /*
      * Cada corpo envenena na taxa DELE, e não na da fase.
@@ -969,7 +1003,9 @@ export function createSim(seed: number, tuning: Tuning): Sim {
      * de fidelidade de 02/08 permite; o que ela proíbe é o jogo AFIRMAR um
      * número que não é verdade.
      */
-    const fission = phaseSpec().fissionSeconds
+    // A curva aperta o relógio da colônia, e é a alavanca principal dela: das
+    // cinco, é a única que muda o quanto a onda PIORA enquanto você decide.
+    const fission = phaseSpec().fissionSeconds * (degrau()?.fissao ?? 1)
     if (fission > 0) {
       s.fissionAcc += passo
       if (s.fissionAcc >= fission) {
@@ -989,7 +1025,8 @@ export function createSim(seed: number, tuning: Tuning): Sim {
          */
         const mães = s.enemies.filter((e) => e.kind === phaseSpec().disease)
         // Logístico, não exponencial: acima do teto o meio está esgotado.
-        if (mães.length >= phaseSpec().fissionCap) {
+        const teto = Math.round(phaseSpec().fissionCap * (degrau()?.teto ?? 1))
+        if (mães.length >= teto) {
           s.fissionAcc = 0
         } else
         for (const m of mães) {
@@ -1243,18 +1280,30 @@ export function createSim(seed: number, tuning: Tuning): Sim {
      */
     if (s.infection <= WIN && s.enemies.length === 0) {
       /*
-       * Última onda da doença FECHA a fase; as outras pagam recompensa.
+       * Última onda da doença FECHA a fase; as outras caem no RESPIRO.
        *
-       * Chamada do H em 02/08: "quando finalizo a última onda não deveria
-       * selecionar powerup, a fase foi concluída — deveria ver um card de
-       * fechamento com as informações do encerramento". Recompensa é combustível
-       * para a próxima onda; na última não há próxima onda desta doença.
+       * A distinção nasceu de uma chamada do H em 02/08 — "quando finalizo a
+       * última onda não deveria selecionar powerup, a fase foi concluída" — e
+       * sobreviveu à morte da recompensa em 13/08 com o mesmo desenho e outro
+       * motivo: o que a onda contida entrega agora é a onda seguinte, e na
+       * última não há onda seguinte para entregar.
        */
-      const ultima = s.round >= phaseSpec().waves
-      s.phase = ultima ? "closed" : "reward"
-      s.cardLock = tuning.cardLockTicks
-      s.offer = ultima ? [] : rollOffer()
-      s.pick = 0
+      if (s.round >= phaseSpec().waves) {
+        /*
+         * A ÚLTIMA onda fecha a DOENÇA — e hoje, com uma doença só, fecha a run.
+         *
+         * Fim de verdade, não teto: `TASTE.md` §1 recusa número que satura, e o
+         * que satura aqui é a LISTA de doenças, não a dificuldade. Quando a
+         * segunda doença voltar, este ramo volta a avançar `phaseIndex` e o
+         * fechamento vira o que já era em 02/08 — o balanço de uma fase.
+         */
+        s.phase = "closed"
+        s.cardLock = tuning.cardLockTicks
+        return
+      }
+      s.wave++
+      s.round++
+      startInterval()
     }
   }
 
@@ -1286,67 +1335,61 @@ export function createSim(seed: number, tuning: Tuning): Sim {
   }
 
   /**
-   * A tela de RECOMPENSA, depois de conter a fase.
+   * O FECHAMENTO: a doença inteira contida. Hoje é o fim da run pelo lado bom.
    *
-   * Três poderes, escolhidos com as setas, valendo a run inteira. Não é a tela
-   * de escolha de 31/07 ressuscitada: aquela vinha entre ondas de um jogo sem
-   * fim e sem contexto. Esta é PAGAMENTO por ter contido uma doença inteira, e
-   * vem depois de você já saber com o que lidou.
+   * Confirmar recomeça, e não avança nada — com uma doença na lista não há
+   * próxima. O `runIndex` sobe porque isto É uma run nova, e o gate conta por
+   * ele; contar como continuação faria a vitória sumir do registro.
    */
-  /** O fechamento da fase. Só informa; a próxima doença vem quando você confirma. */
   const stepClosed = (bits: number): void => {
     if (s.cardLock > 0) {
       s.cardLock--
       return
     }
     if (((bits & ~s.prevBits) & (BIT_ACTION | BIT_RESTART)) !== 0) {
-      s.wave++
-      s.phaseIndex++
-      s.round = 1
-      startWave()
+      s.runIndex++
+      startRun()
     }
   }
 
-  const stepReward = (bits: number): void => {
-    if (s.cardLock > 0) {
-      s.cardLock--
-      return
-    }
-    const novo = bits & ~s.prevBits
-    if (s.offer.length > 0) {
-      if ((novo & BIT_LEFT) !== 0) s.pick = (s.pick + s.offer.length - 1) % s.offer.length
-      if ((novo & BIT_RIGHT) !== 0) s.pick = (s.pick + 1) % s.offer.length
-    }
-    if ((novo & (BIT_ACTION | BIT_RESTART)) !== 0) {
-      const escolhido = s.offer[s.pick]
-      if (escolhido !== undefined) {
-        // Build cheio: o novo ENTRA e o mais antigo SAI. É o que devolve custo
-        // à escolha — sem isso acumular era sempre certo, e a fase 4 virava
-        // passeio longo em vez de fase 4.
-        if (s.owned[escolhido] === 1) {
-          // Já é seu: reconfirmar apenas renova a posição na fila.
-          s.buildOrder = s.buildOrder.filter((p) => p !== escolhido)
-          s.buildOrder.push(escolhido)
-        } else {
-        if (s.buildOrder.length >= tuning.run.buildSlots) {
-          const saiu = s.buildOrder.shift()
-          if (saiu !== undefined) s.owned[saiu] = 0
-        }
-        s.owned[escolhido] = 1
-        s.buildOrder.push(escolhido)
-        }
-      }
-      s.wave++
-      s.round++
-      startWave()
-    }
+  /**
+   * O RESPIRO entre ondas: 3 segundos reais, e nada para apertar.
+   *
+   * A onda já está montada atrás da contagem — focos semeados, corpos em cena, o
+   * relógio da colônia parado. É a única janela do jogo em que dá para OLHAR o
+   * tabuleiro sem que ele piore, e é para isso que ela existe. Sem ela, conter
+   * uma onda e cair na seguinte no mesmo quadro fazia as duas virarem uma só.
+   *
+   * Nenhuma tecla adianta a contagem, de propósito: se pular fosse possível,
+   * pular viraria o certo a fazer, e o respiro só teria custo para quem parou
+   * para ler. Não é trava contra reflexo (isso é o `cardLock`) — é a garantia de
+   * que os 3 segundos são de graça.
+   */
+  const stepIntervalo = (): void => {
+    s.countdown--
+    if (s.countdown > 0) return
+    s.countdown = 0
+    s.phase = "run"
+    /*
+     * A CARÊNCIA de nascimento é renovada aqui, e este é um defeito que eu
+     * mesmo criei ao montar a onda antes da contagem.
+     *
+     * `spawnGraceTicks` existe para que um corpo recém-aparecido não acerte
+     * você antes de dar para reagir. Ela conta em `s.tick`, e `s.tick` corre
+     * durante os 3 segundos — então a carência queimava inteira com o jogador
+     * congelado, e um corpo semeado em cima dele acertava no primeiro quadro em
+     * que o controle voltava. Zero aviso e zero reação: exatamente o que a regra
+     * existe para impedir. Renovar aqui devolve a carência ao instante em que o
+     * jogo de fato começa, que é o que ela sempre quis dizer.
+     */
+    for (const e of s.enemies) e.bornTick = s.tick
   }
 
   const step = (input: InputFrame): void => {
     const bits = bitsOf(input)
     if (s.phase === "run") stepRun(bits)
     else if (s.phase === "card") stepCard(bits)
-    else if (s.phase === "reward") stepReward(bits)
+    else if (s.phase === "intervalo") stepIntervalo()
     else if (s.phase === "closed") stepClosed(bits)
     else stepDead(bits)
     s.prevBits = bits
@@ -1358,7 +1401,17 @@ export function createSim(seed: number, tuning: Tuning): Sim {
     packer
       .reset()
       .u32(s.tick)
-      .u8(s.phase === "run" ? 0 : s.phase === "card" ? 1 : s.phase === "reward" ? 3 : s.phase === "closed" ? 4 : 2)
+      .u8(
+        s.phase === "run"
+          ? 0
+          : s.phase === "card"
+            ? 1
+            : s.phase === "intervalo"
+              ? 3
+              : s.phase === "closed"
+                ? 4
+                : 2,
+      )
       .u32(s.runIndex)
       .u32(s.wave)
       .u32(s.waveKills)
@@ -1379,7 +1432,7 @@ export function createSim(seed: number, tuning: Tuning): Sim {
       .f64(s.worldScale)
       .u32(s.frozen)
       .u32(s.deadLock)
-      .u32(s.cardLock).u32(s.auraTicks).f64(s.instantAcc).u32(s.pick).u32(s.phaseIndex).u32(s.round)
+      .u32(s.cardLock).u32(s.countdown).u32(s.auraTicks).f64(s.instantAcc).u32(s.pick).u32(s.phaseIndex).u32(s.round)
       .f64(s.fissionAcc)
       .u32(s.infection)
       .u32(s.necrosed)
@@ -1422,7 +1475,18 @@ export function createSim(seed: number, tuning: Tuning): Sim {
     return { tick: s.tick, hash: packer.digest() }
   }
 
+  /*
+   * O boot abre no CARD, e isso é do `startRun` — não do `startWave`.
+   *
+   * Desde 13/08 montar a onda e escolher a tela são coisas separadas, e o boot
+   * precisa das duas. Chamar só `startWave` deixava a run começar em `run`, com
+   * a apresentação da doença nunca aparecendo: um estado inicial errado que
+   * nenhum teste de regra pegaria, porque todos eles dispensam o card antes de
+   * medir qualquer coisa.
+   */
   startWave()
+  s.phase = "card"
+  s.cardLock = tuning.cardLockTicks
 
   return {
     step,

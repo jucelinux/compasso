@@ -98,6 +98,12 @@ try {
    * É o mesmo defeito que o reinício já tinha, na outra ponta do laço: card é
    * estado normal do jogo agora, e todo laço que dirige o jogo precisa saber
    * dispensá-lo.
+   *
+   * Em 13/08 a recompensa virou `intervalo`, e nele o espaço não faz NADA — a
+   * contagem não se pula. O laço continua correto por acidente feliz: ele
+   * espera, relê a fase, e a onda entra sozinha em 3 segundos. Fica escrito
+   * porque "aperta espaço até sair da tela" deixou de ser a razão de funcionar,
+   * e quem mexer aqui depois merece saber disso.
    */
   let atual = await fase()
   while (passos < MAX && atual !== "dead") {
@@ -206,9 +212,27 @@ try {
     }
   }
   if (divergentes.length > 0) {
+    /*
+     * A mensagem nomeia a causa MAIS PROVÁVEL, e ela não é a sim.
+     *
+     * Em 13/08 esta verificação acusou 5 de 5 testemunhas divergentes e eu
+     * gastei a tarde caçando um defeito de determinismo que não existia: eu
+     * tinha editado `src/main.ts` com o gravador rodando, e o HMR do Vite
+     * trocou o módulo no meio da run. A página passou a rodar um código, o
+     * Node replicou outro, e o sintoma apontava para o lugar errado — que é
+     * exatamente o tipo de defeito que o comentário do laço lá em cima já
+     * chama de pior.
+     *
+     * O aparelho não pode influenciar o jogo (`drive.ts`), e um servidor de
+     * desenvolvimento que troca módulo no meio da medição influencia. Enquanto
+     * o gravador rodar contra o `vite dev`, a regra é: árvore parada.
+     */
     throw new Error(
       `browser e node DIVERGEM — a fixture não é reproduzível fora do browser:\n` +
-        divergentes.join("\n"),
+        divergentes.join("\n") +
+        `\n\nANTES de procurar defeito na sim: alguém editou algo em \`src/\` ou no ` +
+        `\`tuning.json\` enquanto isto gravava? O HMR do Vite troca o módulo na página ` +
+        `no meio da run e produz exatamente este sintoma. Pare a árvore e regrave.`,
     )
   }
   console.log(

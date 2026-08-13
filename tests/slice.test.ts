@@ -39,16 +39,18 @@ const ACTION = IN({ action: true })
  *
  * Cada dispensa custa os ticks que custa de verdade: a trava conta para baixo
  * com NONE e a borda de subida gasta um tick. A contagem continua exata.
+ *
+ * O `intervalo` de 13/08 não aceita tecla — ele corre sozinho. Passar NONE nele
+ * é o certo, e é por isso que a lista de telas e a condição de dispensa
+ * deixaram de ser a mesma coisa.
  */
+const TELA = (ph: string): boolean => ph === "card" || ph === "intervalo" || ph === "closed"
+
 const advance = (sim: Sim, ticks: number, input: InputFrame = NONE): void => {
   for (let i = 0; i < ticks; i++) {
     const ph = sim.state().phase
-    if (ph === "card" || ph === "reward" || ph === "closed") {
-      sim.step(sim.state().cardLock === 0 ? ACTION : NONE)
-      // A RECOMPENSA concede um poder desde 02/08. Estes testes medem regra de
-      // contato e de relógio; começar com MEMBRANA ou ENZIMA no bolso muda o
-      // resultado e já derrubou dois deles. Quem mede a escolha usa passo cru.
-      ;(sim.state() as SimState).owned.fill(0)
+    if (TELA(ph)) {
+      sim.step(ph !== "intervalo" && sim.state().cardLock === 0 ? ACTION : NONE)
     } else sim.step(input)
   }
 }
@@ -67,10 +69,14 @@ const start = (seed: number): Sim => {
   // Solta a tecla: senão o próximo `action` do teste não tem borda de subida
   // e o impulso não dispara. Custou um teste verde-falso para aparecer.
   sim.step(NONE)
-  // Zera o poder ESCOLHIDO no card. Quase todo teste daqui mede regra de
-  // contato ou de relógio, e começar com MEMBRANA ou ENZIMA no bolso muda o
-  // resultado — foi assim que dois testes viraram vermelho em 02/08.
-  ;(sim.state() as SimState).owned.fill(0)
+  /*
+   * O `owned.fill(0)` que morava aqui saiu em 13/08 junto com a recompensa.
+   *
+   * Ele existia porque a tela de escolha concedia um poder ao conter uma onda, e
+   * começar com MEMBRANA ou ENZIMA no bolso mudava o resultado dos testes de
+   * contato e de relógio — dois viraram vermelho por isso em 02/08. Sem tela de
+   * escolha nada mais preenche `owned`, e a linha virou no-op.
+   */
   return sim
 }
 
@@ -82,9 +88,8 @@ const start = (seed: number): Sim => {
  */
 const tick = (sim: Sim, input: InputFrame = NONE): void => {
   const ph = sim.state().phase
-  if (ph === "card" || ph === "reward" || ph === "closed") {
-    sim.step(sim.state().cardLock === 0 ? ACTION : NONE)
-    ;(sim.state() as SimState).owned.fill(0)
+  if (TELA(ph)) {
+    sim.step(ph !== "intervalo" && sim.state().cardLock === 0 ? ACTION : NONE)
   } else sim.step(input)
 }
 
@@ -125,10 +130,17 @@ const park = (sim: Sim): void => {
   mut(sim).enemies = [virus(8, 8)]
 }
 
-/** Garante fase RODANDO: esvazia a trava do card, se houver um na tela. */
+/**
+ * Garante fase RODANDO: atravessa a tela que estiver na frente.
+ *
+ * A folga tem que caber na MAIOR delas, e desde 13/08 a maior é o `intervalo` —
+ * 3 segundos, 180 ticks, contra os 45 do `cardLock`. Dimensionar pelo card
+ * deixaria o teste medindo uma contagem em vez do jogo.
+ */
 const resume = (sim: Sim): void => {
-  const ph = sim.state().phase
-  if (ph === "card" || ph === "reward" || ph === "closed") advance(sim, (tuning.cardLockTicks + 2) * 2)
+  if (TELA(sim.state().phase)) {
+    advance(sim, Math.round(tuning.run.intervalSeconds * tuning.sim.hz) + tuning.cardLockTicks + 4)
+  }
 }
 
 /**
@@ -534,39 +546,87 @@ describe("poderes automáticos, temporários e aleatórios", () => {
     expect(activeStats(tuning, sim.state().active).trailTicks).toBe(0)
   })
 
-  it("a fase começa SEM poder: ele é recompensa, não presente de chegada", () => {
+  it("a run inteira acontece SEM poder: o formato onda → upgrade morreu", () => {
     const sim = createSim(77, tuning)
     expect(sim.state().phase).toBe("card")
     expect(sim.state().offer.length, "o card de identidade não oferece nada").toBe(0)
     expect(sim.state().owned.reduce((n, v) => n + v, 0)).toBe(0)
   })
 
-  it("conter a fase abre a RECOMPENSA, e o poder escolhido vale a run", () => {
+  /*
+   * O DESDOBRAMENTO da decisão de 13/08, travado por teste.
+   *
+   * Sem tela de recompensa e com `drops.chance` em 0, não existe mais caminho
+   * para `owned` — a camada roguelite ficou dormente. Isso é consequência
+   * ACEITA e não descuido, e é exatamente o tipo de coisa que uma sessão futura
+   * "consertaria" por parecer bug. Se voltar poder por outra porta, este teste
+   * cai, e cair é o aviso de que a decisão está sendo revista de propósito.
+   */
+  it("conter uma onda NÃO paga poder: o que paga é a onda seguinte apertar", () => {
     const sim = start(77)
     const s = mut(sim)
     s.field.fill(0)
     s.infection = 0
     s.enemies = []
     sim.step(NONE)
-    expect(sim.state().phase, "contida paga antes de apresentar a próxima").toBe("reward")
-    expect(sim.state().offer.length, "três opções, não catálogo").toBe(3)
+    expect(sim.state().phase, "contida cai no respiro, não num menu").toBe("intervalo")
+    expect(sim.state().offer.length, "nada é oferecido").toBe(0)
+    expect(sim.state().round, "a onda seguinte já está montada atrás da contagem").toBe(2)
 
-    // Passo CRU: o `advance` confirmaria por mim.
-    for (let i = 0; i < tuning.cardLockTicks + 1; i++) sim.step(NONE)
-    // Move o cursor e confirma: o escolhido é o que está sob ele.
-    sim.step(IN({ right: true }))
-    const alvo = sim.state().offer[sim.state().pick]!
-    sim.step(NONE)
-    sim.step(ACTION)
-
-    // Onda 2 da MESMA doença entra direto: card só quando a doença muda.
-    expect(sim.state().phase, "onda seguinte da mesma doença não reapresenta").toBe("run")
-    expect(sim.state().round).toBe(2)
-    expect(sim.state().owned[alvo], "o poder escolhido é da RUN").toBe(1)
+    advance(sim, Math.round(tuning.run.intervalSeconds * tuning.sim.hz) + 1)
+    expect(sim.state().phase, "a contagem solta a onda sozinha").toBe("run")
     expect(
       sim.state().owned.reduce((n, v) => n + v, 0),
-      "um por card, não três",
-    ).toBeLessThanOrEqual(1)
+      "a run atravessa a onda inteira sem ganhar poder",
+    ).toBe(0)
+  })
+
+  it("a contagem dura os 3 segundos e NENHUMA tecla a adianta", () => {
+    const sim = start(78)
+    const s = mut(sim)
+    s.field.fill(0)
+    s.infection = 0
+    s.enemies = []
+    sim.step(NONE)
+    expect(sim.state().phase).toBe("intervalo")
+    const total = Math.round(tuning.run.intervalSeconds * tuning.sim.hz)
+
+    /*
+     * Marteladas de ACTION o tempo todo. Se qualquer tecla adiantasse, pular
+     * viraria o certo a fazer e o respiro só teria custo para quem parou para
+     * ler — que é a razão de a contagem não aceitar input nenhum.
+     */
+    for (let i = 0; i < total - 1; i++) {
+      sim.step(i % 2 === 0 ? ACTION : NONE)
+      expect(sim.state().phase, `tick ${i}: a contagem não pula`).toBe("intervalo")
+    }
+    sim.step(ACTION)
+    expect(sim.state().phase, "no fim dos 3 segundos ela solta").toBe("run")
+  })
+
+  it("o respiro é REAL: parado ou a toda, a contagem dura o mesmo", () => {
+    /*
+     * O único relógio do jogo que a velocidade não toca. Se dependesse de
+     * `worldScale`, ficar parado congelaria a contagem — e refúgio por parar é
+     * o modo de falha que este projeto já corrigiu duas vezes (o piso do
+     * `idleProgress` e o relógio próprio da necrose).
+     */
+    const ticksAte = (input: InputFrame): number => {
+      const sim = start(79)
+      const s = mut(sim)
+      s.field.fill(0)
+      s.infection = 0
+      s.enemies = []
+      sim.step(NONE)
+      expect(sim.state().phase).toBe("intervalo")
+      let n = 0
+      while (sim.state().phase === "intervalo" && n < 600) {
+        sim.step(input)
+        n++
+      }
+      return n
+    }
+    expect(ticksAte(NONE)).toBe(ticksAte(IN({ right: true })))
   })
 
   it("abate NÃO larga mais cápsula: o laço que premiava ficar parado morreu", () => {
@@ -574,41 +634,138 @@ describe("poderes automáticos, temporários e aleatórios", () => {
     expect(tuning.drops.chance).toBe(0)
   })
 
-  it("o card só volta quando a DOENÇA muda, não a cada onda", () => {
+  it("o card apresenta UMA vez; as outras nove ondas entram pela contagem", () => {
     const sim = start(90)
-    const doenca = tuning.phases[0]!.disease
-    // Contém `waves` vezes: só a última troca de doença.
-    for (let n = 0; n < tuning.phases[0]!.waves; n++) {
+    const total = tuning.phases[0]!.waves
+    const intervalo = Math.round(tuning.run.intervalSeconds * tuning.sim.hz)
+    expect(total, "a progressão da E. coli é de 10 ondas desde 13/08").toBe(10)
+
+    for (let n = 0; n < total; n++) {
+      /*
+       * Esvazia a cada tick até a contenção pegar, em vez de um passo só.
+       *
+       * Um TOQUE congela o tick (`hitFreezeTicks`) e `stepRun` sai antes da
+       * checagem de contenção — regra do jogo desde 01/08, não defeito. Da onda
+       * 6 em diante a abertura põe corpos suficientes para que um caia em cima
+       * do jogador no primeiro quadro de jogo, e o passo único media a sorte da
+       * seed em vez da transição.
+       */
+      let guarda = 0
+      while (sim.state().phase === "run" && guarda++ < 120) {
+        const s = mut(sim)
+        s.field.fill(0)
+        s.infection = 0
+        s.enemies = []
+        sim.step(NONE)
+      }
+      const ultima = n === total - 1
+      expect(sim.state().phase, `onda ${n + 1}`).toBe(ultima ? "closed" : "intervalo")
+      if (ultima) break
+      // Nenhum card no meio: a doença é a mesma e não há nada a reapresentar.
+      advance(sim, intervalo + 1)
+      expect(sim.state().phase, `onda ${n + 2} entra direto`).toBe("run")
+      expect(sim.state().round).toBe(n + 2)
+    }
+    expect(sim.state().phaseIndex, "uma doença só na lista").toBe(0)
+  })
+
+  it("limpar as 10 ondas FECHA a run, e confirmar recomeça do zero", () => {
+    /*
+     * A única tela do jogo que diz que você ganhou — até 13/08 só existia
+     * perder. Confirmar não avança para doença nenhuma porque não há próxima:
+     * `phases` tem uma entrada. Quando a segunda voltar, este teste cai, e é
+     * assim que se descobre que o ramo precisa voltar a avançar `phaseIndex`.
+     */
+    const sim = start(91)
+    mut(sim).round = tuning.phases[0]!.waves
+    const s = mut(sim)
+    s.field.fill(0)
+    s.infection = 0
+    s.enemies = []
+    sim.step(NONE)
+    expect(sim.state().phase).toBe("closed")
+
+    const antes = sim.state().runIndex
+    for (let i = 0; i < tuning.cardLockTicks + 1; i++) sim.step(NONE)
+    sim.step(ACTION)
+    expect(sim.state().runIndex, "vitória conta como run encerrada").toBe(antes + 1)
+    expect(sim.state().round, "recomeça da onda 1").toBe(1)
+    expect(sim.state().lives).toBe(tuning.run.lives)
+    expect(sim.state().phase, "a doença se reapresenta").toBe("card")
+  })
+
+  it("a curva de 10 degraus só APERTA: nenhum degrau afrouxa o anterior", () => {
+    /*
+     * A trava contra o defeito mais provável de uma curva escrita à mão: um
+     * degrau digitado fora de ordem. `TASTE.md` §1 recusa teto, e teto aqui
+     * seria qualquer par onde o de baixo não é pior que o de cima.
+     *
+     * `fissao` é o único que desce, porque é SEGUNDOS até dobrar — menos tempo
+     * é mais pressão. Os outros quatro sobem.
+     */
+    const curva = tuning.phases[0]!.curva
+    expect(curva.length, "um degrau por onda").toBe(tuning.phases[0]!.waves)
+    expect(curva[0], "a onda 1 É o tuning já medido, sem multiplicador").toEqual({
+      fissao: 1.0,
+      teto: 1.0,
+      focos: 1.0,
+      abertura: 1.0,
+      fonte: 1.0,
+    })
+    for (let i = 1; i < curva.length; i++) {
+      const a = curva[i - 1]!
+      const b = curva[i]!
+      expect(b.fissao, `onda ${i + 1}: a colônia não dobra mais devagar`).toBeLessThanOrEqual(a.fissao)
+      expect(b.teto, `onda ${i + 1}: o teto não cai`).toBeGreaterThanOrEqual(a.teto)
+      expect(b.focos, `onda ${i + 1}: os focos não caem`).toBeGreaterThanOrEqual(a.focos)
+      expect(b.abertura, `onda ${i + 1}: a abertura não cai`).toBeGreaterThanOrEqual(a.abertura)
+      expect(b.fonte, `onda ${i + 1}: a fonte não cai`).toBeGreaterThanOrEqual(a.fonte)
+    }
+    const ultimo = curva[curva.length - 1]!
+    expect(ultimo.fissao, "a onda 10 aperta de verdade, não por decimal").toBeLessThan(0.6)
+  })
+
+  it("o degrau CHEGA na sim: a onda 10 abre pior que a 1", () => {
+    /*
+     * Curva declarada em JSON que ninguém lê é curva que não existe — e é a
+     * classe de defeito que o `TASTE.md` §2b registra como a minha (o
+     * `frontSprite`, atualizado 60x por segundo e nunca posto em cena).
+     */
+    const abre = (round: number): { inf: number; corpos: number } => {
+      const sim = start(92)
       const s = mut(sim)
+      s.round = round
+      s.wave = round
       s.field.fill(0)
       s.infection = 0
       s.enemies = []
+      // Contém: a sim monta a onda `round + 1` atrás da contagem.
       sim.step(NONE)
-      // A ÚLTIMA onda fecha a fase em vez de pagar poder: não há próxima onda
-      // desta doença para se preparar.
-      const ultima = n === tuning.phases[0]!.waves - 1
-      expect(sim.state().phase).toBe(ultima ? "closed" : "reward")
-      advance(sim, tuning.cardLockTicks + 2)
+      return { inf: sim.state().infection, corpos: sim.state().enemies.length }
     }
-    expect(sim.state().phaseIndex, "quatro ondas depois, doença nova").toBe(1)
-    expect(sim.state().round).toBe(1)
-    expect(sim.state().phase, "doença nova se apresenta").toBe("card")
-    expect(tuning.phases[1]!.disease).not.toBe(doenca)
+    const cedo = abre(1)
+    const tarde = abre(9)
+    expect(tarde.inf, "a onda 10 semeia mais infecção").toBeGreaterThan(cedo.inf)
+    expect(tarde.corpos, "e abre com mais corpos em cena").toBeGreaterThan(cedo.corpos)
   })
 
-  it("entre fases há CARD, não tela de escolha", () => {
-    const sim = start(32)
-    const s = mut(sim)
-    s.waveKills = s.quota
-    s.enemies = []
-    sim.step(NONE)
-    // O card apresenta a doença; ele não oferece nada para escolher. A fase de
-    // pick morreu em 01/08 e não voltou disfarçada de apresentação (02/08).
-    expect(sim.state().phase, "primeiro a recompensa").toBe("reward")
+  it("caso NULO: sem curva, valem as fórmulas por onda de antes", () => {
+    /*
+     * É como se mede se a curva fez alguma coisa, e foi assim que a necrose
+     * provou não ter mexido no baseline (`necroseAmount: 0`, 05/08). Sem isto,
+     * a próxima sessão teria que confiar em mim.
+     */
+    const semCurva = {
+      ...tuning,
+      phases: tuning.phases.map((p) => ({ ...p, curva: [] })),
+    } as typeof tuning
+    const sim = createSim(93, semCurva)
     advance(sim, tuning.cardLockTicks + 2)
-    expect(sim.state().wave).toBe(2)
     expect(sim.state().phase).toBe("run")
-    expect(sim.state().drops.length, "recompensa não distribui cápsula").toBe(0)
+    // `seeds` + floor((wave-1) * seedsPerWave) com wave 1 = `seeds` puro, que é
+    // o mesmo que o degrau 1 produz. As duas vias coincidem na onda 1 DE
+    // PROPÓSITO: é o que torna a comparação legível degrau a degrau.
+    expect(sim.state().enemies.length).toBe(tuning.enemy.openingBase)
   })
 
   it("todo poder do sorteio faz alguma coisa", () => {
@@ -827,10 +984,19 @@ describe("o tecido: conter e retomar", () => {
     mut(sim).infection = 0
     mut(sim).enemies = []
     sim.step(NONE)
-    // Contida abre a RECOMPENSA; a onda só vira quando você confirma o poder.
-    expect(sim.state().phase).toBe("reward")
-    advance(sim, tuning.cardLockTicks + 2)
-    expect(sim.state().wave).toBe(antes + 1)
+    /*
+     * Contida cai no RESPIRO, e a onda já virou — a contagem corre por cima de
+     * um tabuleiro montado.
+     *
+     * Até 13/08 a onda só virava quando você confirmava o poder, e por isso
+     * `wave` era medido DEPOIS de atravessar a tela. Agora a ordem é o
+     * contrário, e a asserção mudou de lugar junto: virar a onda deixou de ser
+     * consequência de um gesto seu.
+     */
+    expect(sim.state().phase).toBe("intervalo")
+    expect(sim.state().wave, "a onda vira ao conter, não ao confirmar").toBe(antes + 1)
+    advance(sim, Math.round(tuning.run.intervalSeconds * tuning.sim.hz) + 1)
+    expect(sim.state().phase).toBe("run")
   })
 
   it("o tecido tomado encerra a run mesmo com vidas sobrando", () => {

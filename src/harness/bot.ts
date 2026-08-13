@@ -101,6 +101,16 @@ export interface RunReport {
   diedAtWave: number | null
   diedAtSeconds: number | null
   lostByTissue: boolean
+  /**
+   * Segundos até LIMPAR a doença inteira, ou `null` se não limpou.
+   *
+   * Entrou em 13/08 com a progressão de 10 ondas, e é a pergunta que o bot não
+   * sabia fazer: antes dela, `fases` contava degraus subidos e uma run que
+   * limpasse tudo ficava indistinguível de uma que atolasse na onda 9. A curva
+   * inteira se justifica ou não por esta coluna — se toda política vence, ela
+   * não aperta; se nenhuma vence, ela não é curva, é parede.
+   */
+  wonAtSeconds: number | null
   kills: number
   folga: Folga
 }
@@ -181,11 +191,17 @@ export function playRun(
   let necPico = 0
   let fases = 0
 
-  const report = (tick: number, done: Readonly<SimState>, died: boolean): RunReport => ({
+  const report = (
+    tick: number,
+    done: Readonly<SimState>,
+    died: boolean,
+    won = false,
+  ): RunReport => ({
     seed,
     waves,
     diedAtWave: died ? done.wave : null,
     diedAtSeconds: died ? tick / 60 : null,
+    wonAtSeconds: won ? tick / 60 : null,
     lostByTissue: died ? done.lostByTissue : false,
     kills: done.kills,
     folga: {
@@ -205,6 +221,14 @@ export function playRun(
   for (let tick = 0; tick < maxTicks; tick++) {
     const s = sim.state()
     if (s.phase === "dead") return report(tick, s, true)
+    /*
+     * `closed` é a doença INTEIRA contida — a run acabou pelo lado bom.
+     *
+     * Sem esta linha o bot ficaria parado nela até `maxTicks` medindo um jogo
+     * que já terminou, e toda média por tick da run vencedora sairia diluída.
+     * O `fases` da última onda já foi contado quando ela virou.
+     */
+    if (s.phase === "closed") return report(tick, s, false, true)
 
     /*
      * Dispensa o card, senão o bot mede NADA.
@@ -215,9 +239,14 @@ export function playRun(
      * um erro do mesmo tipo em número plausível teria virado balanço.
      *
      * A trava conta com input vazio; a borda de subida gasta um tick.
+     *
+     * O `intervalo` que entrou em 13/08 NÃO aceita tecla — ele corre sozinho e
+     * solta a onda. Passa por aqui só para não ser medido como jogo: são 3
+     * segundos em que o bot não decide nada, e contá-los afundaria toda média
+     * por tick em ~5% por onda contida.
      */
-    if (s.phase === "card" || s.phase === "reward") {
-      sim.step(s.cardLock === 0 ? IN({ action: true }) : IN())
+    if (s.phase === "card" || s.phase === "intervalo") {
+      sim.step(s.phase === "intervalo" || s.cardLock > 0 ? IN() : IN({ action: true }))
       continue
     }
 
@@ -321,14 +350,28 @@ if (import.meta.url === `file://${process.argv[1]}`) {
     console.log(`\n── política ${policy} ──`)
     const lengths: number[] = []
     const folgas: Folga[] = []
+    let vitorias = 0
     for (const seed of seeds) {
       const r = playRun(seed, tuning, MAX, policy)
-      const how = r.diedAtSeconds === null ? "SOBREVIVEU" : r.lostByTissue ? "tecido morreu" : "três toques"
-      const when = r.diedAtSeconds === null ? ">6min" : `${r.diedAtSeconds.toFixed(0)}s`
+      const how =
+        r.wonAtSeconds !== null
+          ? "LIMPOU AS 10"
+          : r.diedAtSeconds === null
+            ? "SOBREVIVEU"
+            : r.lostByTissue
+              ? "tecido morreu"
+              : "três toques"
+      const when =
+        r.wonAtSeconds !== null
+          ? `${r.wonAtSeconds.toFixed(0)}s`
+          : r.diedAtSeconds === null
+            ? ">6min"
+            : `${r.diedAtSeconds.toFixed(0)}s`
       if (r.diedAtSeconds !== null) lengths.push(r.diedAtSeconds)
       folgas.push(r.folga)
+      if (r.wonAtSeconds !== null) vitorias++
       console.log(
-        `seed ${String(seed).padEnd(6)} onda ${String(r.diedAtWave ?? "—").padEnd(3)} ` +
+        `seed ${String(seed).padEnd(6)} onda ${String(r.diedAtWave ?? r.folga.fases + 1).padEnd(3)} ` +
           `${when.padEnd(6)} ${String(r.kills).padEnd(5)} kills  (${how})`,
       )
       const tot = r.folga.escaloes.reduce((a, b) => a + b, 0) || 1
@@ -349,6 +392,7 @@ if (import.meta.url === `file://${process.argv[1]}`) {
     } else {
       console.log(`média: NENHUMA das ${seeds.length} seeds morreu em 6 min`)
     }
+    console.log(`       ${vitorias}/${seeds.length} limparam as 10 ondas`)
     console.log(
       `       fases ${media((f) => f.fases)} · infecção méd ${media((f) => f.infMedia * 100)}% ` +
         `pico ${media((f) => f.infPico * 100)}% · cicatriz méd ${media((f) => f.necMedia * 100)}% ` +

@@ -9,6 +9,68 @@ de propósito. `DECISIONS.md` guarda o histórico; este arquivo guarda só o pre
 
 ---
 
+## A rodada de 13/08 — a progressão trocou de formato
+
+Chamada do H, decisão dele, trazida pronta: **o formato onda → upgrade saiu.** Não estava
+funcionando. No lugar entrou um respiro de 3 segundos entre ondas, e a E. coli ganhou uma
+progressão de **10 ondas** no lugar de 4. As outras cinco doenças ficaram dormentes.
+
+O que segue é o que a rodada DEIXOU ABERTO — o que assentou está no `DECISIONS.md`.
+
+### 1. O upgrade estava carregando a run, e ninguém sabia — PRIMEIRO ITEM
+
+Medido, `npm run pace`, 4 políticas × 5 seeds, contra o worktree de `f7f7dcb`:
+
+| | com recompensa (até 12/08) | sem recompensa (hoje) |
+|---|---|---|
+| agressiva | 1,6 ondas | 0,6 |
+| ritmo | **2,4** | 0,8 |
+| curandeira | 0,0 | 0,0 |
+| triagem | 1,8 | 0,8 |
+
+**Nenhuma seed de nenhuma política passa da onda 3.** O corte é de ~2/3, e ele é da
+recompensa saindo — não da curva: o caso nulo (`curva: []`, fórmulas de 08/08) dá
+0,8/0,8/0,0/0,6 contra 0,6/0,8/0,0/0,8 da curva. As ondas 1-3 são iguais de propósito.
+
+**A consequência que decide a próxima rodada:** a onda 1 de hoje foi balanceada num jogo em
+que você ganhava poder a cada onda contida. Ela não mudou, e o que a compensava sumiu. Ou a
+base afrouxa, ou a curva começa abaixo do que começa hoje.
+
+**Não mexi nisso de propósito.** `TASTE-LOOP.md` §3.1 — um eixo por rodada. Trocar o formato
+e o balanço no mesmo commit deixaria as duas leituras impossíveis de separar.
+
+**E o bot entende menos deste jogo do que entendia:** ele nunca planta foco (dívida antiga,
+mais abaixo), e desde a necrose o foco é a única forma de trabalhar onde você não está. O H
+já limpou fases que o bot não limpa. O número acima é piso, não veredito.
+
+### 2. As ondas 4 a 10 são DESENHO, não medição
+
+O bot morre na 2. Os sete degraus de cima nunca rodaram. A curva está travada por teste
+contra o defeito que dá para travar — degrau fora de ordem, e o degrau chegando na sim — e
+isso não é a mesma coisa que ela estar certa.
+
+**A primeira leitura que vale é humana.** É a única coisa que esta rodada precisa.
+
+### 3. O que a decisão deixou dormente, de propósito
+
+`powers.ts`, `activeStats`, `owned`/`active`, `buildOrder` e o caminho da cápsula continuam
+inteiros e sob teste. Com `drops.chance` em 0 e sem tela de escolha, **não existe mais
+caminho para `owned`** — a camada roguelite do pitch está desligada.
+
+Há teste travando isso (`conter uma onda NÃO paga poder`), e ele existe para que a sessão
+que "consertar" isso saiba que está revendo uma decisão, não corrigindo um bug.
+
+**Aberto com o H:** poder volta por outra porta, ou sai do jogo? Ele não disse, e eu não
+decidi no lugar dele.
+
+### 4. O eixo do relógio lento continua parado, por decisão dele
+
+Ele foi explícito: mantém a dilatação como está por enquanto e evolui o resto. Pediu que eu
+traga insight quando achar função importante para a mecânica. **Um já apareceu nesta rodada,
+e está no fim deste arquivo.**
+
+---
+
 ## Aberto agora
 
 **PORTÃO: 0 STRIKES de 3** — *"a dilatação é lida sem explicação"*, escolha do H em 08/08.
@@ -190,6 +252,36 @@ espaço de índice. `volume.ts` e `rig.ts` são lembrete, não fila.
 - **A métrica de portão para o formato de fases**, acima.
 - **Dados epidemiológicos no card.** Ele adiou: "depois eu vejo se isso melhora o jogo".
   Regra já acordada se voltar: ordem de grandeza, com ano e fonte, nunca inventados.
+
+## INSIGHT para o relógio lento, 13/08 — a pedido dele
+
+Ele pediu que eu traga função importante para a dilatação quando eu achar uma. Achei uma
+enquanto construía o respiro, e ela vem de um defeito que eu mesmo criei.
+
+**O respiro é o único momento do jogo em que o tempo NÃO responde ao movimento.** São 3
+segundos em que o tabuleiro está montado, visível e congelado, e você não pode fazer nada. É
+o oposto exato da tese, e ele foi introduzido sem que ninguém decidisse isso.
+
+Isso abre a via mais direta que já apareceu para o portão — *"a dilatação é lida sem
+explicação"*. Hoje o creep é 0.05 e o jogo nunca para, então **um jogador de fora nunca vê o
+contraste**: ele vê tudo devagar, acha que o jogo é devagar, e nada denuncia que a
+lentidão é dele. O respiro é o primeiro estado do jogo com tempo VERDADEIRAMENTE parado — e
+um estado parado ao lado de um estado que anda é o que torna a regra legível.
+
+**A proposta concreta, para ele decidir:** em vez de a contagem correr sozinha, ela corre no
+RELÓGIO DO MUNDO — o jogador pode se mexer durante o respiro, e mexer-se faz a contagem
+andar. Parado, ela quase congela; a toda, ela passa em 3 segundos. O jogador aprende a regra
+inteira num lugar sem risco, sem texto e sem ninguém explicando: *ele quer começar, e
+descobre que só começa se andar.*
+
+**Não implementei.** Três razões, nesta ordem: o H disse que mantém a dilatação como está por
+enquanto; a contagem que eu entreguei é a que ele pediu, literalmente ("contagem de 3
+segundos"); e mudar isto anula a garantia de que o respiro é de graça, que é o que faz ele
+ser respiro. É proposta, não pendência.
+
+**Custo declarado se ele topar:** perde-se o "os 3 segundos duram o mesmo para todo mundo" (há
+teste travando exatamente isso, e ele cairia de propósito), e o respiro passa a ter uma
+decisão dentro — o que é ganho ou perda dependendo do que ele quer que o respiro seja.
 
 ## Vindo do tema, como mecânica e não como arte
 
