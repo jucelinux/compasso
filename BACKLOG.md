@@ -32,12 +32,12 @@ Medido, `npm run pace`, 4 políticas × 5 seeds, contra o worktree de `f7f7dcb`:
 recompensa saindo — não da curva: o caso nulo (`curva: []`, fórmulas de 08/08) dá
 0,8/0,8/0,0/0,6 contra 0,6/0,8/0,0/0,8 da curva. As ondas 1-3 são iguais de propósito.
 
-**A consequência que decide a próxima rodada:** a onda 1 de hoje foi balanceada num jogo em
-que você ganhava poder a cada onda contida. Ela não mudou, e o que a compensava sumiu. Ou a
-base afrouxa, ou a curva começa abaixo do que começa hoje.
+**RESPONDIDO no fim do dia, no item 5:** a base afrouxou. `fissionSeconds` 3,0 → 8,0 devolve
+2,0 ondas às políticas móveis — acima até do que a recompensa entregava. O upgrade não voltou;
+o que substituiu a folga que ele dava foi a colônia dobrar mais devagar.
 
-**Não mexi nisso de propósito.** `TASTE-LOOP.md` §3.1 — um eixo por rodada. Trocar o formato
-e o balanço no mesmo commit deixaria as duas leituras impossíveis de separar.
+Fica registrado que os dois efeitos foram medidos SEPARADOS, em commits separados, e é só por
+isso que dá para dizer qual fez o quê.
 
 **E o bot entende menos deste jogo do que entendia:** ele nunca planta foco (dívida antiga,
 mais abaixo), e desde a necrose o foco é a única forma de trabalhar onde você não está. O H
@@ -45,9 +45,10 @@ já limpou fases que o bot não limpa. O número acima é piso, não veredito.
 
 ### 2. As ondas 4 a 10 são DESENHO, não medição
 
-O bot morre na 2. Os sete degraus de cima nunca rodaram. A curva está travada por teste
-contra o defeito que dá para travar — degrau fora de ordem, e o degrau chegando na sim — e
-isso não é a mesma coisa que ela estar certa.
+Depois do rebalanceamento o bot chega à onda 3 (`fases` 2,0). Os sete degraus de cima
+continuam sem rodar. A curva está travada por teste contra o defeito que dá para travar —
+degrau fora de ordem, e o degrau chegando na sim — e isso não é a mesma coisa que ela estar
+certa.
 
 **A primeira leitura que vale é humana.** É a única coisa que esta rodada precisa.
 
@@ -73,9 +74,54 @@ a penalidade de velocidade da cura, que deixa de valer. Limpar o limo passa a ac
 Um insight que já tinha aparecido antes está no fim deste arquivo, e continua valendo para
 quando ele religar.
 
-### 5. Desligar a dilatação quase DOBROU a pressão da doença — e ninguém decidiu isso
+### 5. FECHADO no mesmo dia: a pressão foi rebalanceada, e a alavanca foi a fissão
 
-**É o item mais importante em aberto.** Medido, `npm run pace`, 4 políticas × 5 seeds:
+O H confirmou o diagnóstico com a leitura dele — no formato anterior, cada ausência de
+comando de algumas centenas de ms já freava patógeno e limo; sem a câmera lenta o jogo opera
+no tick normal e isso **evidencia a taxa real de combate**, sem um segundo relógio
+amortecendo. E pediu rebalanceamento: *"nas taxas atuais é impossível jogar"*.
+
+**`phases.0.fissionSeconds` 3,0 → 8,0.** Varrido, não escolhido:
+
+| fissionSeconds | agressiva | ritmo | run |
+|---|---|---|---|
+| 3,0 (antes) | 0,0 | 0,0 | 179s |
+| 6 | 0,8 | 0,8 | 207s |
+| 7 | 1,6 | 1,8 | 164s |
+| **8** | **2,0** | **2,0** | **165s** |
+| 10 | 2,2 | 2,8 | 170s |
+| 12 | 3,4 | 3,6 | 195s |
+
+**Resultado final, 4 políticas:** 2,0 / 2,0 / 0,0 / 1,6 — melhor que a build que ele jogou
+(0,6/0,8/0,0/0,8). `triagem` fecha em **128s**, o mais perto do alvo de ~120s que este projeto
+já chegou. As 5 seeds continuam morrendo 5/5 em toda a faixa, e a `curandeira` morre em 49s:
+parar segue inviável, que é o certo agora.
+
+**O veneno foi testado e reprovado como alavanca**, e era o candidato óbvio:
+`enemy.kinds.ecoli.poison` 21/15/12/9 pula de "morre em 179s" para IMORTAL (0/5 mortes em 6
+min) com `fases` em 0,0 nos dois extremos — o ponto fixo de 02/08 outra vez. Veneno é cego;
+fissão é monótona.
+
+**Se ele quiser mais folga, é um número só:** 10 dá 2,2/2,8 e 12 dá 3,4/3,6, sem estagnação
+em nenhum ponto medido.
+
+**O que a curva de 10 ondas ganhou com isso:** as ondas 4-10 continuam sem medição, mas o bot
+agora chega à 3 em vez de morrer na 1 — os degraus de cima deixaram de ser inalcançáveis por
+construção.
+
+### 6. A aura plantada é a última mecânica que ainda pede que você pare
+
+`dash.auraBelowSpeed` continua exigindo velocidade quase nula para plantar o foco. O H não a
+citou, e desligá-la junto seria decidir no lugar dele. Mas ela ficou sozinha: é a única coisa
+no jogo que cobra imobilidade num jogo onde parar não compra mais nada — e o rebalanceamento
+não a tocou, então ela segue exatamente como estava.
+
+---
+
+<details>
+<summary>O diagnóstico original do desbalanço, mantido como registro</summary>
+
+Medido, `npm run pace`, 4 políticas × 5 seeds:
 
 | | com dilatação | sem |
 |---|---|---|
@@ -105,11 +151,13 @@ separados) são o erro de 02/08 outra vez: três números onde o problema é um.
 que usava para comparar direção. Ele ainda mede duração, infecção e cicatriz, mas "quantas
 ondas essa política contém" virou zero em todas — e zero não distingue nada.
 
-### 6. A aura plantada é a última mecânica que ainda pede que você pare
+**Nota de fechamento:** a recomendação acima — reintroduzir o 0,57 como constante do relógio
+da doença — NÃO foi o caminho escolhido. Ela devolveria o balanço antigo escondendo a taxa
+real atrás de um multiplicador, e é justamente a taxa real que o H disse querer ver. A
+varredura mostrou que uma alavanca só, no número que já existia e diz o que faz, chega mais
+longe. A intuição estava certa na magnitude e errada no lugar.
 
-`dash.auraBelowSpeed` continua exigindo velocidade quase nula para plantar o foco. O H não a
-citou, e desligá-la junto seria decidir no lugar dele. Mas ela ficou sozinha: é a única coisa
-no jogo que cobra imobilidade num jogo onde parar não compra mais nada.
+</details>
 
 ---
 

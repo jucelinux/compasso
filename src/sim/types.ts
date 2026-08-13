@@ -362,8 +362,6 @@ export interface Tuning {
     readonly idleProgress: number
     /** Focos a mais por fase. É a escalada da doença. */
     readonly seedsPerWave: number
-    /** Quanto cada patógeno infecta o próprio tile, por segundo de MUNDO. */
-    readonly sourceRate: number
     /** Fração a mais de fonte por fase. */
     readonly sourcePerWave: number
     /** Segundos de MUNDO entre passos de alastramento. */

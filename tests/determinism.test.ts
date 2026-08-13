@@ -12,7 +12,7 @@ import type { Tuning } from "../src/sim/types.ts"
  */
 
 const SMOKE = resolve(projectRoot, "replays", "smoke.json")
-const BASELINE_HASH = "67004be7"
+const BASELINE_HASH = "031eda8c"
 
 /**
  * Run real do humano, 7,6 min de input de verdade, do core do dash (`7c952a6`).
@@ -22,7 +22,7 @@ const BASELINE_HASH = "67004be7"
  * leitura de ritmo, e não como cobertura de morte.
  */
 const RUN_01 = resolve(projectRoot, "replays", "run-01.json")
-const RUN_01_HASH = "29cdb63f"
+const RUN_01_HASH = "95ec31fc"
 
 /**
  * Segunda run real: 5 min, 10 ondas, uma morte. Gravada antes da tecla de
@@ -30,7 +30,7 @@ const RUN_01_HASH = "29cdb63f"
  * Vale como determinismo sobre input humano longo.
  */
 const RUN_02 = resolve(projectRoot, "replays", "run-02.json")
-const RUN_02_HASH = "513bc48b"
+const RUN_02_HASH = "527c9f68"
 
 /**
  * Terceira run real: 5,7 min de input humano, gravada quando os modificadores
@@ -39,7 +39,7 @@ const RUN_02_HASH = "513bc48b"
  * Com os patógenos reais este input voltou a morrer, na onda 6.
  */
 const RUN_03 = resolve(projectRoot, "replays", "run-03.json")
-const RUN_03_HASH = "045f834c"
+const RUN_03_HASH = "15436db7"
 
 /**
  * Fixture do core contínuo, gravada por `npm run rec`. Sintética, não humana:
@@ -61,7 +61,7 @@ const RUN_03_HASH = "045f834c"
  * isso, um baseline nascido no browser seria verdade só do Node.
  */
 const CORE_ATUAL = resolve(projectRoot, "replays", "core-atual.json")
-const CORE_ATUAL_HASH = "331e1c97"
+const CORE_ATUAL_HASH = "ba59e37a"
 
 const smoke = () => loadReplay(SMOKE)
 const tuning = () => loadTuning()
@@ -140,6 +140,18 @@ const tuning = () => loadTuning()
  * contra um tuning com `dilation: true`, mas NENHUMA fixture a exercita mais.
  * Quando o H religar o relógio, os cinco caem juntos de novo — e isso é o
  * comportamento certo, não uma dívida.
+ *
+ * OITAVA VEZ, ainda em 13/08: o REBALANCEAMENTO que o toggle exigiu.
+ *
+ * `phases.0.fissionSeconds` 3,0 → 8,0 (varrido, não escolhido — a razão inteira
+ * está na âncora), e dois números MORTOS saíram do arquivo: `field.sourceRate`,
+ * que a sim não lia desde 02/08, e `powers.backRadius`. Remover chave muda o
+ * `tuningHash`, e a fissão muda a trajetória de todo replay.
+ *
+ * Três derivas declaradas no mesmo dia é muito, e vale dizer por quê: foram três
+ * mudanças de jogo pedidas por ele, cada uma medida e commitada separada. O
+ * preço de separar é rebasear três vezes; o de juntar seria não saber qual das
+ * três fez o quê — que foi exatamente o custo de 02/08.
  */
 
 /**
@@ -309,7 +321,7 @@ describe("determinismo", () => {
  */
 const PROCEDENCIA: ReadonlyArray<readonly [string, string, string]> = [
   ["smoke.json", "7c952a6", "sintética, regenerável byte a byte por `npm run smoke`"],
-  ["core-atual.json", "a9ba571", "sintética, VIVA — regravar com `npm run rec`"],
+  ["core-atual.json", "ab4750c", "sintética, VIVA — regravar com `npm run rec`"],
   ["run-01.json", "7c952a6", "humana, core do dash; hoje só âncora de determinismo"],
   ["run-02.json", "7c952a6", "humana, core do dash; hoje só âncora de determinismo"],
   ["run-03.json", "7c952a6", "humana, core do dash; hoje só âncora de determinismo"],
