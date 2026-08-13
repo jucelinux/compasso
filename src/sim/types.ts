@@ -362,6 +362,31 @@ export interface Tuning {
     readonly intervalSeconds: number
   }
   /**
+   * O CÉREBRO: o hub navegável. 13/08.
+   *
+   * O H pediu que o jogador ANDE aqui com o glóbulo. Isso troca a natureza da
+   * tela: ela deixa de ser um menu com fundo bonito e vira um lugar pequeno com
+   * uma porta — e a porta é a órbita dos patógenos.
+   */
+  readonly hub: {
+    /** Centro da ÓRBITA dos patógenos, onde se entra para escolher o inimigo. */
+    readonly orbitX: number
+    readonly orbitY: number
+    /** Raio em que os patógenos giram. É também o alvo visual. */
+    readonly orbitRadius: number
+    /**
+     * Distância do centro da órbita que ABRE a seleção.
+     *
+     * Menor que `orbitRadius`: entrar é atravessar o anel e chegar ao MIOLO, não
+     * encostar na borda. Um gatilho na borda dispararia de raspão enquanto o
+     * jogador só passeia, e o cérebro é o lugar onde nada deve acontecer sem
+     * você querer.
+     */
+    readonly enterRadius: number
+    /** Voltas por segundo dos patógenos na órbita. */
+    readonly orbitSpeed: number
+  }
+  /**
    * A MOEDA: o que o abate deixa para a próxima run. 13/08.
    *
    * Memória imunológica adaptada a roguelite, como o H nomeou — o organismo não
@@ -542,6 +567,10 @@ export interface Tuning {
  *               jogo onde nada te ataca. Escolhe-se o vilão e conta-se a
  *               memória imunológica. Chamada do H em 13/08: *"será a safezone
  *               do usuário, onde ele irá voltar sempre que morrer"*.
+ * `select`    — a ESCOLHA do inimigo, aberta ao entrar na órbita. Separada do
+ *               hub porque hub é lugar e escolha é ato: enquanto as duas eram a
+ *               mesma tela, andar pelo cérebro e escolher o vilão disputavam as
+ *               mesmas teclas.
  * `card`      — apresentação da doença. Identidade, não estratégia.
  * `intervalo` — o respiro entre ondas, com a contagem de 3 segundos. Não pede
  *               nada e não oferece nada: o próximo tabuleiro JÁ ESTÁ montado
@@ -555,7 +584,7 @@ export interface Tuning {
  * AUSÊNCIA de escolha — a onda passou a pagar em dificuldade, não em poder.
  * Detalhe e desdobramentos no `DECISIONS.md`.
  */
-export type Phase = "hub" | "card" | "intervalo" | "closed" | "run" | "dead"
+export type Phase = "hub" | "select" | "card" | "intervalo" | "closed" | "run" | "dead"
 
 export interface Enemy {
   id: number

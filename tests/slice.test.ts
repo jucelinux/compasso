@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest"
 import { loadTuning } from "../src/harness/loadTuning.ts"
+import { atravessaTela, ehTela } from "../src/harness/atravessa.ts"
 import { createSim } from "../src/sim/sim.ts"
 import {
   activeStats,
@@ -75,19 +76,32 @@ const ACTION = IN({ action: true })
  * cérebro há DUAS telas antes do primeiro tick de jogo — hub e card. Atravessar
  * as duas é o que mantém a contagem de ticks dos testes exata.
  */
-const TELA = (ph: string): boolean =>
-  ph === "hub" || ph === "card" || ph === "intervalo" || ph === "closed"
+const TELA = (ph: string): boolean => ehTela(ph)
 
-/** O `intervalo` corre sozinho; as outras telas pedem tecla. */
-const PEDE_TECLA = (ph: string, cardLock: number): boolean =>
-  ph !== "intervalo" && (ph === "hub" || cardLock === 0)
+/**
+ * O input que ATRAVESSA a tela em que a sim está.
+ *
+ * Deixou de ser "aperte ação" em 13/08, e a razão é do jogo e não do teste: o
+ * hub virou navegável, então sair dele exige ANDAR até a órbita. O helper pilota
+ * o glóbulo — é a mesma coisa que o jogador faz, e escrever aqui qualquer atalho
+ * (teleportar, forçar a fase) faria os testes atravessarem um caminho que
+ * ninguém percorre.
+ *
+ * A regra em si mora em `src/harness/atravessa.ts` desde o mesmo dia, e não por
+ * elegância: no dia em que o hub virou navegável havia SEIS cópias dela, duas
+ * ficaram para trás, e as duas viraram teste verde medindo nada. O comentário
+ * de lá conta quais.
+ *
+ * Este `sim` a mais existe só porque os testes chamam com a sim na mão. Passa a
+ * sim ao módulo comum, e usa o mesmo `tuning` que a sim daqui usa.
+ */
+const atravessa = (sim: Sim, t: typeof tuning = tuning): InputFrame =>
+  atravessaTela(sim.state(), t)
 
 const advance = (sim: Sim, ticks: number, input: InputFrame = NONE): void => {
   for (let i = 0; i < ticks; i++) {
-    const ph = sim.state().phase
-    if (TELA(ph)) {
-      sim.step(PEDE_TECLA(ph, sim.state().cardLock) ? ACTION : NONE)
-    } else sim.step(input)
+    if (TELA(sim.state().phase)) sim.step(atravessa(sim))
+    else sim.step(input)
   }
 }
 
@@ -114,10 +128,7 @@ const start = (seed: number, t: typeof tuning = tuning): Sim => {
    * laço continua certo sozinho.
    */
   let guarda = 0
-  while (TELA(sim.state().phase) && guarda++ < 900) {
-    const ph = sim.state().phase
-    sim.step(PEDE_TECLA(ph, sim.state().cardLock) ? ACTION : NONE)
-  }
+  while (TELA(sim.state().phase) && guarda++ < 900) sim.step(atravessa(sim, t))
   // Solta a tecla: senão o próximo `action` do teste não tem borda de subida
   // e o impulso não dispara. Custou um teste verde-falso para aparecer.
   sim.step(NONE)
@@ -139,10 +150,23 @@ const start = (seed: number, t: typeof tuning = tuning): Sim => {
  * satisfaz a contenção sem querer. Quem quer VER o card usa `sim.step` cru.
  */
 const tick = (sim: Sim, input: InputFrame = NONE): void => {
-  const ph = sim.state().phase
-  if (TELA(ph)) {
-    sim.step(PEDE_TECLA(ph, sim.state().cardLock) ? ACTION : NONE)
-  } else sim.step(input)
+  if (TELA(sim.state().phase)) sim.step(atravessa(sim))
+  else sim.step(input)
+}
+
+/**
+ * Leva o glóbulo do CÉREBRO até a órbita e confirma o inimigo.
+ *
+ * Existe para os testes que descrevem o CAMINHO (morte → cérebro → run) em vez
+ * de descrever a arena. Eles não podem usar `start`, que atravessa tudo de uma
+ * vez, nem apertar uma tecla só — desde 13/08 sair do hub é andar.
+ */
+const saiDoHub = (sim: Sim): void => {
+  let guarda = 0
+  while (sim.state().phase === "hub" && guarda++ < 600) sim.step(atravessa(sim))
+  // Solta a tecla e confirma: a seleção precisa da borda de subida.
+  sim.step(NONE)
+  sim.step(ACTION)
 }
 
 const mut = (sim: Sim): SimState => sim.state() as SimState
@@ -792,8 +816,7 @@ describe("poderes automáticos, temporários e aleatórios", () => {
      */
     expect(sim.state().runIndex, "a run vencida conta como terminada").toBe(antes + 1)
 
-    sim.step(NONE)
-    sim.step(ACTION)
+    saiDoHub(sim)
     expect(sim.state().runIndex, "sair do hub não termina run nenhuma").toBe(antes + 1)
     expect(sim.state().round, "recomeça da onda 1").toBe(1)
     expect(sim.state().lives).toBe(tuning.run.lives)
@@ -866,7 +889,9 @@ describe("poderes automáticos, temporários e aleatórios", () => {
       phases: tuning.phases.map((p) => ({ ...p, curva: [] })),
     } as typeof tuning
     const sim = createSim(93, semCurva)
-    advance(sim, tuning.cardLockTicks + 2)
+    // Atravessa cérebro, seleção e card — três telas antes do jogo desde 13/08.
+    let g = 0
+    while (TELA(sim.state().phase) && g++ < 900) sim.step(atravessa(sim))
     expect(sim.state().phase).toBe("run")
     // `seeds` + floor((wave-1) * seedsPerWave) com wave 1 = `seeds` puro, que é
     // o mesmo que o degrau 1 produz. As duas vias coincidem na onda 1 DE
@@ -1207,8 +1232,7 @@ describe("o gate continua medível", () => {
     sim.step(RESTART)
     // Morrer devolve ao CÉREBRO desde 13/08, e é de lá que a run nova nasce.
     expect(sim.state().phase).toBe("hub")
-    sim.step(NONE)
-    sim.step(ACTION)
+    saiDoHub(sim)
     expect(sim.state().phase, "e o hub leva ao card da doença").toBe("card")
     expect(sim.state().runIndex, "a run nova ainda não terminou").toBe(1)
     expect(sim.state().wave).toBe(1)
@@ -1396,8 +1420,7 @@ describe("o CÉREBRO: hub, escolha e memória imunológica", () => {
     expect(sim.state().phase).toBe("dead")
     sim.step(RESTART)
     expect(sim.state().phase, "o caminho da morte é o cérebro").toBe("hub")
-    sim.step(NONE)
-    sim.step(ACTION)
+    saiDoHub(sim)
     expect(sim.state().phase, "e do cérebro sai uma run nova").toBe("card")
   })
 
@@ -1459,7 +1482,7 @@ describe("o CÉREBRO: hub, escolha e memória imunológica", () => {
      */
     const sim = createSim(305, tuning)
     mut(sim).villain = 0
-    sim.step(ACTION)
+    saiDoHub(sim)
     expect(sim.state().phaseIndex).toBe(0)
     expect(sim.state().phase).toBe("card")
   })
@@ -1493,5 +1516,96 @@ describe("o CÉREBRO: hub, escolha e memória imunológica", () => {
     sim.step(ACTION)
     sim.step(NONE)
     expect(sim.state().runIndex, "começar não é terminar").toBe(0)
+  })
+})
+
+describe("o cérebro NAVEGÁVEL e a órbita como porta", () => {
+  it("o glóbulo ANDA no hub, com a física do jogo", () => {
+    const sim = createSim(400, tuning)
+    expect(sim.state().phase).toBe("hub")
+    const x0 = sim.state().player.x
+    for (let i = 0; i < 20; i++) sim.step(IN({ left: true }))
+    expect(sim.state().player.x, "andar para a esquerda anda para a esquerda").toBeLessThan(x0)
+    expect(sim.state().player.speed, "e a velocidade é a mesma leitura da arena").toBeGreaterThan(0)
+  })
+
+  it("o hub NASCE fora da órbita — chegar não é materializar na porta", () => {
+    /*
+     * Sem isto, voltar da morte na posição em que se morreu podia cair em cima
+     * do gatilho, e a seleção abriria antes de o jogador ver o cérebro.
+     */
+    const sim = createSim(401, tuning)
+    const dx = sim.state().player.x - tuning.hub.orbitX
+    const dy = sim.state().player.y - tuning.hub.orbitY
+    expect(Math.sqrt(dx * dx + dy * dy)).toBeGreaterThan(tuning.hub.enterRadius)
+    // E fica: parado, ninguém entra sozinho.
+    for (let i = 0; i < 600; i++) sim.step(NONE)
+    expect(sim.state().phase, "parado no cérebro, nada acontece").toBe("hub")
+  })
+
+  it("entrar na órbita ABRE a seleção, e só o miolo dispara", () => {
+    const sim = createSim(402, tuning)
+    const s = mut(sim)
+    /*
+     * Encostado na BORDA do anel, e não no miolo: o gatilho é o `enterRadius`,
+     * bem menor que o `orbitRadius`, para não disparar de raspão em quem passeia.
+     */
+    s.player.x = tuning.hub.orbitX + tuning.hub.orbitRadius - 2
+    s.player.y = tuning.hub.orbitY
+    sim.step(NONE)
+    expect(sim.state().phase, "passar pela borda não abre nada").toBe("hub")
+
+    mut(sim).player.x = tuning.hub.orbitX
+    mut(sim).player.y = tuning.hub.orbitY
+    sim.step(NONE)
+    expect(sim.state().phase, "o miolo abre").toBe("select")
+  })
+
+  it("voltar da seleção EMPURRA para fora, senão ela reabre no quadro seguinte", () => {
+    const sim = createSim(403, tuning)
+    const s = mut(sim)
+    s.player.x = tuning.hub.orbitX
+    s.player.y = tuning.hub.orbitY
+    sim.step(NONE)
+    expect(sim.state().phase).toBe("select")
+
+    sim.step(RESTART)
+    expect(sim.state().phase).toBe("hub")
+    const dx = sim.state().player.x - tuning.hub.orbitX
+    const dy = sim.state().player.y - tuning.hub.orbitY
+    expect(Math.sqrt(dx * dx + dy * dy), "fora do gatilho").toBeGreaterThan(
+      tuning.hub.enterRadius,
+    )
+    // E continua fora: o remédio aqui é geometria, não um relógio de carência.
+    for (let i = 0; i < 120; i++) sim.step(NONE)
+    expect(sim.state().phase).toBe("hub")
+  })
+
+  it("a seleção CONFIRMA com ação e a run começa no vilão escolhido", () => {
+    const sim = createSim(404, tuning)
+    const s = mut(sim)
+    s.player.x = tuning.hub.orbitX
+    s.player.y = tuning.hub.orbitY
+    sim.step(NONE)
+    expect(sim.state().phase).toBe("select")
+    sim.step(ACTION)
+    expect(sim.state().phase).toBe("card")
+    expect(sim.state().phaseIndex).toBe(sim.state().villain)
+  })
+
+  it("no hub o glóbulo NÃO tem arranco nem recarga", () => {
+    /*
+     * O impulso é habilidade de combate, e o cérebro não tem combate. Deixá-lo
+     * ligado daria ao jogador uma tecla que faz algo invisível num lugar sem
+     * consequência — e a mesma tecla é a que confirma na seleção.
+     */
+    const sim = createSim(405, tuning)
+    for (let i = 0; i < 40; i++) sim.step(IN({ right: true, action: true }))
+    expect(sim.state().player.dashTicks).toBe(0)
+    expect(sim.state().player.dashCooldown).toBe(0)
+  })
+
+  it("o gatilho é MENOR que a órbita, e isso é a regra, não um número solto", () => {
+    expect(tuning.hub.enterRadius).toBeLessThan(tuning.hub.orbitRadius)
   })
 })

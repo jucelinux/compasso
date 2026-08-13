@@ -12,6 +12,7 @@
 import { createSim } from "../sim/sim.ts"
 import { fieldSpec, tileAt } from "../sim/field.ts"
 import type { Enemy, InputFrame, SimState, Tuning } from "../sim/types.ts"
+import { atravessaTela, ehTela } from "./atravessa.ts"
 import { loadTuning } from "./loadTuning.ts"
 
 const DIRS: ReadonlyArray<{ dx: number; dy: number; frame: Partial<InputFrame> }> = [
@@ -245,15 +246,22 @@ export function playRun(
      * segundos em que o bot não decide nada, e contá-los afundaria toda média
      * por tick em ~5% por onda contida.
      */
-    if (s.phase === "hub" || s.phase === "card" || s.phase === "intervalo") {
-      /*
-       * O HUB entrou em 13/08 e o bot atravessa igual ao card: ele não escolhe
-       * vilão, aceita o que estiver selecionado. Medir a escolha exigiria uma
-       * política de META-jogo, e o bot mede a arena — misturar os dois faria
-       * `npm run pace` responder a duas perguntas e nenhuma bem.
-       */
-      const pedeTecla = s.phase === "hub" || (s.phase === "card" && s.cardLock === 0)
-      sim.step(pedeTecla ? IN({ action: true }) : IN())
+    /*
+     * O CÉREBRO virou navegável em 13/08: o bot ANDA até a órbita em vez de
+     * apertar uma tecla. Sem isto ele fica parado no hub para sempre e `npm run
+     * pace` mede zero — o mesmo modo de falha do card em 02/08, que saiu com 0
+     * abates em cinco seeds e só foi notado porque o absurdo denunciou.
+     *
+     * Ele não ESCOLHE vilão: aceita o que estiver selecionado. Medir a escolha
+     * exigiria uma política de META-jogo, e o bot mede a arena — misturar os
+     * dois faria `npm run pace` responder a duas perguntas e nenhuma bem.
+     *
+     * A regra de atravessar mora em `atravessa.ts`, com os outros que precisam
+     * dela. Ela mudou uma vez, seis cópias existiam, duas ficaram para trás e
+     * viraram medição de nada; esta é uma das que sobreviveram por sorte.
+     */
+    if (ehTela(s.phase)) {
+      sim.step(atravessaTela(s, tuning))
       continue
     }
 

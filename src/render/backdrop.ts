@@ -11,6 +11,9 @@ import {
   PLASMA1,
   PLASMA2,
   PLASMA3,
+  GREY0,
+  GREY1,
+  GREY2,
   RAMP_HEM,
   RAMP_NUC,
 } from "./palette.ts"
@@ -222,7 +225,7 @@ export function layerBuf(w: number, h: number, kind: LayerKind, seed: number): B
  * e quente; o cérebro sai azul e parado, e a diferença aparece antes de qualquer
  * texto ser lido.
  */
-export type BrainLayerKind = "corpos" | "axonios" | "faiscas"
+export type BrainLayerKind = "chao" | "corpos" | "axonios" | "faiscas"
 
 export function brainLayerBuf(w: number, h: number, kind: BrainLayerKind, seed: number): Buf {
   const b = makeBuf(w, h)
@@ -232,7 +235,40 @@ export function brainLayerBuf(w: number, h: number, kind: BrainLayerKind, seed: 
     draw(x + w)
   }
 
-  if (kind === "corpos") {
+  if (kind === "chao") {
+    /*
+     * O CHÃO cinza do cérebro, pedido do H em 13/08 ("fundo mais acinzentado
+     * escuro"). Até aqui o hub não tinha chão nenhum: era o `INK` do canvas.
+     *
+     * Não é uma cor chapada. Chapado num jogo de pixel art lê como buraco, e o
+     * fundo da arena já ensinou o olho a esperar textura — o plasma tem quatro
+     * tons ciclando. Aqui são manchas largas e sobrepostas de `RAMP_GREY`, com
+     * dither, que é a mesma técnica do plasma com outra temperatura.
+     *
+     * Sem `wrap`: este é o único plano que NÃO desliza. Ele é o chão, e chão que
+     * escorre transforma a safezone em esteira.
+     */
+    for (let y = 0; y < h; y++) {
+      for (let x = 0; x < w; x++) plot(b, x, y, GREY0)
+    }
+    for (let i = 0; i < 34; i++) {
+      const cx = hashNoise(i, seed, 61) * w
+      const cy = hashNoise(i, seed, 63) * h
+      const r = 40 + hashNoise(i, seed, 67) * 90
+      const tom = hashNoise(i, seed, 71) > 0.55 ? GREY1 : GREY2
+      for (let y = Math.max(0, cy - r); y < Math.min(h, cy + r); y++) {
+        for (let x = Math.max(0, cx - r); x < Math.min(w, cx + r); x++) {
+          const dx = x - cx
+          const dy = y - cy
+          if (dx * dx + dy * dy > r * r) continue
+          // Dither por distância: a mancha desbota da borda para dentro, então
+          // duas manchas vizinhas se fundem em vez de virar um recorte.
+          const t = 1 - Math.sqrt(dx * dx + dy * dy) / r
+          if (bayer(x, y) < t * 0.5) plot(b, x, y, tom)
+        }
+      }
+    }
+  } else if (kind === "corpos") {
     /*
      * Somas distantes: a PROFUNDIDADE, equivalente aos discos de hemácia.
      *

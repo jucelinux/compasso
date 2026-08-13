@@ -1509,6 +1509,7 @@ export function createSim(seed: number, tuning: Tuning): Sim {
        * a razão não. Decisão registrada não se reabre de passagem.
        */
       s.phase = "hub"
+      poeNoCerebro()
     }
   }
 
@@ -1527,12 +1528,109 @@ export function createSim(seed: number, tuning: Tuning): Sim {
    * contagem, sem trava. O H pediu safezone, e safezone com prazo não é
    * safezone. Ficar aqui não custa e não rende.
    */
+  /**
+   * Põe o jogador no cérebro, FORA da órbita e parado.
+   *
+   * Chamado em toda entrada no hub. Sem isto ele volta da morte na posição em
+   * que morreu — que pode ser exatamente em cima do gatilho, e aí a tela de
+   * seleção abre sozinha antes de ele ver o cérebro. Voltar para um lugar é
+   * chegar nele, não materializar dentro da porta.
+   */
+  const poeNoCerebro = (): void => {
+    s.player.x = tuning.hub.orbitX
+    s.player.y = Math.min(
+      height - tuning.player.size,
+      tuning.hub.orbitY + tuning.hub.orbitRadius + tuning.player.size * 2,
+    )
+    s.player.vx = 0
+    s.player.vy = 0
+    s.player.speed = 0
+    s.player.dashTicks = 0
+    s.player.dashCooldown = 0
+  }
+
+  /**
+   * MOVE o jogador com a física de sempre, sem nada do mundo.
+   *
+   * É literalmente o mesmo gesto do jogo — aceleração, arrasto, teto, colisão
+   * com a borda — e escrevê-lo aqui em vez de inventar uma física de menu é o
+   * que garante que andar no cérebro tenha o mesmo peso que andar na artéria.
+   * Duas físicas parecidas mas separadas divergiriam em uma semana, e o jogador
+   * sentiria sem saber dizer o quê.
+   *
+   * O que NÃO vem junto: relógio de mundo, tecido, arrasto de multidão, arranco.
+   * O hub não tem nada disso, e é essa ausência que faz dele safezone.
+   */
+  const movePlayer = (bits: number): void => {
+    const p = s.player
+    const dir = direction(bits)
+    if (dir !== null) {
+      p.vx += dir.dx * tuning.player.accel * dt
+      p.vy += dir.dy * tuning.player.accel * dt
+    }
+    const drag = tuning.player.drag * dt
+    const sp0 = Math.sqrt(p.vx * p.vx + p.vy * p.vy)
+    if (sp0 > 0) {
+      const resta = Math.max(0, sp0 - drag)
+      p.vx = (p.vx / sp0) * resta
+      p.vy = (p.vy / sp0) * resta
+    }
+    let sp = Math.sqrt(p.vx * p.vx + p.vy * p.vy)
+    const cap = tuning.player.maxSpeed
+    if (sp > cap) {
+      p.vx = (p.vx / sp) * cap
+      p.vy = (p.vy / sp) * cap
+      sp = cap
+    }
+    p.speed = sp / tuning.player.maxSpeed
+    const meio = tuning.player.size / 2
+    const nx = p.x + p.vx * dt
+    const ny = p.y + p.vy * dt
+    if (nx < meio || nx > width - meio) p.vx = -p.vx * 0.4
+    if (ny < meio || ny > height - meio) p.vy = -p.vy * 0.4
+    p.x = clamp(nx, meio, width - meio)
+    p.y = clamp(ny, meio, height - meio)
+  }
+
+  /**
+   * O CÉREBRO, agora NAVEGÁVEL — chamada do H em 13/08.
+   *
+   * A escolha do vilão saiu daqui e virou tela própria (`select`), aberta ao
+   * entrar na ÓRBITA dos patógenos. A razão é dura: hub é LUGAR e escolha é ATO,
+   * e enquanto os dois dividiam a mesma tela as setas queriam significar duas
+   * coisas ao mesmo tempo — andar e trocar de inimigo.
+   *
+   * Com a órbita como porta, escolher passa a ter um GESTO: você vai até lá. É o
+   * mesmo verbo do jogo inteiro, usado num lugar sem risco.
+   */
   const stepHub = (bits: number): void => {
+    movePlayer(bits)
+    const dx = s.player.x - tuning.hub.orbitX
+    const dy = s.player.y - tuning.hub.orbitY
+    if (Math.sqrt(dx * dx + dy * dy) <= tuning.hub.enterRadius) s.phase = "select"
+  }
+
+  /**
+   * A ESCOLHA do inimigo. Setas percorrem, ação confirma, reinício volta.
+   *
+   * Voltar EMPURRA o jogador para fora da órbita, e isso não é polimento: sem
+   * empurrar ele reaparece dentro do gatilho e a tela reabre no quadro seguinte.
+   * Seria a versão de menu do "dispensar por reflexo" que o `cardLock` resolve
+   * com tempo — aqui o remédio é geometria.
+   */
+  const stepSelect = (bits: number): void => {
     const novo = bits & ~s.prevBits
     const n = villainCount()
     if ((novo & BIT_LEFT) !== 0) s.villain = (s.villain + n - 1) % n
     if ((novo & BIT_RIGHT) !== 0) s.villain = (s.villain + 1) % n
-    if ((novo & (BIT_ACTION | BIT_RESTART)) !== 0) startRun()
+    if ((novo & BIT_ACTION) !== 0) {
+      startRun()
+      return
+    }
+    if ((novo & BIT_RESTART) !== 0) {
+      s.phase = "hub"
+      poeNoCerebro()
+    }
   }
 
   const stepCard = (bits: number): void => {
@@ -1560,6 +1658,7 @@ export function createSim(seed: number, tuning: Tuning): Sim {
       // é o que faz dele um HUB em vez de uma tela de continue.
       bankCoins()
       s.phase = "hub"
+      poeNoCerebro()
     }
   }
 
@@ -1600,6 +1699,7 @@ export function createSim(seed: number, tuning: Tuning): Sim {
     const bits = bitsOf(input)
     if (s.phase === "run") stepRun(bits)
     else if (s.phase === "hub") stepHub(bits)
+    else if (s.phase === "select") stepSelect(bits)
     else if (s.phase === "card") stepCard(bits)
     else if (s.phase === "intervalo") stepIntervalo()
     else if (s.phase === "closed") stepClosed(bits)
@@ -1616,6 +1716,8 @@ export function createSim(seed: number, tuning: Tuning): Sim {
       .u8(
         s.phase === "hub"
           ? 5
+          : s.phase === "select"
+            ? 6
           : s.phase === "run"
           ? 0
           : s.phase === "card"
@@ -1710,6 +1812,7 @@ export function createSim(seed: number, tuning: Tuning): Sim {
    */
   s.phase = "hub"
   s.cardLock = 0
+  poeNoCerebro()
 
   return {
     step,

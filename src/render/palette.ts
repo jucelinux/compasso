@@ -95,6 +95,11 @@ export const GLD2 = 53
 export const DIM0 = 54
 export const DIM1 = 55
 
+// cinzas frios: o chão do cérebro
+export const GREY0 = 56
+export const GREY1 = 57
+export const GREY2 = 58
+
 /** RGB de cada índice. A ordem é a das constantes acima e não pode mudar. */
 const RGB: number[] = [
   0x000000, // 0 transparente (alpha 0; o RGB não é lido)
@@ -166,6 +171,25 @@ const RGB: number[] = [
   0xffe58a, // 53 GLD2
   0x7a4450, // 54 DIM0
   0x4a2830, // 55 DIM1
+
+  /*
+   * CINZAS FRIOS do cérebro, acrescentados em 13/08 a pedido do H ("fundo mais
+   * acinzentado escuro").
+   *
+   * A paleta é travada e a ORDEM não pode mudar — mas acrescentar no FIM é
+   * seguro, porque índice novo não é referenciado por nada que já existe, e as
+   * variantes de paleta mapeiam por nome, não por posição.
+   *
+   * Por que cor nova em vez de dither: o cérebro não tinha chão nenhum, era o
+   * `INK` do canvas aparecendo. Todo escuro que a paleta oferecia é QUENTE —
+   * `INK2`, `PLASMA0` e `DIM1` são maroom, feitos para o sangue —, e ditherizar
+   * maroom com azul dá roxo, não cinza. Três tons neutros são o mínimo para o
+   * chão do hub existir sem puxar a tela de volta para a cor da arena, que é
+   * justamente o contraste que faz o hub ler como outro lugar.
+   */
+  0x14161c, // 56 GREY0 — o chão
+  0x212530, // 57 GREY1 — o relevo
+  0x333a4a, // 58 GREY2 — a aresta
 ]
 
 /**
@@ -413,6 +437,9 @@ export const RAMP_ECO: Ramp = [INK2, ECO0, ECO1, ECO2, ECO3]
 export const RAMP_EST: Ramp = [INK2, EST0, EST1, EST2, EST3]
 export const RAMP_SAL: Ramp = [INK2, SAL0, SAL1, SAL2, SAL3]
 export const RAMP_COR: Ramp = [INK2, COR0, COR1, COR2, COR3]
+/** O chão do cérebro. Frio e escuro, contra o vermelho quente da arena. */
+export const RAMP_GREY: Ramp = [GREY0, GREY0, GREY1, GREY2]
+
 export const RAMP_GLD: Ramp = [INK2, GLD0, GLD1, GLD2, WHITE]
 export const RAMP_SHI: Ramp = [INK2, SHI0, SHI1, WHITE]
 /** Sem o tom mais claro: hemácia é fundo distante, não corpo em jogo. */

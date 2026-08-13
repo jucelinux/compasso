@@ -1,10 +1,28 @@
 import { writeFileSync } from "node:fs"
 import { resolve } from "node:path"
-import { drive } from "./drive.ts"
+import { drive, type Driver } from "./drive.ts"
 import { loadTuning, projectRoot } from "./loadTuning.ts"
 import { parseReplay, replayInputs } from "./replay.ts"
 import { runReplay } from "./runReplay.ts"
 import { createSim } from "../sim/sim.ts"
+
+/**
+ * Atravessa a tela em que o jogo está, seja ela qual for.
+ *
+ * Deixou de ser "aperte espaço" em 13/08: o cérebro virou navegável, e sair
+ * dele exige ANDAR até a órbita dos patógenos. O aparelho passa a pilotar o
+ * glóbulo, que é o mesmo que o jogador faz — qualquer atalho aqui faria o rig
+ * medir um caminho que ninguém percorre.
+ *
+ * A órbita fica no centro-baixo da arena e o jogador nasce logo abaixo dela,
+ * então segurar CIMA basta. Fica escrito porque a posição vem do `tuning.hub`,
+ * e mudar o centro da órbita mexe nisto.
+ */
+async function atravessaTela(d: Driver, fase: () => Promise<string>): Promise<void> {
+  const f = await fase()
+  if (f === "hub") await d.hold(["ArrowUp"], 220)
+  else await d.hold([" "], 150)
+}
 
 /**
  * Grava uma fixture do build ATUAL — `npm run rec [nome] [seed]`.
@@ -108,7 +126,7 @@ try {
   let atual = await fase()
   while (passos < MAX && atual !== "dead") {
     if (atual !== "run") {
-      await d.hold([" "], 150)
+      await atravessaTela(d, fase)
       await d.page.waitForTimeout(200)
       atual = await fase()
       continue
@@ -142,8 +160,8 @@ try {
   await testemunha()
 
   let tentativas = 0
-  while ((await fase()) !== "run" && tentativas < 20) {
-    await d.hold([" "], 150)
+  while ((await fase()) !== "run" && tentativas < 40) {
+    await atravessaTela(d, fase)
     await d.page.waitForTimeout(200)
     tentativas++
   }

@@ -12,7 +12,7 @@ import type { Tuning } from "../src/sim/types.ts"
  */
 
 const SMOKE = resolve(projectRoot, "replays", "smoke.json")
-const BASELINE_HASH = "0ffd6bfe"
+const BASELINE_HASH = "0314289c"
 
 /**
  * Run real do humano, 7,6 min de input de verdade, do core do dash (`7c952a6`).
@@ -22,7 +22,7 @@ const BASELINE_HASH = "0ffd6bfe"
  * leitura de ritmo, e não como cobertura de morte.
  */
 const RUN_01 = resolve(projectRoot, "replays", "run-01.json")
-const RUN_01_HASH = "efaaf337"
+const RUN_01_HASH = "567cf12e"
 
 /**
  * Segunda run real: 5 min, 10 ondas, uma morte. Gravada antes da tecla de
@@ -30,16 +30,17 @@ const RUN_01_HASH = "efaaf337"
  * Vale como determinismo sobre input humano longo.
  */
 const RUN_02 = resolve(projectRoot, "replays", "run-02.json")
-const RUN_02_HASH = "1a13885c"
+const RUN_02_HASH = "5630397d"
 
 /**
  * Terceira run real: 5,7 min de input humano, gravada quando os modificadores
  * ainda eram porcentagem.
  *
- * Com os patógenos reais este input voltou a morrer, na onda 6.
+ * Chegou a voltar a morrer na onda 6, com os patógenos reais. Desde 13/08 não
+ * sai mais do cérebro — ver o teste da cobertura, mais abaixo.
  */
 const RUN_03 = resolve(projectRoot, "replays", "run-03.json")
-const RUN_03_HASH = "ee17c6fa"
+const RUN_03_HASH = "4378914a"
 
 /**
  * Fixture do core contínuo, gravada por `npm run rec`. Sintética, não humana:
@@ -55,13 +56,17 @@ const RUN_03_HASH = "ee17c6fa"
  * cobrir. Duas vezes o mesmo modo de falha em quatro dias é o que fez a âncora
  * ganhar teste próprio, logo abaixo.
  *
- * Esta é a primeira gravada com verificação BROWSER↔NODE: o `npm run rec` colhe
- * pares (tick, hash) do HUD durante a captura e exige que o replay em Node
- * reproduza os mesmos hashes nos mesmos ticks. Bateu em 11 testemunhas. Sem
- * isso, um baseline nascido no browser seria verdade só do Node.
+ * Desde 05/08 toda gravação passa por verificação BROWSER↔NODE: o `npm run rec`
+ * colhe pares (tick, hash) do HUD durante a captura e exige que o replay em Node
+ * reproduza os mesmos hashes nos mesmos ticks. Sem isso, um baseline nascido no
+ * browser seria verdade só do Node. A gravação vigente bateu em 8 testemunhas.
+ *
+ * Desde 13/08 esta é também a ÚNICA fixture que cobre morte no core atual: as
+ * três humanas não saem mais do cérebro. Regravar quando ela parar de morrer
+ * deixou de ser zelo e virou a única forma de a suíte cobrir o fim da run.
  */
 const CORE_ATUAL = resolve(projectRoot, "replays", "core-atual.json")
-const CORE_ATUAL_HASH = "37f49a04"
+const CORE_ATUAL_HASH = "3eb27699"
 
 const smoke = () => loadReplay(SMOKE)
 const tuning = () => loadTuning()
@@ -177,6 +182,38 @@ const tuning = () => loadTuning()
  * caminho morte → cérebro → run nova. É um estado a mais entre os dois que o
  * teste "atravessa morte E reinício" já media, e ele é atravessado de verdade
  * — o gravador aperta espaço até voltar a `run`, e voltou.
+ *
+ * DÉCIMA PRIMEIRA VEZ, ainda em 13/08: o cérebro virou NAVEGÁVEL.
+ *
+ * Pedido do H — o jogador anda com o glóbulo dentro do cérebro, e a saída deixou
+ * de ser uma tecla para virar um LUGAR: a órbita dos patógenos, no centro-baixo.
+ * Entrou a fase `select` entre o hub e o card. Posição do jogador no cérebro e
+ * fase nova mudam o hash de qualquer replay que passe por ali, que são todos.
+ *
+ * E esta deriva cobrou um preço que as dez anteriores não cobraram, porque
+ * trocar tecla por lugar invalida INPUT GRAVADO de um jeito que acrescentar tela
+ * não invalidava. Medido, fixture por fixture, antes de trocar número nenhum:
+ *
+ *   `smoke.json`   → visitava `hub` e MAIS NENHUMA fase. 900 ticks de passeio
+ *                    aleatório no cérebro. A fixture que quatro testes daqui
+ *                    usam de baseline tinha parado de tocar no jogo.
+ *   `run-02.json`  → ainda entra na run, mas não morre mais dentro do log: os
+ *                    ticks que ela gastava jogando agora são gastos saindo do
+ *                    cérebro.
+ *   `run-03.json`  → como a `run-01` em 13/08 de manhã: não sai do cérebro.
+ *
+ * A `smoke` foi CONSERTADA, não rebaseada, e a diferença importa: ela é a única
+ * declarada regenerável byte a byte, então o `makeSmoke.ts` ganhou um prólogo
+ * que atravessa as telas rodando a sim enquanto gera — 987 ticks, e o passeio
+ * aleatório de 15s voltou a acontecer DENTRO da run. Rebasear o número dela
+ * teria congelado uma fixture que não mede mais nada, que é o defeito de 05/08
+ * com outra roupa. O sintoma que denunciou: `tuning.json > muda o comportamento
+ * sem editar código` passou a não mudar hash nenhum — no cérebro não há dash.
+ *
+ * As outras duas não têm conserto possível: input humano não se regrava. Elas
+ * perdem a cobertura de morte e continuam valendo pelo que sempre valeram,
+ * determinismo sobre input humano longo. O teste logo abaixo passa a AFIRMAR
+ * isso em vez de afirmar a cobertura que sumiu.
  */
 
 /**
@@ -290,26 +327,33 @@ describe("determinismo", () => {
      */
     expect(reaches(SMOKE), "smoke não morre: input sintético mal se move").toBe(false)
     /*
-     * `run-01` deixou de chegar ao JOGO em 13/08, e isto não é regressão.
+     * NENHUM dos três replays humanos morre mais, e isto não é regressão.
      *
-     * O hub acrescentou uma tela antes do card, e o input gravado em `7c952a6`
-     * não tem as teclas nos instantes que atravessam DUAS telas — ele passa o
-     * hub e fica parado na apresentação até o log acabar. Medido: as fases que
-     * ele visita hoje são `hub, card`, e mais nenhuma.
+     * Em 13/08 o cérebro virou navegável: sair dele deixou de ser uma tecla e
+     * passou a ser um LUGAR. Input gravado em `7c952a6` não sabe andar até a
+     * órbita, então o log inteiro se gasta antes de o jogo começar. Medido, fase
+     * por fase, no dia em que caiu:
      *
-     * É o preço declarado de acrescentar tela, e ele cai sempre no replay mais
-     * antigo. `run-01` continua valendo pelo que este arquivo já dizia dele —
-     * determinismo sobre input humano longo, mesma seed e mesmo hash — e deixou
-     * de valer como cobertura de morte, que ele também já não era desde 01/08.
+     *   `run-01` → visita `hub`, e mais nenhuma.
+     *   `run-03` → idem.
+     *   `run-02` → chega a `run` por acaso (o passeio dela cruza a órbita com a
+     *              ação apertada), mas o que sobra de log já não dá para morrer.
      *
-     * As outras duas ainda atravessam e ainda morrem; quando pararem, esta
-     * asserção vira `false` para elas e o comentário explica por quê. O que não
-     * pode acontecer é o teste continuar AFIRMANDO uma cobertura que sumiu, que
-     * é exatamente o defeito que ele foi escrito para impedir.
+     * É o preço declarado de trocar tecla por lugar, e ele cai primeiro no
+     * replay mais antigo. Os três continuam valendo pelo que este arquivo já
+     * dizia deles — determinismo sobre input humano longo, mesma seed e mesmo
+     * hash — e deixaram de valer como cobertura de morte.
+     *
+     * A cobertura de morte inteira mora agora no `core-atual.json`, que é
+     * sintético e REGRAVÁVEL, e é por isso que ele existe. O que continua
+     * faltando é um replay do HUMANO no core novo; isso nenhum script grava.
+     *
+     * O que não pode acontecer é o teste continuar AFIRMANDO uma cobertura que
+     * sumiu — é exatamente o defeito que ele foi escrito para impedir.
      */
-    expect(reaches(RUN_01), "run-01 não passa mais do card: o hub é uma tela a mais").toBe(false)
-    expect(reaches(RUN_02)).toBe(true)
-    expect(reaches(RUN_03)).toBe(true)
+    expect(reaches(RUN_01), "run-01 não sai mais do cérebro").toBe(false)
+    expect(reaches(RUN_02), "run-02 entra na run, mas o log acaba antes da morte").toBe(false)
+    expect(reaches(RUN_03), "run-03 não sai mais do cérebro").toBe(false)
   })
 
   it("a âncora ainda está ancorada: o tuning da gravação é o tuning de agora", () => {
@@ -363,8 +407,8 @@ describe("determinismo", () => {
  * alguém dizer o que ele é.
  */
 const PROCEDENCIA: ReadonlyArray<readonly [string, string, string]> = [
-  ["smoke.json", "7c952a6", "sintética, regenerável byte a byte por `npm run smoke`"],
-  ["core-atual.json", "b05a1da", "sintética, VIVA — regravar com `npm run rec`"],
+  ["smoke.json", "d838d78", "sintética, regenerável byte a byte por `npm run smoke`"],
+  ["core-atual.json", "d838d78", "sintética, VIVA — regravar com `npm run rec`"],
   ["run-01.json", "7c952a6", "humana, core do dash; hoje só âncora de determinismo"],
   ["run-02.json", "7c952a6", "humana, core do dash; hoje só âncora de determinismo"],
   ["run-03.json", "7c952a6", "humana, core do dash; hoje só âncora de determinismo"],

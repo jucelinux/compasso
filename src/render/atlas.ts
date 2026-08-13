@@ -272,17 +272,19 @@ export function buildAtlas(tuning: Tuning, crowdArea?: number): Atlas {
    * primeiro plano. O erro foi confundir área por CENTRO com espaço entre
    * CORPOS; a 560 os centros ficam a ~24px e o sprite tem 48.
    *
-   * Em 2600 os centros ficam a ~51px, um pouco mais que a largura do corpo, e é
-   * isso que abre o vão onde a ligação existe. O H pediu neurônios de FUNDO —
-   * fundo que cobre a tela deixou de ser fundo.
+   * Passei por 2600 (centros a ~51px) e o H pediu POPULAÇÃO MAIOR. 1350 dá ~170
+   * corpos com centros a ~37px: ainda sobra vão para a sinapse — que é a
+   * restrição real desta tela —, e a rede fica densa o bastante para parecer
+   * tecido nervoso em vez de uma constelação. Abaixo disso os corpos voltam a se
+   * tocar e as ligações somem por baixo deles.
    */
-  const NEURON_AREA = 2600
+  const NEURON_AREA = 1350
   const brainCrowd = crowdLayout(tuning.arena.width, tuning.arena.height, 909, NEURON_AREA)
   const neurons = Array.from({ length: CROWD_VARIANTS }, (_, v) => {
     const sh = neuronShape(v)
     return bake(neuronSheet(sh.r, sh.dendritos, sh.tilt, v))
   })
-  const brainLayers = (["corpos", "axonios", "faiscas"] as const).map((kind, i) =>
+  const brainLayers = (["chao", "corpos", "axonios", "faiscas"] as const).map((kind, i) =>
     toTexture(brainLayerBuf(tuning.arena.width, tuning.arena.height, kind, 4200 + i)),
   )
   /*

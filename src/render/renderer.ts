@@ -15,7 +15,12 @@ import {
   KIND_TINT,
   ORG2,
   PALETTE,
+  ECO2,
+  INF3,
+  LEU3,
   NUC0,
+  NUC1,
+  NUC2,
   SAL2,
   SHI1,
   WHITE,
@@ -43,6 +48,17 @@ export interface Renderer {
 }
 
 const TAU = Math.PI * 2
+
+/**
+ * A roda de cores do sinal sináptico. Seis matizes do topo das rampas.
+ *
+ * Mesmo critério do halo do item: tom médio some contra o fundo, e a paleta é
+ * travada — escolhe-se entre o que já existe. A diferença é que aqui a cor é
+ * fixa por LIGAÇÃO em vez de ciclar no tempo, porque o que ela distingue é o
+ * canal e não o instante.
+ */
+const SINAL: ReadonlyArray<number> = [FAST1, SHI1, ECO2, ORG2, INF3, LEU3]
+
 const col = (idx: number): number => PALETTE[idx]!
 const lerp = (a: number, b: number, t: number): number => a + (b - a) * t
 
@@ -205,10 +221,16 @@ const PROMPTS = {
   teclado: {
     comecar: "ESPAÇO PRA COMEÇAR",
     outra: "R OU ENTER PRA OUTRA",
+    entrar: "LEVE O GLÓBULO ATÉ A ÓRBITA",
+    lutar: "ESPAÇO PRA LUTAR",
+    voltar: "R VOLTA AO CÉREBRO",
   },
   toque: {
     comecar: "TOQUE PRA COMEÇAR",
     outra: "TOQUE PRA OUTRA",
+    entrar: "LEVE O GLÓBULO ATÉ A ÓRBITA",
+    lutar: "TOQUE PRA LUTAR",
+    voltar: "TOQUE LONGO VOLTA",
   },
 } as const
 
@@ -349,16 +371,34 @@ export async function createRenderer(
   const brainBack = new Container()
   const brainCrowdLayer = new Container()
   const brainFxLayer = new Graphics()
-  brain.addChild(brainBack, brainFxLayer, brainCrowdLayer)
+  /*
+   * Os patógenos em ÓRBITA e o JOGADOR, na cena do cérebro.
+   *
+   * Camada própria acima da multidão: eles são os corpos vivos desta tela, e a
+   * multidão é cenário. A ordem aqui é a mesma da arena — cenário, efeitos,
+   * corpos — e repetir a ordem entre as duas telas é o que evita a próxima
+   * geração de defeitos de composição.
+   */
+  const brainBodies = new Container()
+  const brainOrbit = new Pool(brainBodies)
+  const brainPlayer = new Sprite()
+  brainPlayer.anchor.set(0.5)
+  brainBodies.addChild(brainPlayer)
+
+  brain.addChild(brainBack, brainCrowdLayer, brainFxLayer, brainBodies)
 
   const brainDrift = atlas.brainLayers.flatMap((tex, i) =>
     [0, 1].map((slot) => {
       const sp = new Sprite(tex)
       brainBack.addChild(sp)
-      // Mesmas velocidades da arena: fundo devagar, frente rápida. É o que dá
-      // profundidade, e copiar a razão em vez do número é o que mantém as duas
-      // telas com o mesmo caráter de movimento.
-      return { sprite: sp, speed: 6 + i * 13, slot }
+      /*
+       * Velocidade por camada, e a PRIMEIRA é zero.
+       *
+       * O chão não desliza: ele é o chão, e chão que escorre transforma a
+       * safezone em esteira. As três de cima seguem a razão da arena — fundo
+       * devagar, frente rápida —, que é o que dá profundidade.
+       */
+      return { sprite: sp, speed: [0, 6, 19, 32][i] ?? 6, slot }
     }),
   )
 
@@ -370,8 +410,32 @@ export async function createRenderer(
    * parallax atrás, e a diferença de comportamento é metade do que faz o hub
    * parecer outro lugar.
    */
+  /*
+   * A CLAREIRA em volta da órbita, e ela veio da captura.
+   *
+   * Com a multidão adensada a pedido do H, o miolo do cérebro virou uma parede
+   * de corpos pálidos — e a órbita, que é a única PORTA da tela, ficou dentro
+   * dela: os patógenos giravam por cima de neurônios, o anel do gatilho tinha um
+   * soma bem no meio, e o lugar mais importante da tela lia como mais um pedaço
+   * de textura.
+   *
+   * Abrir a densidade inteira desfaria o pedido. Abrir só aqui não: uma clareira
+   * é a forma mais antiga de dizer "aqui acontece alguma coisa", e ela custa
+   * nada — os corpos de dentro simplesmente não nascem, então some junto o
+   * sprite, a respiração dele e as sinapses que sairiam dali.
+   *
+   * O raio é o da órbita mais meio corpo de neurônio, que é o mínimo para que
+   * nenhum deles encoste no anel de fora.
+   */
+  const CLAREIRA = tuning.hub.orbitRadius + 30
+  const neuronios = atlas.brainCrowd.filter((c) => {
+    const dx = c.hx - tuning.hub.orbitX
+    const dy = c.hy - tuning.hub.orbitY
+    return dx * dx + dy * dy > CLAREIRA * CLAREIRA
+  })
+
   const neuronSprites: Sprite[] = []
-  for (const c of atlas.brainCrowd) {
+  for (const c of neuronios) {
     const folha = atlas.neurons[c.variant % atlas.neurons.length]!
     const sp = new Sprite(folha.frames[0]!)
     sp.anchor.set(0.5)
@@ -406,16 +470,16 @@ export async function createRenderer(
   /** Até quantos vizinhos cada neurônio liga. Um só desenha pares, não rede. */
   const SINAPSE_MAX = 2
   const sinapses: Array<{ ax: number; ay: number; bx: number; by: number; fase: number }> = []
-  for (let i = 0; i < atlas.brainCrowd.length; i++) {
-    const a1 = atlas.brainCrowd[i]!
+  for (let i = 0; i < neuronios.length; i++) {
+    const a1 = neuronios[i]!
     /*
      * Só liga para FRENTE na lista (`j > i`), e isso evita a ligação dupla sem
      * precisar de um conjunto de pares já vistos: cada par nasce uma vez só,
      * pelo índice menor.
      */
     const perto: Array<{ j: number; d2: number }> = []
-    for (let j = i + 1; j < atlas.brainCrowd.length; j++) {
-      const b1 = atlas.brainCrowd[j]!
+    for (let j = i + 1; j < neuronios.length; j++) {
+      const b1 = neuronios[j]!
       const dx = b1.hx - a1.hx
       const dy = b1.hy - a1.hy
       const d2 = dx * dx + dy * dy
@@ -423,7 +487,7 @@ export async function createRenderer(
     }
     perto.sort((p, q) => p.d2 - q.d2)
     for (const { j } of perto.slice(0, SINAPSE_MAX)) {
-      const b1 = atlas.brainCrowd[j]!
+      const b1 = neuronios[j]!
       sinapses.push({
         ax: Math.round(a1.hx),
         ay: Math.round(a1.hy),
@@ -795,7 +859,7 @@ export async function createRenderer(
     // Respiração: cada neurônio na fase dele. Mesma ideia da hemácia, e é o que
     // separa multidão viva de mosaico parado.
     for (let i = 0; i < neuronSprites.length; i++) {
-      const c = atlas.brainCrowd[i]!
+      const c = neuronios[i]!
       const folha = atlas.neurons[c.variant % atlas.neurons.length]!
       const fase = Math.floor(selfClock * 3 + c.variant * 0.7 + i * 0.11) % folha.frames.length
       neuronSprites[i]!.texture = folha.frames[fase]!
@@ -816,18 +880,98 @@ export async function createRenderer(
         .lineTo(li.bx, li.by)
         .stroke({ width: 1, color: col(NUC0), alpha: 0.5 })
     }
-    for (const li of sinapses) {
-      const t = (selfClock * 0.55 + li.fase) % 1
-      // Só a metade do ciclo tem sinal: a ligação passa mais tempo quieta que
-      // acesa, senão o cérebro inteiro vira ruído branco.
-      if (t > 0.5) continue
-      const u = t * 2
+
+    /*
+     * A ÓRBITA: os patógenos girando, e a PORTA para a escolha. Pedido do H.
+     *
+     * O anel é desenhado, não assado, porque ele pulsa com a proximidade do
+     * jogador — e é esse pulso que ensina que dá para entrar. Sem ele o jogador
+     * teria que descobrir a porta por tentativa, num lugar que existe
+     * justamente para não exigir tentativa.
+     *
+     * Dois círculos: o de fora é a órbita dos corpos, o de dentro é o GATILHO.
+     * Desenhar só um mentiria sobre onde a coisa acontece — o `enterRadius` é
+     * bem menor que o `orbitRadius`, de propósito, para não disparar de raspão
+     * em quem só passeia.
+     */
+    const hx = tuning.hub.orbitX
+    const hy = tuning.hub.orbitY
+    const dxp = cur.player.x - hx
+    const dyp = cur.player.y - hy
+    const perto = Math.max(0, 1 - Math.sqrt(dxp * dxp + dyp * dyp) / (tuning.hub.orbitRadius * 2))
+    brainFxLayer
+      .circle(hx, hy, tuning.hub.orbitRadius)
+      .stroke({ width: 1, color: col(NUC1), alpha: 0.4 + perto * 0.4 })
+    brainFxLayer
+      .circle(hx, hy, tuning.hub.enterRadius + Math.round(Math.sin(selfClock * 4) * 1.5))
+      .stroke({ width: 1, color: col(GLD2), alpha: 0.35 + perto * 0.55 })
+
+    /*
+     * TODOS os patógenos girando no anel — o H pediu todos, não só o jogável.
+     *
+     * A `ecoli_filha` fica de fora: ela não é um inimigo, é o que sobra de um
+     * abate apressado. Pôr a filha ao lado da mãe na vitrine anunciaria seis
+     * doenças onde há cinco, e a órbita é a promessa da tela.
+     *
+     * Giram em tempo de PAREDE, como todo o resto do hub. A ordem angular vem do
+     * índice, então a roda é estável entre quadros e o jogador aprende onde cada
+     * um fica — vitrine que embaralha não deixa aprender nada.
+     */
+    brainOrbit.begin()
+    const vitrine = Object.keys(tuning.enemy.kinds).filter((k) => k !== "ecoli_filha")
+    for (let i = 0; i < vitrine.length; i++) {
+      const kind = vitrine[i]!
+      const folha = atlas.pathogens.get(kind)
+      if (folha === undefined) continue
+      const ang = selfClock * tuning.hub.orbitSpeed * TAU + (i / vitrine.length) * TAU
+      const px = Math.round(hx + Math.cos(ang) * tuning.hub.orbitRadius)
+      const py = Math.round(hy + Math.sin(ang) * tuning.hub.orbitRadius)
+      // A direção do sprite acompanha a tangente: o bicho olha para onde anda,
+      // como em campo. Parado na órbita ele viraria ilustração.
+      const dir = (Math.round(((ang + Math.PI / 2) / TAU) * 8) + 8) % 8
+      const sp = brainOrbit.next(frameOf(folha, 0, dir, Math.floor(selfClock * 7) + i))
+      sp.position.set(px, py)
+    }
+    brainOrbit.end()
+
+    /*
+     * O JOGADOR no cérebro, com o mesmo sprite e a mesma leitura de velocidade
+     * da arena. É o corpo dele; usar outro aqui seria dizer que o hub é outro
+     * jogo.
+     */
+    const tierHub = tierOf(cur.player.speed)
+    const dirHub = cur.player.speed > 0.05 ? dirOf(cur.player.vx, cur.player.vy) : lastDir
+    lastDir = dirHub
+    brainPlayer.texture = frameOf(
+      atlas.player,
+      tierHub,
+      dirHub,
+      Math.floor(selfClock * (4 + cur.player.speed * 16)),
+    )
+    brainPlayer.position.set(Math.round(cur.player.x), Math.round(cur.player.y))
+    /*
+     * O SINAL, agora MULTICOLORIDO e em TODA sinapse — pedido do H em 13/08.
+     *
+     * Duas mudanças, e a segunda é a que custa: antes só metade do ciclo tinha
+     * sinal, então a qualquer instante metade das ligações estava vazia. Ele
+     * pediu "percorrendo cada sinapse", e agora percorre — o que sobra para
+     * evitar o ruído branco não é apagar ligações, é dar a cada uma um ritmo
+     * PRÓPRIO (`fase`) e velocidades diferentes, de forma que a tela nunca
+     * tenha dois sinais no mesmo ponto do percurso.
+     *
+     * A cor sai de uma roda de seis, escolhida pelo índice da ligação: fixa por
+     * sinapse e não sorteada por quadro. Cor que muda a cada quadro no mesmo fio
+     * lê como interferência; cor fixa por fio lê como sinais DIFERENTES viajando
+     * em canais diferentes, que é o que o cérebro faz.
+     */
+    for (let i = 0; i < sinapses.length; i++) {
+      const li = sinapses[i]!
+      // Velocidade própria por ligação, entre 0,35 e 0,75 de volta por segundo.
+      const vel = 0.35 + (i % 9) * 0.05
+      const u = (selfClock * vel + li.fase) % 1
       const x = Math.round(li.ax + (li.bx - li.ax) * u)
       const y = Math.round(li.ay + (li.by - li.ay) * u)
-      // 3px e não 2: contra o dendrito pálido do soma, dois pixels somem. O
-      // sinal é o que o H chamou de "produzindo sinapses" — ele precisa ganhar
-      // do corpo que o produz.
-      brainFxLayer.rect(x - 1, y - 1, 3, 3).fill(col(FAST1))
+      brainFxLayer.rect(x - 1, y - 1, 3, 3).fill(col(SINAL[i % SINAL.length]!))
     }
     void cur
   }
@@ -1465,85 +1609,125 @@ export async function createRenderer(
   }
 
   /**
-   * A tela do HUB: quem você é, quanto você guardou, e quem vai enfrentar.
+   * A tela do HUB — e ela agora é quase VAZIA, de propósito.
    *
-   * Sem moldura escura por cima do cérebro, ao contrário das outras telas. O
-   * véu existe nas outras porque elas interrompem um jogo em andamento e
-   * precisam separar-se dele; aqui não há jogo por baixo — o cérebro É a tela.
-   * Cobri-lo apagaria justamente o que o H pediu para desenhar.
+   * Enquanto o hub era um menu, tudo morava aqui: memória, vilão, prompt. Com o
+   * cérebro navegável, a escolha ganhou tela própria e o que sobra é o mínimo
+   * para orientar quem está ANDANDO: quanto você guardou, e o nome do que está
+   * girando no meio da sala.
+   *
+   * Menos texto não é menos tela. É a diferença entre um lugar e um formulário.
    */
-  const drawHub = (cur: SimState, phase: number): void => {
+  const drawHub = (cur: SimState): void => {
+    const cx = tuning.arena.width / 2
+    rewardPanels.clear()
+
+    // FAIXA DE CIMA: a memória imunológica, com a moeda ao lado do número.
+    rewardPanels.rect(0, 8, tuning.arena.width, 26).fill({ color: col(INK), alpha: 0.8 })
+    cardLines[0]!.set("MEMÓRIA IMUNOLÓGICA", NUC2, cx - 34, 12, 1, true, true)
+    cardLines[1]!.set(`${cur.bank}`, GLD2, cx + 62, 13, 2, true, true)
+    // A moeda DESENHADA, e não a palavra "moedas": o jogador vê no chão o mesmo
+    // objeto que vê aqui, e a ligação entre juntar e acumular fica sem texto.
+    hubCoin.texture = frameOf(atlas.coin, 0, 0, Math.floor(selfClock * 8))
+    hubCoin.position.set(Math.round(cx + 38), 21)
+    hubCoin.visible = true
+
+    /*
+     * O RÓTULO DA ÓRBITA, acima dela — pedido literal do H.
+     *
+     * Ele é a única instrução da tela, e por isso leva chão próprio em vez de
+     * confiar na sombra: fica sobre a multidão de neurônios, que é justamente o
+     * fundo contra o qual a sombra já falhou uma vez hoje.
+     */
+    const oy = tuning.hub.orbitY - tuning.hub.orbitRadius - 26
+    rewardPanels.rect(cx - 92, oy - 2, 184, 14).fill({ color: col(INK), alpha: 0.78 })
+    cardLines[2]!.set("COMBATER PATÓGENOS", GLD2, cx, oy + 1, 1, true, true)
+    /*
+     * O prompt de baixo leva chão pela MESMA razão do rótulo — e ele não tinha.
+     *
+     * Na primeira captura do cérebro navegável ele saía por cima dos neurônios E
+     * por cima da linha de depuração do HUD, três textos disputando as mesmas
+     * fileiras de pixel. A sombra da letra não resolve isso: ela dá contorno
+     * contra fundo irregular, não separa texto de texto.
+     */
+    const py = tuning.arena.height - 24
+    rewardPanels.rect(0, py - 2, tuning.arena.width, 14).fill({ color: col(INK), alpha: 0.78 })
+    cardLines[3]!.set(prompt.entrar, SHI1, cx, py + 1, 1, true, true)
+    cardPicks[0]!.hide()
+    cardPicks[1]!.hide()
+    cardPicks[2]!.hide()
+    cardBicho.visible = false
+    for (const l of cardBlurbs) l.hide()
+    for (const l of cardCusto) l.hide()
+    cardBlurb.hide()
+  }
+
+  /**
+   * A tela de SELEÇÃO, aberta ao entrar na órbita.
+   *
+   * Painel opaco por cima do cérebro, ao contrário do hub: aqui o jogador PAROU
+   * de andar e está decidindo, então a tela pode tomar a frente. É a mesma
+   * distinção que separa o card do respiro — quem interrompe um gesto se
+   * anuncia; quem acompanha um gesto se afasta.
+   */
+  const drawSelect = (cur: SimState, phase: number): void => {
     const cx = tuning.arena.width / 2
     const spec = tuning.phases[Math.min(cur.villain, tuning.phases.length - 1)]!
     const kind = tuning.enemy.kinds[spec.disease]
     const sheet = atlas.pathogens.get(spec.disease)
     const tint = col(KIND_TINT[spec.disease] ?? WHITE)
 
-    /*
-     * TODO texto do hub tem CHÃO. A captura é que cobrou isso.
-     *
-     * A primeira versão soltava "MEMÓRIA IMUNOLÓGICA" e "QUEM VOCÊ VAI
-     * ENFRENTAR" direto sobre a multidão de neurônios, contando com a sombra de
-     * letra que entrou hoje. Sombra resolve texto sobre fundo IRREGULAR de
-     * contraste médio; contra corpos pálidos de 48px ela some junto. O tecido da
-     * arena é escuro e uniforme o bastante para a sombra dar conta — o cérebro
-     * não é, e supor que a mesma solução serve para os dois foi meu erro.
-     *
-     * Três faixas, uma por função: o que você ACUMULOU, o que vai ENFRENTAR, e o
-     * que fazer agora. O cérebro continua visível em toda a volta, que é o que o
-     * H pediu ao querer os neurônios ao fundo.
-     */
-    rewardPanels.clear()
-
-    // FAIXA DE CIMA: a memória imunológica, com a moeda ao lado do número.
-    rewardPanels
-      .rect(0, 10, tuning.arena.width, 26)
-      .fill({ color: col(INK), alpha: 0.86 })
-    cardLines[0]!.set("MEMÓRIA IMUNOLÓGICA", NUC0, cx - 34, 14, 1, true, true)
-    cardLines[1]!.set(`${cur.bank}`, GLD2, cx + 62, 15, 2, true, true)
-    // A moeda DESENHADA, e não a palavra "moedas": o jogador vê no chão o mesmo
-    // objeto que vê aqui, e a ligação entre juntar e acumular fica sem texto.
-    hubCoin.texture = frameOf(atlas.coin, 0, 0, phase)
-    hubCoin.position.set(Math.round(cx + 38), 23)
-    hubCoin.visible = true
-
-    // O PAINEL do vilão.
-    const W = 214
-    const H = 148
+    hubCoin.visible = false
+    const W = 240
+    const H = 176
     const x0 = Math.round(cx - W / 2)
-    const y0 = 74
+    const y0 = Math.round(tuning.arena.height / 2 - H / 2)
     rewardPanels
+      .clear()
       .rect(x0, y0, W, H)
-      .fill({ color: col(INK), alpha: 0.9 })
+      .fill({ color: col(INK), alpha: 0.95 })
       .stroke({ width: 1, color: tint, alignment: 0 })
       .rect(x0, y0, W, 16)
-      .fill({ color: tint, alpha: 0.22 })
-    cardLines[2]!.set("QUEM VOCÊ VAI ENFRENTAR", DIM0, cx, y0 + 5, 1, true)
+      .fill({ color: tint, alpha: 0.24 })
+    /*
+     * Os dois prompts ficam FORA do painel, sobre a multidão, então levam chão
+     * próprio — mesma correção do hub, mesmo motivo. E o "R volta ao cérebro"
+     * deixou de ser `DIM0`: aquele vermelho escuro é legível sobre o preto do
+     * painel e some sobre neurônio pálido, que é justamente onde ele cai.
+     */
+    rewardPanels
+      .rect(x0, y0 + H + 4, W, 32)
+      .fill({ color: col(INK), alpha: 0.78 })
 
+    cardLines[0]!.set("ESCOLHA O INIMIGO", GLD2, cx, y0 + 5, 1, true)
     if (sheet !== undefined) {
       cardBicho.texture = frameOf(sheet, 0, Math.floor(phase * 0.18) & 7, phase)
-      cardBicho.position.set(cx, y0 + 62)
+      cardBicho.position.set(cx, y0 + 64)
       cardBicho.visible = true
     } else {
       cardBicho.visible = false
     }
-    cardPicks[0]!.set((kind?.real ?? spec.disease).toUpperCase(), WHITE, cx, y0 + 104, 2, true)
-    cardPicks[1]!.set(`${spec.waves} ONDAS`, GLD2, cx, y0 + 128, 1, true)
+    cardLines[1]!.set((kind?.real ?? spec.disease).toUpperCase(), WHITE, cx, y0 + 108, 2, true)
+    cardLines[2]!.set(`${(kind?.form ?? "").toUpperCase()} · ${spec.waves} ONDAS`, GLD2, cx, y0 + 132, 1, true)
     /*
-     * As setas só aparecem quando há PARA ONDE ir.
+     * Quantos existem, e onde você está — em pontos, não em setas.
      *
-     * Com uma doença na lista, desenhar "◄ ►" prometeria um catálogo que não
-     * existe — e promessa que a tela não cumpre é pior que tela pobre. Quando o
-     * segundo patógeno entrar, elas aparecem sozinhas.
+     * Com um patógeno jogável a fileira tem um ponto só, e isso é honesto: diz
+     * "há um" em vez de prometer um catálogo com "◄ ►". Quando o segundo entrar,
+     * a fileira cresce sozinha e as setas passam a fazer sentido.
      */
-    const varios = tuning.phases.length > 1
-    cardPicks[2]!.set(varios ? "◄        ►" : "", DIM0, cx, y0 + 62, 1, true)
-
-    // FAIXA DE BAIXO: o que fazer agora.
-    rewardPanels
-      .rect(0, y0 + H + 10, tuning.arena.width, 18)
-      .fill({ color: col(INK), alpha: 0.86 })
-    cardLines[3]!.set(prompt.comecar, SHI1, cx, y0 + H + 15, 1, true, true)
+    const n = tuning.phases.length
+    cardLines[3]!.set(
+      n > 1 ? `◄ ${"·".repeat(cur.villain)}●${"·".repeat(n - cur.villain - 1)} ►` : "",
+      DIM0,
+      cx,
+      y0 + 150,
+      1,
+      true,
+    )
+    cardPicks[0]!.set(prompt.lutar, SHI1, cx, y0 + H + 8, 1, true, true)
+    cardPicks[1]!.set(prompt.voltar, NUC2, cx, y0 + H + 22, 1, true, true)
+    cardPicks[2]!.hide()
     for (const l of cardBlurbs) l.hide()
     for (const l of cardCusto) l.hide()
     cardBlurb.hide()
@@ -1551,10 +1735,11 @@ export async function createRenderer(
 
   const drawOverlay = (cur: SimState, phase: number): void => {
     const isHub = cur.phase === "hub"
+    const isSelect = cur.phase === "select"
     const isCard = cur.phase === "card"
     const isIntervalo = cur.phase === "intervalo"
     const isClosed = cur.phase === "closed"
-    const telaDeCima = isHub || isCard || isIntervalo || isClosed
+    const telaDeCima = isHub || isSelect || isCard || isIntervalo || isClosed
     const on = cur.phase === "dead" || telaDeCima
     overlay.visible = on
     cardVeil.visible = telaDeCima
@@ -1567,13 +1752,14 @@ export async function createRenderer(
      * proteger, e o que ele serve para mostrar é justamente o tabuleiro atrás.
      * Escurecer aqui seria apagar a razão de os 3 segundos existirem.
      */
-    // O HUB não leva véu: o cérebro é a tela, não um fundo a esconder.
-    cardVeil.visible = telaDeCima && !isHub
+    // Nem o hub nem a seleção levam véu: o cérebro é a tela, não um fundo a
+    // esconder, e a seleção já tem painel opaco próprio.
+    cardVeil.visible = telaDeCima && !isHub && !isSelect
     cardVeil.texture = atlas.veil(INK, isClosed ? 2 : 1)
-    cardBicho.visible = isCard || isHub
+    cardBicho.visible = isCard || isSelect
     hubCoin.visible = isHub
     for (const l of cardLines) if (!telaDeCima) l.hide()
-    if (!isClosed && !isHub) {
+    if (!isClosed && !isHub && !isSelect) {
       for (const l of cardPicks) l.hide()
       for (const l of cardBlurbs) l.hide()
       for (const l of cardCusto) l.hide()
@@ -1584,7 +1770,11 @@ export async function createRenderer(
     deadVeil.visible = cur.phase === "dead"
     if (!on) return
     if (isHub) {
-      drawHub(cur, phase)
+      drawHub(cur)
+      return
+    }
+    if (isSelect) {
+      drawSelect(cur, phase)
       return
     }
     if (isCard) {
@@ -1820,7 +2010,15 @@ export async function createRenderer(
        * bordas do painel, que é a classe de defeito que este arquivo mais comete
        * (`TASTE.md` §2b: posição e ordem, o que o código não denuncia).
        */
-      const noHub = cur.phase === "hub"
+      /*
+       * A cena do cérebro cobre HUB e SELEÇÃO.
+       *
+       * A seleção é um painel POR CIMA do cérebro, não outro lugar — parar de
+       * desenhar o fundo ali faria a tela piscar do cérebro para o preto no
+       * instante em que o jogador entra na órbita, e o gesto de entrar perderia
+       * a continuidade que é a razão de ele existir.
+       */
+      const noHub = cur.phase === "hub" || cur.phase === "select"
       brain.visible = noHub
       world.visible = !noHub
       if (noHub) {

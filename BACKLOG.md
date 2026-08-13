@@ -524,3 +524,40 @@ hub — que só uma leitura humana resolve.
 **O `app.ticker` está parado e quem desenha é a chamada no fim do `draw`.** Qualquer atalho
 que saia antes dela monta a cena e não a mostra. Custou seis diagnósticos e a resposta veio
 de um retângulo magenta — quando nem ele apareceu, sobrou uma explicação só.
+
+---
+
+## O cérebro navegável, 13/08 — o que ficou aberto
+
+### A leitura humana continua sendo a que falta, e agora com uma tela a mais
+
+O hub virou um lugar que se percorre, e o bot atravessa aceitando o vilão selecionado. Nada
+no rig sabe dizer se ANDAR até a órbita é um gesto bom ou uma caminhada chata — é a quarta
+coisa da mesma família (aura, COMPLEMENTO, hub, e agora a navegação dele) que só uma leitura
+humana resolve.
+
+### As três fixtures humanas perderam a cobertura de morte, e isso não se recupera
+
+`run-01` e `run-03` não saem mais do cérebro; `run-02` entra na run e o log acaba antes da
+morte. Input humano não se regrava. **Toda a cobertura de morte do core atual está hoje numa
+fixture só, a `core-atual.json`** — se ela parar de morrer, a suíte deixa de cobrir o fim da
+run e ninguém é avisado por outro caminho. Regravar quando isso acontecer deixou de ser zelo.
+
+O que fecharia o buraco de verdade é um replay do HUMANO no core novo, que nenhum script
+grava: é o F9 na mão dele.
+
+### O que aprendi hoje, e vale mais que a tela
+
+**Regra que muda um gesto do jogador invalida todo instrumento que imita esse gesto.** Ao
+trocar "aperte espaço" por "ande até a órbita", seis lugares do rig precisavam mudar junto,
+dois não mudaram, e os dois ficaram VERDES medindo nada — a fixture de determinismo gastando
+900 ticks num menu e o teste da necrose comparando dois hubs idênticos.
+
+Nenhum dos cinco baselines denunciou. Quem denunciou foi um teste lateral: `muda o
+comportamento sem editar código` parou de mudar hash ao quadruplicar o dash, porque no
+cérebro não existe dash. **Teste que prova que o instrumento AINDA MEDE vale mais que teste
+que compara números** — o baseline continuava batendo consigo mesmo, sobre nada.
+
+A resposta estrutural foi tirar a regra das seis cópias e pôr numa só (`atravessa.ts`).
+Sobraram duas cópias declaradas, `rec.ts` e `shot.ts`, que pilotam o browser por tecla e não
+têm a sim na mão — dívida nomeada, não esquecida.

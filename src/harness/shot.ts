@@ -1,7 +1,25 @@
 import { mkdirSync } from "node:fs"
 import { resolve } from "node:path"
-import { drive } from "./drive.ts"
+import { drive, type Driver } from "./drive.ts"
 import { projectRoot } from "./loadTuning.ts"
+
+/**
+ * Atravessa a tela em que o jogo está, seja ela qual for.
+ *
+ * Deixou de ser "aperte espaço" em 13/08: o cérebro virou navegável, e sair
+ * dele exige ANDAR até a órbita dos patógenos. O aparelho passa a pilotar o
+ * glóbulo, que é o mesmo que o jogador faz — qualquer atalho aqui faria o rig
+ * medir um caminho que ninguém percorre.
+ *
+ * A órbita fica no centro-baixo da arena e o jogador nasce logo abaixo dela,
+ * então segurar CIMA basta. Fica escrito porque a posição vem do `tuning.hub`,
+ * e mudar o centro da órbita mexe nisto.
+ */
+async function atravessaTela(d: Driver, fase: () => Promise<string>): Promise<void> {
+  const f = await fase()
+  if (f === "hub") await d.hold(["ArrowUp"], 220)
+  else await d.hold([" "], 150)
+}
 
 /**
  * Capturas do build atual — `npm run shot [seed]`.
@@ -37,9 +55,29 @@ try {
    * Achado em 13/08, olhando as capturas do respiro: o pano de fundo escuro que
    * eu tomei por "HUD apagado" era o VÉU do card, e o véu não deveria estar ali.
    */
+  /*
+   * O CÉREBRO e a ESCOLHA, capturados antes de sair deles.
+   *
+   * O jogo nasce no cérebro desde 13/08, e até esta linha o único olho do
+   * projeto atravessava a porta de entrada sem olhar para ela. Tudo o que só
+   * existe ali — a multidão de neurônios, o chão acinzentado, os sinais
+   * percorrendo as sinapses, a órbita dos patógenos — não tinha nenhuma forma
+   * de ser lido, e trabalho visual sem captura é trabalho sem verificação.
+   *
+   * A do cérebro espera meio segundo: os sinais percorrem as sinapses, e o
+   * primeiro quadro pega todos eles ainda no ponto de partida.
+   */
+  await d.page.waitForTimeout(500)
+  await d.shot(resolve(dir, "0-cerebro.png"))
+
   let tentativas = 0
-  while ((await fase()) !== "run" && tentativas < 20) {
-    await d.hold([" "], 150)
+  let viuSelecao = false
+  while ((await fase()) !== "run" && tentativas < 40) {
+    if (!viuSelecao && (await fase()) === "select") {
+      viuSelecao = true
+      await d.shot(resolve(dir, "0b-selecao.png"))
+    }
+    await atravessaTela(d, fase)
     tentativas++
   }
   if ((await fase()) !== "run") throw new Error("não saiu do card — as capturas mentiriam")
@@ -100,8 +138,9 @@ try {
       continue
     }
     if (f !== "run") {
-      // `card` e `closed` pedem tecla; sem isto o laço gira até o teto.
-      await d.hold([" "], 150)
+      // `card` e `closed` pedem tecla, o `hub` pede ANDAR. Sem isto o laço gira
+      // até o teto e a captura de morte mente dizendo que a run não morreu.
+      await atravessaTela(d, fase)
       f = await fase()
       continue
     }
