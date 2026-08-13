@@ -22,7 +22,7 @@ const BASELINE_HASH = "0314289c"
  * leitura de ritmo, e não como cobertura de morte.
  */
 const RUN_01 = resolve(projectRoot, "replays", "run-01.json")
-const RUN_01_HASH = "567cf12e"
+const RUN_01_HASH = "fefcb575"
 
 /**
  * Segunda run real: 5 min, 10 ondas, uma morte. Gravada antes da tecla de
@@ -30,7 +30,7 @@ const RUN_01_HASH = "567cf12e"
  * Vale como determinismo sobre input humano longo.
  */
 const RUN_02 = resolve(projectRoot, "replays", "run-02.json")
-const RUN_02_HASH = "5630397d"
+const RUN_02_HASH = "49303a28"
 
 /**
  * Terceira run real: 5,7 min de input humano, gravada quando os modificadores
@@ -40,7 +40,7 @@ const RUN_02_HASH = "5630397d"
  * sai mais do cérebro — ver o teste da cobertura, mais abaixo.
  */
 const RUN_03 = resolve(projectRoot, "replays", "run-03.json")
-const RUN_03_HASH = "4378914a"
+const RUN_03_HASH = "803c4dca"
 
 /**
  * Fixture do core contínuo, gravada por `npm run rec`. Sintética, não humana:
@@ -59,14 +59,14 @@ const RUN_03_HASH = "4378914a"
  * Desde 05/08 toda gravação passa por verificação BROWSER↔NODE: o `npm run rec`
  * colhe pares (tick, hash) do HUD durante a captura e exige que o replay em Node
  * reproduza os mesmos hashes nos mesmos ticks. Sem isso, um baseline nascido no
- * browser seria verdade só do Node. A gravação vigente bateu em 8 testemunhas.
+ * browser seria verdade só do Node. A gravação vigente bateu em 12 testemunhas.
  *
  * Desde 13/08 esta é também a ÚNICA fixture que cobre morte no core atual: as
  * três humanas não saem mais do cérebro. Regravar quando ela parar de morrer
  * deixou de ser zelo e virou a única forma de a suíte cobrir o fim da run.
  */
 const CORE_ATUAL = resolve(projectRoot, "replays", "core-atual.json")
-const CORE_ATUAL_HASH = "3eb27699"
+const CORE_ATUAL_HASH = "0a7a6762"
 
 const smoke = () => loadReplay(SMOKE)
 const tuning = () => loadTuning()
@@ -214,6 +214,35 @@ const tuning = () => loadTuning()
  * perdem a cobertura de morte e continuam valendo pelo que sempre valeram,
  * determinismo sobre input humano longo. O teste logo abaixo passa a AFIRMAR
  * isso em vez de afirmar a cobertura que sumiu.
+ */
+
+/*
+ * DÉCIMA SEGUNDA VEZ, ainda em 13/08: a ÓRBITA mudou de lugar.
+ *
+ * `hub.orbitX/orbitY` 320,196 → 486,128, do centro para o canto superior
+ * direito. Pedido do H, e o motivo é o que vem depois: o centro fica reservado
+ * para o upgrade do glóbulo. Mexer no `tuning.json` muda o `tuningHash`, e a
+ * âncora deixa de estar ancorada — que foi exatamente o teste que caiu.
+ *
+ * E aqui aconteceu uma coisa que vale mais que o rebase: DOIS dos cinco
+ * baselines NÃO se mexeram, e eu fui conferir antes de aceitar. Hash igual
+ * depois de mexer no tuning é do tipo de coisa que costuma significar que o
+ * estado parou de entrar no hash.
+ *
+ * Não era. Medido, comparando o mesmo replay sob o tuning velho e o novo: os
+ * hashes DENTRO do cérebro diferem (t5 e t40 diferentes), então a posição do
+ * jogador está no hash. O que coincide é o resto — `poeNoCerebro` põe o jogador
+ * a `orbitY + orbitRadius + 2×size` da órbita, então mover a órbita TRANSLADA
+ * jogador e alvo pelo mesmo vetor. Sem bater em parede, o percurso do hub é
+ * invariante à translação: mesma distância, mesmo número de ticks (87 nos dois),
+ * e a run começa do zero pela seed. `smoke` e `core-atual` andam em linha reta e
+ * herdam a invariância; as três humanas vagam e batem nas bordas, que é o que a
+ * quebra para elas.
+ *
+ * A âncora foi regravada assim mesmo, e não por burocracia: o `tuningHash` dela
+ * precisa voltar a bater, senão ela deixa de ser o que o nome diz. A gravação
+ * nova bateu em 12 testemunhas browser↔node e mudou de hash — o passeio do
+ * gravador é outro, com a porta em outro canto.
  */
 
 /**
@@ -408,7 +437,7 @@ describe("determinismo", () => {
  */
 const PROCEDENCIA: ReadonlyArray<readonly [string, string, string]> = [
   ["smoke.json", "d838d78", "sintética, regenerável byte a byte por `npm run smoke`"],
-  ["core-atual.json", "d838d78", "sintética, VIVA — regravar com `npm run rec`"],
+  ["core-atual.json", "43c2626", "sintética, VIVA — regravar com `npm run rec`"],
   ["run-01.json", "7c952a6", "humana, core do dash; hoje só âncora de determinismo"],
   ["run-02.json", "7c952a6", "humana, core do dash; hoje só âncora de determinismo"],
   ["run-03.json", "7c952a6", "humana, core do dash; hoje só âncora de determinismo"],

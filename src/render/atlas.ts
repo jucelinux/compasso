@@ -289,8 +289,12 @@ export function buildAtlas(tuning: Tuning, crowdArea?: number): Atlas {
    * entao dois vizinhos somam no maximo 23px de corpo: eles se aproximam sem se
    * tocar, e os dendritos passam a se entrelacar — que e o que faz a tela ler
    * como TECIDO nervoso em vez de constelacao.
+   *
+   * QUARTO ajuste, ainda em 13/08: mais 10%, numero dito pelo H. 864 da ~245
+   * corpos. E os corpos agora se EMPURRAM, entao densidade parou de significar
+   * sobreposicao — quem fica sem espaco cede espaco.
    */
-  const NEURON_AREA = 950
+  const NEURON_AREA = 864
   const brainCrowd = crowdLayout(tuning.arena.width, tuning.arena.height, 909, NEURON_AREA)
   const neurons = Array.from({ length: CROWD_VARIANTS }, (_, v) => {
     const sh = neuronShape(v)

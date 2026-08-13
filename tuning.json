@@ -230,8 +230,8 @@
     "instantEverySeconds": 18.0
   },
   "hub": {
-    "orbitX": 320,
-    "orbitY": 196,
+    "orbitX": 486,
+    "orbitY": 128,
     "orbitRadius": 62,
     "enterRadius": 26,
     "orbitSpeed": 0.11

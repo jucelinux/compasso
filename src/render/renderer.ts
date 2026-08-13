@@ -435,6 +435,42 @@ export async function createRenderer(
     return dx * dx + dy * dy > CLAREIRA * CLAREIRA
   })
 
+  /*
+   * DERIVA e EMPURRÃO dos neurônios — pedido do H, "do mesmo jeito das hemácias".
+   *
+   * Duas coisas diferentes que somam no mesmo offset:
+   *
+   * - DERIVA é o vaguear lento de cada corpo, com período e fase próprios. Não é
+   *   corrente: a decisão de 13/08 de que o cérebro não escorre continua de pé,
+   *   e é o que separa safezone de arena. Cada um vaga em torno da própria casa
+   *   e nenhum vai a lugar nenhum — em conjunto lê como tecido vivo, que é o que
+   *   faltava para a multidão parecer viva em vez de um mosaico com respiro.
+   *
+   * - EMPURRÃO é a hemácia de 02/08 inteira: quem está sob o glóbulo sai pela
+   *   normal até encostar, cede rápido e volta devagar. A assimetria é o efeito
+   *   — sem ela o corpo acompanha o jogador como se estivesse colado.
+   *
+   * Aqui o laço é direto sobre os ~245 corpos, sem a grade de buckets da arena.
+   * Lá ela existe porque a corrente enrola a coordenada e há dezenas de corpos
+   * empurrando por quadro; aqui só o glóbulo empurra, e 245 distâncias por
+   * quadro custam menos que manter a grade.
+   */
+  const nOffX = new Float32Array(neuronios.length)
+  const nOffY = new Float32Array(neuronios.length)
+  /** Fase e período da deriva, sorteados por corpo. Nunca dois no mesmo passo. */
+  const nDrift = neuronios.map((c, i) => ({
+    fx: 0.10 + hashNoise(i, 909, 53) * 0.14,
+    fy: 0.09 + hashNoise(i, 909, 59) * 0.15,
+    px: hashNoise(i, 909, 61) * TAU,
+    py: hashNoise(i, 909, 67) * TAU,
+    // Amplitude proporcional ao corpo: neurônio grande vaga mais que pequeno,
+    // como massa maior num meio viscoso. Uniforme, todos pareceriam boiar juntos.
+    amp: 1.6 + c.r * 0.12,
+    /** Casa VIVA do corpo neste quadro: base + deriva + empurrão. */
+    vx: c.hx,
+    vy: c.hy,
+  }))
+
   const neuronSprites: Sprite[] = []
   for (const c of neuronios) {
     const folha = atlas.neurons[c.variant % atlas.neurons.length]!
@@ -487,22 +523,35 @@ export async function createRenderer(
    * quando a regra de atravessar tela existia em seis, mudá-la deixou duas para
    * trás e as duas viraram teste verde medindo nada.
    */
+  /*
+   * As pontas são OFFSETS em relação ao centro do corpo, não posições absolutas.
+   *
+   * Elas eram absolutas até os neurônios ganharem deriva e empurrão, no mesmo
+   * 13/08. Corpo que se mexe com a sinapse cravada em coordenada de tela
+   * desgruda do próprio braço — o fio fica no ar e o pulso viaja de lugar
+   * nenhum a lugar nenhum. Guardar o offset é o que faz a ligação ser uma
+   * propriedade do CORPO em vez de um desenho no chão.
+   */
   const pontas = neuronios.map((c) => {
     const v = c.variant % CROWD_VARIANTS
     const sh = neuronShape(v)
+    void c
     return Array.from({ length: sh.dendritos }, (_, k) => {
       const d = neuronDendrito(sh.r, sh.dendritos, sh.tilt, v, k)
-      return { x: c.hx + Math.cos(d.a) * d.reach, y: c.hy + Math.sin(d.a) * d.reach }
+      return { dx: Math.cos(d.a) * d.reach, dy: Math.sin(d.a) * d.reach }
     })
   })
 
   /** A ponta do neurônio `i` mais próxima de um ponto — por onde o fio sai. */
-  const pontaPara = (i: number, tx: number, ty: number): { x: number; y: number } => {
+  const pontaPara = (i: number, tx: number, ty: number): { dx: number; dy: number } => {
+    const c = neuronios[i]!
     const lista = pontas[i]!
     let melhor = lista[0]!
     let melhorD = Infinity
     for (const p of lista) {
-      const d = (p.x - tx) * (p.x - tx) + (p.y - ty) * (p.y - ty)
+      const ex = c.hx + p.dx - tx
+      const ey = c.hy + p.dy - ty
+      const d = ex * ex + ey * ey
       if (d < melhorD) {
         melhorD = d
         melhor = p
@@ -511,7 +560,15 @@ export async function createRenderer(
     return melhor
   }
 
-  const sinapses: Array<{ ax: number; ay: number; bx: number; by: number; fase: number }> = []
+  const sinapses: Array<{
+    i: number
+    j: number
+    adx: number
+    ady: number
+    bdx: number
+    bdy: number
+    fase: number
+  }> = []
   for (let i = 0; i < neuronios.length; i++) {
     const a1 = neuronios[i]!
     /*
@@ -537,16 +594,26 @@ export async function createRenderer(
       const pa = pontaPara(i, b1.hx, b1.hy)
       const pb = pontaPara(j, a1.hx, a1.hy)
       sinapses.push({
-        ax: Math.round(pa.x),
-        ay: Math.round(pa.y),
-        bx: Math.round(pb.x),
-        by: Math.round(pb.y),
+        i,
+        j,
+        adx: pa.dx,
+        ady: pa.dy,
+        bdx: pb.dx,
+        bdy: pb.dy,
         // Fase própria por ligação: sem ela o cérebro inteiro pisca junto, que
         // lê como pisca-pisca de natal em vez de atividade.
         fase: hashNoise(i * 31 + j, 909, 41),
       })
     }
   }
+
+  /**
+   * Rascunho das quatro coordenadas vivas de cada sinapse no quadro.
+   *
+   * Fora do laço para não alocar 60 vezes por segundo — a mesma razão pela qual
+   * os acumuladores do empurrão da arena vivem fora do `drawCrowd`.
+   */
+  const vaos = new Float32Array(sinapses.length * 4)
 
   /*
    * O tecido: um sprite por tile, posicionado uma vez e com a textura trocada
@@ -904,13 +971,58 @@ export async function createRenderer(
       d.sprite.position.set(Math.round(base) + d.slot * span, 0)
     }
 
-    // Respiração: cada neurônio na fase dele. Mesma ideia da hemácia, e é o que
-    // separa multidão viva de mosaico parado.
+    /*
+     * Respiração, DERIVA e EMPURRÃO num laço só.
+     *
+     * O empurrão é o da arena com uma diferença que vale dizer: lá o alvo é
+     * recalculado do zero por quadro contra vários corpos, aqui só o glóbulo
+     * empurra, então o alvo é a normal dele e mais nada. Cede a 0,5 por quadro e
+     * volta a 0,09 — os mesmos números da multidão de 02/08, porque é o mesmo
+     * gesto e ter dois valores para a mesma sensação seria inventar diferença.
+     */
+    const pRaio = tuning.player.size / 2
     for (let i = 0; i < neuronSprites.length; i++) {
       const c = neuronios[i]!
+      const dr = nDrift[i]!
+      const dvx = Math.sin(selfClock * dr.fx * TAU + dr.px) * dr.amp
+      const dvy = Math.cos(selfClock * dr.fy * TAU + dr.py) * dr.amp
+
+      // Empurrão: distância medida da casa JÁ DERIVADA, senão o corpo é empurrado
+      // de onde ele não está e escapa por um lado enquanto o desenho sai por outro.
+      const bx = c.hx + dvx
+      const by = c.hy + dvy
+      let alvoX = 0
+      let alvoY = 0
+      const ex = bx + nOffX[i]! - cur.player.x
+      const ey = by + nOffY[i]! - cur.player.y
+      const min = pRaio + c.r
+      const d2 = ex * ex + ey * ey
+      const empurrada = d2 < min * min
+      if (empurrada) {
+        const d = Math.sqrt(d2)
+        // Corpo exatamente sobre o centro: empurra para um lado ESTÁVEL, não um
+        // sorteado, senão ele vibra. Mesma nota da multidão da arena.
+        const nx = d > 0.001 ? ex / d : 1
+        const ny = d > 0.001 ? ey / d : 0
+        alvoX = nx * (min - d)
+        alvoY = ny * (min - d)
+      }
+      const taxa = empurrada ? 0.5 : 0.09
+      const ox = nOffX[i]! + (alvoX - nOffX[i]!) * taxa
+      const oy = nOffY[i]! + (alvoY - nOffY[i]!) * taxa
+      nOffX[i] = Math.abs(ox) < 0.02 ? 0 : ox
+      nOffY[i] = Math.abs(oy) < 0.02 ? 0 : oy
+
+      // A casa VIVA do corpo, que a sinapse também vai usar. Guardada na deriva
+      // para não recalcular seno por ligação logo abaixo.
+      dr.vx = bx + nOffX[i]!
+      dr.vy = by + nOffY[i]!
+
       const folha = atlas.neurons[c.variant % atlas.neurons.length]!
       const fase = Math.floor(selfClock * 3 + c.variant * 0.7 + i * 0.11) % folha.frames.length
-      neuronSprites[i]!.texture = folha.frames[fase]!
+      const sp = neuronSprites[i]!
+      sp.texture = folha.frames[fase]!
+      sp.position.set(Math.round(dr.vx), Math.round(dr.vy))
     }
 
     /*
@@ -921,11 +1033,30 @@ export async function createRenderer(
      * outro lê como informação indo de um lugar para outro, que é o que uma
      * sinapse faz e o que o H pediu ao dizer "produzindo sinapses".
      */
+    /*
+     * As pontas são recalculadas por quadro desde que os corpos derivam.
+     *
+     * `adx/ady` é offset em relação ao centro, e `dr.vx/vy` é a casa viva que o
+     * laço acima acabou de escrever — a soma é onde o braço está AGORA. Guardado
+     * em `vaos` porque o pulso, mais abaixo, precisa exatamente das mesmas quatro
+     * coordenadas, e recalcular seria a segunda chance de elas discordarem.
+     */
     brainFxLayer.clear()
-    for (const li of sinapses) {
+    for (let n = 0; n < sinapses.length; n++) {
+      const li = sinapses[n]!
+      const a = nDrift[li.i]!
+      const b = nDrift[li.j]!
+      const ax = Math.round(a.vx + li.adx)
+      const ay = Math.round(a.vy + li.ady)
+      const bx = Math.round(b.vx + li.bdx)
+      const by = Math.round(b.vy + li.bdy)
+      vaos[n * 4] = ax
+      vaos[n * 4 + 1] = ay
+      vaos[n * 4 + 2] = bx
+      vaos[n * 4 + 3] = by
       brainFxLayer
-        .moveTo(li.ax, li.ay)
-        .lineTo(li.bx, li.by)
+        .moveTo(ax, ay)
+        .lineTo(bx, by)
         // Mesma rampa do dendrito que ela liga, um degrau abaixo: o vão entre
         // duas pontas tem que ler como continuação do braço, não como cabo.
         .stroke({ width: 1, color: col(NEU2), alpha: 0.5 })
@@ -1065,14 +1196,19 @@ export async function createRenderer(
       // Velocidade própria por ligação, entre 0,35 e 0,75 de volta por segundo.
       const vel = 0.35 + (i % 9) * 0.05
       const u = (selfClock * vel + li.fase) % 1
-      const dx = li.bx - li.ax
-      const dy = li.by - li.ay
+      // As MESMAS coordenadas que a linha usou neste quadro, não recalculadas:
+      // os corpos derivam, e duas contas do mesmo vão são duas oportunidades de
+      // o pulso correr por fora do fio.
+      const ax = vaos[i * 4]!
+      const ay = vaos[i * 4 + 1]!
+      const dx = vaos[i * 4 + 2]! - ax
+      const dy = vaos[i * 4 + 3]! - ay
       const len = Math.sqrt(dx * dx + dy * dy)
       if (len < 4) continue
       const ux = dx / len
       const uy = dy / len
-      const hx2 = li.ax + dx * u
-      const hy2 = li.ay + dy * u
+      const hx2 = ax + dx * u
+      const hy2 = ay + dy * u
       /*
        * O rabo é uma FRAÇÃO do vão, e isso foi medido antes de ser escolhido.
        *
@@ -1779,9 +1915,19 @@ export async function createRenderer(
      * confiar na sombra: fica sobre a multidão de neurônios, que é justamente o
      * fundo contra o qual a sombra já falhou uma vez hoje.
      */
+    /*
+     * O rótulo acompanha a ÓRBITA, e não o centro da arena.
+     *
+     * Ele nasceu centrado em `cx` porque a órbita estava no meio da tela e os
+     * dois valores coincidiam — coincidência não é ligação, e em 13/08 a órbita
+     * mudou para o canto superior direito (o H reservou o centro para o upgrade
+     * do glóbulo) e o rótulo ficou para trás, anunciando uma porta a 166px dele.
+     * Agora sai do `tuning.hub`, como tudo o mais desta tela.
+     */
+    const ox = tuning.hub.orbitX
     const oy = tuning.hub.orbitY - tuning.hub.orbitRadius - 26
-    rewardPanels.rect(cx - 92, oy - 2, 184, 14).fill({ color: col(INK), alpha: 0.78 })
-    cardLines[2]!.set("COMBATER PATÓGENOS", GLD2, cx, oy + 1, 1, true, true)
+    rewardPanels.rect(ox - 92, oy - 2, 184, 14).fill({ color: col(INK), alpha: 0.78 })
+    cardLines[2]!.set("COMBATER PATÓGENOS", GLD2, ox, oy + 1, 1, true, true)
     /*
      * O prompt de baixo leva chão pela MESMA razão do rótulo — e ele não tinha.
      *
