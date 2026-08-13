@@ -1095,10 +1095,22 @@ export async function createRenderer(
     // um 0 pendurado, e nunca um 3 que dura um quadro.
     const segundos = Math.max(1, Math.ceil(cur.countdown / tuning.sim.hz))
 
+    /*
+     * O bloco todo sobe, para o dígito não cair EM CIMA do jogador.
+     *
+     * Ele estava em `cy - 34` e o corpo da célula mora em `cy`, com 20px de
+     * lado: a 4x o dígito descia até `cy - 6` e os dois se sobrepunham em seis
+     * linhas. Na captura isso aparece como um borrão quadriculado sob o número
+     * — legível, mas sujo, e sujo por acidente. Em `cy - 52` o dígito acaba em
+     * `cy - 24` e sobra folga de 14px até a cabeça dela.
+     *
+     * Subir em vez de escurecer o véu é o que preserva a razão da tela: ela
+     * existe para o tabuleiro ser visto, e o jogador é parte do tabuleiro.
+     */
     rewardPanels.clear()
-    cardLines[0]!.set(`ONDA ${cur.round - 1} CONTIDA`, GLD2, cx, cy - 62, 1, true)
-    cardLines[1]!.set(String(segundos), WHITE, cx, cy - 34, 4, true)
-    cardLines[2]!.set(`ONDA ${cur.round} DE ${total}`, WHITE, cx, cy + 26, 2, true)
+    cardLines[0]!.set(`ONDA ${cur.round - 1} CONTIDA`, GLD2, cx, cy - 78, 1, true)
+    cardLines[1]!.set(String(segundos), WHITE, cx, cy - 52, 4, true)
+    cardLines[2]!.set(`ONDA ${cur.round} DE ${total}`, WHITE, cx, cy + 30, 2, true)
     cardLines[3]!.hide()
   }
 
@@ -1256,17 +1268,25 @@ export async function createRenderer(
       prevCombo = cur.combo
 
       if (cur.wave > prevWave) {
+        /*
+         * A comemoração ficou; o TEXTO dela saiu, e a captura é que denunciou.
+         *
+         * Ele dizia `FASE ${prevWave} CONTIDA` em escala 2 no meio da tela, e
+         * até 13/08 isso era seguro: a onda só virava quando você CONFIRMAVA a
+         * recompensa, então o aviso flutuava por cima do jogo já recomeçado.
+         * Com o respiro, a onda vira no instante da contenção — o aviso passou
+         * a nascer exatamente sobre a tela do intervalo, e a captura mostrou
+         * três textos empilhados no mesmo lugar dizendo a mesma coisa.
+         *
+         * Defeito de POSIÇÃO E ORDEM, que é a minha classe (`TASTE.md` §2b):
+         * passou por revisão de código e por 124 testes verdes, e só apareceu
+         * quando alguém olhou. Consertar movendo seria remendo — quem anuncia a
+         * contenção agora é a tela do respiro, que está sempre no mesmo lugar e
+         * usa o vocabulário certo. Dois anúncios do mesmo fato é um a mais.
+         */
         for (let i = 0; i < 3; i++) {
           burst(tuning.arena.width * (0.25 + i * 0.25), tuning.arena.height / 2, SHI1, 14, 3)
         }
-        pops.push({
-          x: tuning.arena.width / 2,
-          y: tuning.arena.height / 2 - 50,
-          life: 1,
-          text: `FASE ${prevWave} CONTIDA`,
-          scale: 2,
-          idx: SHI1,
-        })
       }
       prevWave = cur.wave
 

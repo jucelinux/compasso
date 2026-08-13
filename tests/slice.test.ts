@@ -604,6 +604,37 @@ describe("poderes automáticos, temporários e aleatórios", () => {
     expect(sim.state().phase, "no fim dos 3 segundos ela solta").toBe("run")
   })
 
+  it("o dígito da contagem faz 3, 2, 1 — e nunca mostra 0", () => {
+    /*
+     * O que o jogador LÊ, e não o que o contador guarda.
+     *
+     * A tela imprime `Math.ceil(countdown / hz)`, e este teste existe porque a
+     * captura não conseguiu conferir isso: cada `shot()` custa mais de um
+     * segundo, então dois quadros seguidos caem em respiros DIFERENTES e os
+     * dois mostram "3". A composição da tela foi conferida olhando; a contagem
+     * é aritmética, e aritmética se confere aqui.
+     *
+     * Os dois erros que ele trava são de fronteira: um "3" que dura um quadro
+     * (se arredondasse para baixo) e um "0" pendurado no fim (se o piso fosse
+     * 0 em vez de 1). Os dois passariam por revisão de código.
+     */
+    const sim = start(80)
+    const s = mut(sim)
+    s.field.fill(0)
+    s.infection = 0
+    s.enemies = []
+    sim.step(NONE)
+    expect(sim.state().phase).toBe("intervalo")
+
+    const lidos: number[] = []
+    while (sim.state().phase === "intervalo") {
+      const d = Math.max(1, Math.ceil(sim.state().countdown / tuning.sim.hz))
+      if (lidos[lidos.length - 1] !== d) lidos.push(d)
+      sim.step(NONE)
+    }
+    expect(lidos, "três dígitos, em ordem, sem zero").toEqual([3, 2, 1])
+  })
+
   it("o respiro é REAL: parado ou a toda, a contagem dura o mesmo", () => {
     /*
      * O único relógio do jogo que a velocidade não toca. Se dependesse de

@@ -311,3 +311,29 @@ decisão dentro — o que é ganho ou perda dependendo do que ele quer que o res
 - **Fase 2 do harness.** Gatilho em `HARNESS.md` §7: mesmo eixo subjetivo julgado mais de
   duas vezes por semana. `npm run shot` e `npm run rec` já cobrem parte do rig de captura.
 - **Empacotamento.** Tauri e Capacitor só depois do slice aprovado — `CLAUDE.md` §5.
+
+## Conferido OLHANDO, 13/08 — e o que a captura pegou
+
+A tela do respiro é código novo, e o `TASTE.md` §2b diz que os meus defeitos visuais são de
+POSIÇÃO E ORDEM — a classe que passa por revisão de código e por teste verde. Passou mesmo:
+124 verdes e dois defeitos na primeira captura.
+
+1. **Três textos empilhados no mesmo ponto.** O aviso flutuante `FASE N CONTIDA` disparava
+   ao virar a onda. Até 12/08 a onda virava quando você CONFIRMAVA a recompensa, então ele
+   flutuava por cima do jogo já recomeçado; com o respiro, a onda vira no instante da
+   contenção e o aviso passou a nascer em cima da tela do intervalo. O texto saiu — quem
+   anuncia agora é a tela, que está sempre no mesmo lugar. Os estouros de partícula ficaram.
+2. **O dígito da contagem caía em cima do jogador.** Escala 4 a partir de `cy - 34` descia
+   até `cy - 6`, e o corpo mora em `cy` com 20px. O bloco subiu 18px.
+
+**Como a tela foi alcançada, e o que isso custou de honestidade:** nenhum passeio roteirado
+contém onda mais — nem o do `shot`, nem o do `rec`, em três seeds. Foi preciso um
+`tuning.json` de sonda (sem spawn, sem fissão, `winFraction` 0.9), aplicado e revertido. Que
+o jogo esteja duro demais para os próprios roteiros do rig é dado, não detalhe: é a mesma
+coisa que o bot diz, por outro instrumento.
+
+**O que NÃO foi conferido olhando:** a contagem indo de 3 a 1 na tela. Cada `shot()` custa
+mais de um segundo, então dois quadros seguidos caem em respiros diferentes e os dois
+mostram "3" — eu quase li isso como "a contagem não anda". Está coberto por teste
+(`o dígito da contagem faz 3, 2, 1`), que é o que aritmética merece; a composição é que
+exigia olho.
