@@ -3,6 +3,7 @@ import { activeStats, COMPLEMENTO, PLAQUETA, POWERS } from "../sim/powers.ts"
 import type { SimState, Tuning } from "../sim/types.ts"
 import { buildAtlas, frameOf, type Atlas } from "./atlas.ts"
 import { BASE_Y, BODY_H, GLYPH_W, textWidth } from "./font.ts"
+import { CROWD_VARIANTS, neuronDendrito, neuronShape } from "./backdrop.ts"
 import { hashNoise } from "./pixelbuf.ts"
 import {
   COMBO_TIERS,
@@ -469,6 +470,47 @@ export async function createRenderer(
   const SINAPSE_R = 84
   /** Até quantos vizinhos cada neurônio liga. Um só desenha pares, não rede. */
   const SINAPSE_MAX = 2
+
+  /*
+   * As PONTAS DOS DENDRITOS, e é delas que a ligação sai — pedido do H.
+   *
+   * Até aqui a sinapse ia de núcleo a núcleo, o que desenhava a linha POR CIMA
+   * do soma dos dois lados: o sinal nascia dentro do corpo, atravessava a
+   * membrana e sumia dentro do outro. Neurônio não faz isso. Ele faz o
+   * contrário — o dendrito existe justamente para ser onde o contato acontece,
+   * e desenhar por dentro do soma apagava a única peça que dava nome à coisa.
+   *
+   * A geometria vem de `neuronDendrito`, a MESMA função que o `neuronSheet` usa
+   * para desenhar o braço. Sprite assado não devolve coordenada, então esta
+   * posição teria que ser recalculada aqui — e recalcular seria recopiar duas
+   * linhas de trigonometria que ninguém manteria em par. Uma cópia é uma a mais:
+   * quando a regra de atravessar tela existia em seis, mudá-la deixou duas para
+   * trás e as duas viraram teste verde medindo nada.
+   */
+  const pontas = neuronios.map((c) => {
+    const v = c.variant % CROWD_VARIANTS
+    const sh = neuronShape(v)
+    return Array.from({ length: sh.dendritos }, (_, k) => {
+      const d = neuronDendrito(sh.r, sh.dendritos, sh.tilt, v, k)
+      return { x: c.hx + Math.cos(d.a) * d.reach, y: c.hy + Math.sin(d.a) * d.reach }
+    })
+  })
+
+  /** A ponta do neurônio `i` mais próxima de um ponto — por onde o fio sai. */
+  const pontaPara = (i: number, tx: number, ty: number): { x: number; y: number } => {
+    const lista = pontas[i]!
+    let melhor = lista[0]!
+    let melhorD = Infinity
+    for (const p of lista) {
+      const d = (p.x - tx) * (p.x - tx) + (p.y - ty) * (p.y - ty)
+      if (d < melhorD) {
+        melhorD = d
+        melhor = p
+      }
+    }
+    return melhor
+  }
+
   const sinapses: Array<{ ax: number; ay: number; bx: number; by: number; fase: number }> = []
   for (let i = 0; i < neuronios.length; i++) {
     const a1 = neuronios[i]!
@@ -488,11 +530,17 @@ export async function createRenderer(
     perto.sort((p, q) => p.d2 - q.d2)
     for (const { j } of perto.slice(0, SINAPSE_MAX)) {
       const b1 = neuronios[j]!
+      // A ponta que cada um oferece ao OUTRO CENTRO, não à outra ponta: mirar a
+      // ponta escolhida do vizinho dependeria da escolha dele, que depende da
+      // sua. O centro é o alvo estável, e o resultado é o mesmo par de braços
+      // que um humano ligaria olhando.
+      const pa = pontaPara(i, b1.hx, b1.hy)
+      const pb = pontaPara(j, a1.hx, a1.hy)
       sinapses.push({
-        ax: Math.round(a1.hx),
-        ay: Math.round(a1.hy),
-        bx: Math.round(b1.hx),
-        by: Math.round(b1.hy),
+        ax: Math.round(pa.x),
+        ay: Math.round(pa.y),
+        bx: Math.round(pb.x),
+        by: Math.round(pb.y),
         // Fase própria por ligação: sem ela o cérebro inteiro pisca junto, que
         // lê como pisca-pisca de natal em vez de atividade.
         fase: hashNoise(i * 31 + j, 909, 41),
@@ -950,6 +998,29 @@ export async function createRenderer(
     )
     brainPlayer.position.set(Math.round(cur.player.x), Math.round(cur.player.y))
     /*
+     * O HALO GIRANDO em volta do glóbulo — pedido do H, e o problema que ele
+     * resolve é de PALETA, não de destaque genérico.
+     *
+     * O leucócito e o neurônio compartilham a rampa: pálidos, frios, redondos.
+     * Na arena isso nunca importou, porque lá nada mais usa a rampa; no cérebro
+     * o jogador é um corpo pálido entre duzentos corpos pálidos. Ele mesmo
+     * apontou a saída — a mesma de 13/08 para os itens: quando a COR não pode
+     * separar, separa o COMPORTAMENTO. Nada mais nesta tela gira.
+     *
+     * Seis contas, uma por cor da roda dos sinais, na mesma rampa que o cérebro
+     * já usa. Não é tinta nova: é o cérebro reconhecendo quem chegou.
+     *
+     * Fica no `brainFxLayer`, que está ATRÁS do corpo — halo por cima taparia a
+     * silhueta que ele existe para destacar.
+     */
+    const raioHalo = tuning.player.size / 2 + 4
+    for (let k = 0; k < SINAL.length; k++) {
+      const a = selfClock * 2.2 + (k / SINAL.length) * TAU
+      const hxk = Math.round(cur.player.x + Math.cos(a) * raioHalo)
+      const hyk = Math.round(cur.player.y + Math.sin(a) * raioHalo)
+      brainFxLayer.rect(hxk - 1, hyk - 1, 2, 2).fill(col(SINAL[k]!))
+    }
+    /*
      * O SINAL, agora MULTICOLORIDO e em TODA sinapse — pedido do H em 13/08.
      *
      * Duas mudanças, e a segunda é a que custa: antes só metade do ciclo tinha
@@ -964,14 +1035,70 @@ export async function createRenderer(
      * lê como interferência; cor fixa por fio lê como sinais DIFERENTES viajando
      * em canais diferentes, que é o que o cérebro faz.
      */
+    /*
+     * E ele virou PULSO ELÉTRICO em vez de ponto — pedido do H na mesma leva.
+     *
+     * O ponto de 3x3 dizia "alguma coisa se desloca". Um pulso diz o que se
+     * desloca: um risco CURTO na direção do percurso, com a cabeça branca e um
+     * degrau de um pixel no meio. O degrau é o que faz o olho ler descarga em
+     * vez de partícula — corrente lida como corrente porque não anda reta.
+     *
+     * O degrau alterna num relógio próprio e RÁPIDO (12/s), fora do ritmo do
+     * deslocamento: no mesmo ritmo, o risco pareceria dobrar de forma fixa e
+     * viraria uma seta viajando.
+     */
     for (let i = 0; i < sinapses.length; i++) {
       const li = sinapses[i]!
       // Velocidade própria por ligação, entre 0,35 e 0,75 de volta por segundo.
       const vel = 0.35 + (i % 9) * 0.05
       const u = (selfClock * vel + li.fase) % 1
-      const x = Math.round(li.ax + (li.bx - li.ax) * u)
-      const y = Math.round(li.ay + (li.by - li.ay) * u)
-      brainFxLayer.rect(x - 1, y - 1, 3, 3).fill(col(SINAL[i % SINAL.length]!))
+      const dx = li.bx - li.ax
+      const dy = li.by - li.ay
+      const len = Math.sqrt(dx * dx + dy * dy)
+      if (len < 4) continue
+      const ux = dx / len
+      const uy = dy / len
+      const hx2 = li.ax + dx * u
+      const hy2 = li.ay + dy * u
+      /*
+       * O rabo é uma FRAÇÃO do vão, e isso foi medido antes de ser escolhido.
+       *
+       * Com 7px fixos e o vão mediano em 15,6px (`crowdLayout` a 950 de área, 412
+       * ligações), o pulso ocupava metade do percurso — e no décimo mais curto
+       * ele nascia maior que o próprio fio, o que lê como traço parado e não como
+       * descarga. 45% mantém a mesma silhueta em vão curto e em vão longo.
+       *
+       * O corte por `len * u` continua: é o que faz o pulso NASCER na ponta do
+       * dendrito em vez de já aparecer inteiro fora dela.
+       */
+      const rabo = Math.min(len * 0.45, len * u)
+      const tx = hx2 - ux * rabo
+      const ty = hy2 - uy * rabo
+      const zig = Math.floor(selfClock * 12 + i) % 2 === 0 ? 1 : -1
+      const mx = Math.round((hx2 + tx) / 2 - uy * zig)
+      const my = Math.round((hy2 + ty) / 2 + ux * zig)
+      const cor = col(SINAL[i % SINAL.length]!)
+      /*
+       * Duas passadas no MESMO traço: um brilho largo e fraco, e o núcleo fino e
+       * cheio. É o que devolve ao pulso a presença que ele perdeu ao deixar de
+       * ser um quadrado de 3x3 — o ponto antigo se via de longe por ser gordo, e
+       * um risco de um pixel sozinho é fino demais para competir com a multidão.
+       *
+       * Largura ÍMPAR nas duas, senão o traço largo cai meio pixel fora do fino e
+       * o pulso sai com franja de um lado só.
+       */
+      const traco = (w: number, a: number): void => {
+        brainFxLayer
+          .moveTo(Math.round(tx), Math.round(ty))
+          .lineTo(mx, my)
+          .lineTo(Math.round(hx2), Math.round(hy2))
+          .stroke({ width: w, color: cor, alpha: a })
+      }
+      traco(3, 0.22)
+      traco(1, 0.95)
+      // A cabeça é o único ponto branco: é ela que diz para onde a coisa vai.
+      brainFxLayer.rect(Math.round(hx2) - 1, Math.round(hy2) - 1, 2, 2).fill(cor)
+      brainFxLayer.rect(Math.round(hx2), Math.round(hy2), 1, 1).fill(col(WHITE))
     }
     void cur
   }

@@ -369,3 +369,34 @@ export function neuronShape(v: number): { r: number; dendritos: number; tilt: nu
     tilt: hashNoise(v, 909, 23) * Math.PI,
   }
 }
+
+/**
+ * Onde fica a PONTA do dendrito `k` — ângulo e alcance a partir do centro.
+ *
+ * Mora aqui, e não dentro de `neuronSheet`, porque desde 13/08 duas coisas
+ * precisam da mesma resposta: o SPRITE, que desenha o braço, e o RENDER, que
+ * ancora a sinapse na ponta dele a pedido do H. Sprite assado não devolve
+ * coordenada, então o render teria que recalcular — e "recalcular" aqui seria
+ * recopiar duas linhas de trigonometria que ninguém iria manter em par.
+ *
+ * A tela cheia de rodadas passadas já pagou por essa classe de defeito: quando
+ * a regra de atravessar tela existia em seis cópias, mudá-la deixou duas para
+ * trás e as duas viraram teste verde medindo nada. Uma cópia é uma a mais.
+ *
+ * A RESPIRAÇÃO (±0,06 rad) não entra: ela é do quadro, não da geometria. O
+ * sprite a soma ao ângulo; o render a ignora de propósito, porque no alcance
+ * típico ela vale ~1px e mexer nas pontas por quadro faria a rede inteira tremer
+ * para devolver a mesma imagem.
+ */
+export function neuronDendrito(
+  r: number,
+  dendritos: number,
+  tilt: number,
+  seed: number,
+  k: number,
+): { a: number; reach: number } {
+  return {
+    a: tilt + (k / dendritos) * Math.PI * 2,
+    reach: r * (1.5 + hashNoise(k, seed, 31) * 0.9),
+  }
+}

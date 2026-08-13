@@ -21,6 +21,7 @@ import {
   bloodCell,
   CELL_LEVELS,
   colonyTile,
+  neuronSheet,
   TISSUE_LEVELS,
   type Sheet,
 } from "../src/render/sprites.ts"
@@ -29,6 +30,8 @@ import {
   crowdLayout,
   crowdShape,
   layerBuf,
+  neuronDendrito,
+  neuronShape,
   plasmaBuf,
 } from "../src/render/backdrop.ts"
 
@@ -416,5 +419,69 @@ describe("fonte bitmap", () => {
       expect(b, ch).not.toBeNull()
       expect(b!.w).toBe(GLYPH_W)
     }
+  })
+})
+
+/*
+ * O DENDRITO é geometria compartilhada, e por isso tem teste próprio.
+ *
+ * Desde 13/08 duas coisas precisam saber onde fica a ponta do braço: o SPRITE,
+ * que a desenha, e o RENDER, que ancora a sinapse nela — o H pediu que o sinal
+ * saia do tentáculo e não do núcleo. Elas chamam a mesma função, `neuronDendrito`,
+ * então não podem divergir; o que estes testes travam é o CONTRATO dela, que é o
+ * que as duas assumem sem verificar.
+ */
+describe("dendrito: a geometria que o sprite e a sinapse dividem", () => {
+  const variantes = Array.from({ length: CROWD_VARIANTS }, (_, v) => v)
+
+  it("a ponta cai FORA do soma, em toda variante", () => {
+    // Se caísse dentro, a sinapse nasceria sob a membrana — que é exatamente o
+    // defeito que ancorá-la na ponta veio consertar.
+    for (const v of variantes) {
+      const sh = neuronShape(v)
+      for (let k = 0; k < sh.dendritos; k++) {
+        const d = neuronDendrito(sh.r, sh.dendritos, sh.tilt, v, k)
+        expect(d.reach, `variante ${v}, dendrito ${k}`).toBeGreaterThan(sh.r)
+      }
+    }
+  })
+
+  it("a ponta cabe DENTRO da folha assada, em toda variante", () => {
+    /*
+     * O alcance é `r * (1,5..2,4)` e a folha é `r * 4,2 + PAD`, ou seja `r * 2,1`
+     * de centro à borda. A folga existe, mas é de ~0,4 px em `r` grande com o
+     * ramo da ponta somado — mexer em qualquer um dos dois números sem mexer no
+     * outro corta o braço na borda, e braço cortado perde o contorno e cola no
+     * vizinho na tela.
+     */
+    for (const v of variantes) {
+      const sh = neuronShape(v)
+      const folha = neuronSheet(sh.r, sh.dendritos, sh.tilt, v)
+      const meio = folha.w / 2
+      for (let k = 0; k < sh.dendritos; k++) {
+        const d = neuronDendrito(sh.r, sh.dendritos, sh.tilt, v, k)
+        expect(d.reach, `variante ${v}, dendrito ${k} estoura a folha`).toBeLessThan(meio)
+      }
+    }
+  })
+
+  it("os braços se ESPALHAM: nenhum par de pontas no mesmo ângulo", () => {
+    // Sem isto, uma variante poderia sair com dois braços sobrepostos e a
+    // sinapse escolheria sempre o mesmo lado do corpo.
+    for (const v of variantes) {
+      const sh = neuronShape(v)
+      const angs = Array.from({ length: sh.dendritos }, (_, k) =>
+        neuronDendrito(sh.r, sh.dendritos, sh.tilt, v, k).a.toFixed(4),
+      )
+      expect(new Set(angs).size, `variante ${v}`).toBe(sh.dendritos)
+    }
+  })
+
+  it("o caso nulo: braço encolhido para dentro do soma REPROVA", () => {
+    // `TASTE-LOOP.md` §2 — instrumento novo passa pelo caso nulo. Sem isto, a
+    // primeira asserção poderia estar comparando com um piso que nada alcança.
+    const sh = neuronShape(0)
+    const d = neuronDendrito(sh.r * 0.1, sh.dendritos, sh.tilt, 0, 0)
+    expect(d.reach).toBeLessThan(sh.r)
   })
 })

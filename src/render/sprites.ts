@@ -52,6 +52,7 @@ import {
   ditherMask,
   type Buf,
 } from "./pixelbuf.ts"
+import { neuronDendrito } from "./backdrop.ts"
 
 /**
  * Assadores de sprite.
@@ -780,8 +781,12 @@ export function neuronSheet(r: number, dendritos: number, tilt: number, seed: nu
      * cruzar por cima dela. É defeito de ORDEM, que é a minha classe.
      */
     for (let k = 0; k < dendritos; k++) {
-      const a = tilt + (k / dendritos) * TAU + Math.sin(ph + k) * 0.06
-      const reach = r * (1.5 + hashNoise(k, seed, 31) * 0.9)
+      // Ângulo e alcance vêm de `neuronDendrito`, que o render também usa para
+      // ancorar a sinapse nesta mesma ponta. A respiração é somada AQUI: ela é
+      // do quadro, e a ponta que a sinapse procura é a de repouso.
+      const d = neuronDendrito(r, dendritos, tilt, seed, k)
+      const a = d.a + Math.sin(ph + k) * 0.06
+      const reach = d.reach
       const x2 = c + Math.cos(a) * reach
       const y2 = c + Math.sin(a) * reach
       line(b, c, c, x2, y2, NUC1, 1)

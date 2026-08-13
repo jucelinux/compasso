@@ -278,7 +278,19 @@ export function buildAtlas(tuning: Tuning, crowdArea?: number): Atlas {
    * tecido nervoso em vez de uma constelação. Abaixo disso os corpos voltam a se
    * tocar e as ligações somem por baixo deles.
    */
-  const NEURON_AREA = 1350
+  /*
+   * TERCEIRO ajuste, 13/08: o H pediu populacao maior de novo, tendo VISTO a de
+   * 1350. Dois numeros mudaram junto e o segundo e o que torna este possivel —
+   * a sinapse passou a sair da PONTA DO DENDRITO em vez do nucleo, entao ela
+   * nasce ja fora do soma e nao depende mais de haver vao entre os corpos para
+   * ser vista. Era exatamente a restricao que travava a densidade aqui.
+   *
+   * 950 da ~220 corpos com centros a ~31px. O raio do soma vai de 7 a 11,5,
+   * entao dois vizinhos somam no maximo 23px de corpo: eles se aproximam sem se
+   * tocar, e os dendritos passam a se entrelacar — que e o que faz a tela ler
+   * como TECIDO nervoso em vez de constelacao.
+   */
+  const NEURON_AREA = 950
   const brainCrowd = crowdLayout(tuning.arena.width, tuning.arena.height, 909, NEURON_AREA)
   const neurons = Array.from({ length: CROWD_VARIANTS }, (_, v) => {
     const sh = neuronShape(v)
