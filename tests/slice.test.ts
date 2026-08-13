@@ -14,6 +14,22 @@ import type { InputFrame, Sim, SimState } from "../src/sim/types.ts"
 
 const tuning = loadTuning()
 
+/**
+ * O tuning com a DILATAÇÃO LIGADA, para os testes que medem justamente ela.
+ *
+ * O H desligou o relógio lento em 13/08 e pediu que ele NÃO saísse do código.
+ * Toggle sem cobertura é código morto com aparência de vivo — em três semanas
+ * ninguém saberia se a fórmula ainda funciona, e ligá-la de volta viraria
+ * arqueologia em vez de trocar um booleano. Então tudo que descreve a
+ * dilatação passa a rodar contra este objeto, e continua verde com o jogo
+ * andando em tempo real.
+ *
+ * É o mesmo instrumento do caso nulo da curva, apontado para o outro lado: lá
+ * se mede o que a curva faz desligando-a, aqui se mede o que o relógio faz
+ * ligando-o.
+ */
+const LENTO = { ...tuning, time: { ...tuning.time, dilation: true } }
+
 const IN = (o: Partial<InputFrame> = {}): InputFrame => ({
   up: false,
   down: false,
@@ -62,8 +78,8 @@ const advance = (sim: Sim, ticks: number, input: InputFrame = NONE): void => {
  * isto, `advance` só faria a trava do card contar para baixo e a asserção
  * mediria uma fase que nunca começou.
  */
-const start = (seed: number): Sim => {
-  const sim = createSim(seed, tuning)
+const start = (seed: number, t: typeof tuning = tuning): Sim => {
+  const sim = createSim(seed, t)
   advance(sim, tuning.cardLockTicks + 1)
   sim.step(ACTION)
   // Solta a tecla: senão o próximo `action` do teste não tem borda de subida
@@ -190,7 +206,7 @@ const toFullSpeed = (sim: Sim): void => {
 
 describe("o relógio é a velocidade", () => {
   it("parada, o mundo escorre no mínimo; a toda, corre inteiro", () => {
-    const sim = start(1)
+    const sim = start(1, LENTO)
     advance(sim, 60)
     expect(sim.state().worldScale).toBeCloseTo(tuning.time.creep, 5)
 
@@ -199,7 +215,7 @@ describe("o relógio é a velocidade", () => {
   })
 
   it("a escala é contínua — nada de degrau", () => {
-    const sim = start(2)
+    const sim = start(2, LENTO)
     park(sim)
     const scales: number[] = []
     for (let i = 0; i < 30; i++) {
@@ -227,7 +243,7 @@ describe("o relógio é a velocidade", () => {
   })
 
   it("nunca chega a zero — pressão constante, decisão de 31/07", () => {
-    const sim = start(3)
+    const sim = start(3, LENTO)
     const scales: number[] = []
     for (let i = 0; i < 600; i++) {
       tick(sim, i % 90 < 30 ? RIGHT : NONE)
@@ -238,7 +254,7 @@ describe("o relógio é a velocidade", () => {
   })
 
   it("patógeno anda em tempo de mundo; a célula, em tempo real", () => {
-    const parada = start(4)
+    const parada = start(4, LENTO)
     mut(parada).enemies = [virus(600, 180)]
     advance(parada, 120)
     const andouParada = 600 - mut(parada).enemies[0]!.x
@@ -894,7 +910,9 @@ describe("o tecido resiste", () => {
   })
 
   it("o relógio do MUNDO herda o freio", () => {
-    const sim = start(12)
+    // Com DILATAÇÃO: sem ela o relógio é 1 e não há freio para herdar. O que
+    // este teste descreve é a consequência do relógio lento, não do tecido.
+    const sim = start(12, LENTO)
     park(sim)
     for (let i = 0; i < 200; i++) {
       mut(sim).field.fill(0)
@@ -956,35 +974,80 @@ describe("o tecido: conter e retomar", () => {
     expect(rapida, "correndo, a infecção avança").toBeGreaterThan(parada * 3)
   })
 
-  it("a cura é em tempo REAL e cai com a velocidade", () => {
-    const cena = (correndo: boolean): number => {
-      const sim = start(52)
-      if (correndo) toFullSpeed(sim)
+  /**
+   * A MESMA cena, medida nos dois mundos — e o veredito se inverte de propósito.
+   *
+   * Com o relógio lento, curar exige ficar: parar compra tempo de mundo devagar,
+   * e curar rápido seria ganhar os dois lados da troca. Sem o relógio lento não
+   * há troca, e cobrar imobilidade vira preço que não paga nada — o H pediu
+   * combater a manifestação no tick normal, andando.
+   *
+   * Os dois testes usam a mesma função de cena de propósito: é a única forma de
+   * a diferença medida ser o TOGGLE e não o roteiro.
+   */
+  const curouEm = (t: typeof tuning, correndo: boolean): number => {
+    const sim = start(52, t)
+    if (correndo) toFullSpeed(sim)
+    park(sim)
+    // Abaixo do limiar de derrota: cheio de propósito a run morria no primeiro
+    // tick e o teste media um tick de cura em vez de doze.
+    mut(sim).field.fill(Math.floor(tuning.field.maxInfection * 0.4))
+    const base = totalOf(sim)
+    /*
+     * Janela CURTA de propósito. Com 60 ticks os dois casos zeravam os 13 tiles
+     * ao alcance e empatavam em 520 — a medição saturava e escondia a diferença
+     * de taxa. Isso expôs uma propriedade real do desenho: parada, a cura é
+     * funda mas satura rápido, porque o alcance é minúsculo.
+     */
+    for (let i = 0; i < 12; i++) {
       park(sim)
-      // Abaixo do limiar de derrota: cheio de propósito a run morria no
-      // primeiro tick e o teste media um tick de cura em vez de sessenta.
-      mut(sim).field.fill(Math.floor(tuning.field.maxInfection * 0.4))
-      const base = totalOf(sim)
-      /*
-       * Janela CURTA de propósito. Com 60 ticks os dois casos zeravam os 13
-       * tiles ao alcance e empatavam em 520 — a medição saturava e escondia a
-       * diferença de taxa. Isso expôs uma propriedade real do desenho: parada, a
-       * cura é funda mas satura rápido, porque o alcance é minúsculo. É a troca
-       * profundidade-por-cobertura que o campo existe para criar.
-       */
-      for (let i = 0; i < 12; i++) {
-        park(sim)
-        tick(sim, correndo ? RIGHT : NONE)
-        // preso no mesmo ponto: a diferença medida é só a velocidade
-        mut(sim).player.x = 320
-        mut(sim).player.y = 180
-      }
-      return base - totalOf(sim)
+      tick(sim, correndo ? RIGHT : NONE)
+      // preso no mesmo ponto: a diferença medida é só a velocidade
+      mut(sim).player.x = 320
+      mut(sim).player.y = 180
     }
-    const curouParada = cena(false)
-    const curouCorrendo = cena(true)
+    return base - totalOf(sim)
+  }
+
+  it("SEM dilatação: limpar o limo NÃO pede que você pare — chamada do H, 13/08", () => {
+    const parada = curouEm(tuning, false)
+    const correndo = curouEm(tuning, true)
+    expect(parada, "parada ainda limpa").toBeGreaterThan(0)
+    /*
+     * A toda limpa o MESMO que parada. Não "quase o mesmo": sem a penalidade a
+     * taxa é o `healRate` cru nos dois casos, e qualquer diferença aqui seria
+     * outra coisa agindo — o que é justamente o que vale travar.
+     */
+    expect(correndo, "andando limpa igual").toBe(parada)
+  })
+
+  it("COM dilatação: a cura é em tempo REAL e cai com a velocidade", () => {
+    const curouParada = curouEm(LENTO, false)
+    const curouCorrendo = curouEm(LENTO, true)
     expect(curouParada, "parada cura fundo").toBeGreaterThan(0)
     expect(curouCorrendo, "a toda quase não cura").toBeLessThan(curouParada / 2)
+  })
+
+  it("o toggle desligado crava o relógio em 1, e nada de creep sobra", () => {
+    const sim = start(53)
+    // Parada: o mundo NÃO desacelera.
+    advance(sim, 60)
+    expect(sim.state().worldScale).toBe(1)
+    // E a toda também não acelera, porque já estava no talo.
+    toFullSpeed(sim)
+    expect(sim.state().worldScale).toBe(1)
+  })
+
+  it("morto-por-enquanto: a fórmula da dilatação continua inteira atrás do toggle", () => {
+    /*
+     * A trava que impede o toggle de virar código morto silencioso. O H pediu
+     * para DESLIGAR sem remover; sem esta asserção, a fórmula poderia apodrecer
+     * por meses e só a tentativa de religá-la descobriria.
+     */
+    const lento = start(54, LENTO)
+    advance(lento, 60)
+    expect(lento.state().worldScale).toBeCloseTo(tuning.time.creep, 5)
+    expect(tuning.time.dilation, "e o jogo de hoje roda com ela DESLIGADA").toBe(false)
   })
 
   it("o patógeno nasce DO TECIDO, não da borda — é o que faz a fase convergir", () => {

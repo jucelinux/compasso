@@ -946,17 +946,25 @@ export async function createRenderer(
      * A barra do relógio. Não é decoração: é o único lugar onde o jogador vê
      * quanto tempo de MUNDO está comprando com a própria velocidade. Fica no
      * rodapé, ocupando a largura toda, porque é o número mais importante da tela.
+     *
+     * SOME com a dilatação desligada, e sumir é o certo. Ela mede uma grandeza
+     * que passou a ser constante: 32 segmentos acesos a run inteira não são
+     * informação, são uma barra cheia mentindo que algo está sendo comprado. Um
+     * mostrador que nunca se move ensina ao jogador que não há nada ali para
+     * olhar — e quando o H religar o relógio, ela volta sozinha.
      */
-    segBar(
-      6,
-      tuning.arena.height - 7,
-      tuning.arena.width - 12,
-      3,
-      Math.min(1, cur.worldScale),
-      32,
-      FAST1,
-      DIM0,
-    )
+    if (tuning.time.dilation) {
+      segBar(
+        6,
+        tuning.arena.height - 7,
+        tuning.arena.width - 12,
+        3,
+        Math.min(1, cur.worldScale),
+        32,
+        FAST1,
+        DIM0,
+      )
+    }
 
     const cd =
       cur.player.dashCooldown > 0 ? 1 - cur.player.dashCooldown / tuning.dash.cooldownTicks : 1

@@ -63,11 +63,53 @@ que "consertar" isso saiba que está revendo uma decisão, não corrigindo um bu
 **Aberto com o H:** poder volta por outra porta, ou sai do jogo? Ele não disse, e eu não
 decidi no lugar dele.
 
-### 4. O eixo do relógio lento continua parado, por decisão dele
+### 4. A DILATAÇÃO FOI DESLIGADA — toggle, não remoção
 
-Ele foi explícito: mantém a dilatação como está por enquanto e evolui o resto. Pediu que eu
-traga insight quando achar função importante para a mecânica. **Um já apareceu nesta rodada,
-e está no fim deste arquivo.**
+Chamada dele no fim do dia: `time.dilation: false`. A fórmula fica inteira, sob teste, e
+ligar é trocar `false` por `true`. O toggle governa duas coisas — o `worldScale` (1 sempre) e
+a penalidade de velocidade da cura, que deixa de valer. Limpar o limo passa a acontecer
+**andando**, que era o pedido dele desde a primeira mensagem do dia.
+
+Um insight que já tinha aparecido antes está no fim deste arquivo, e continua valendo para
+quando ele religar.
+
+### 5. Desligar a dilatação quase DOBROU a pressão da doença — e ninguém decidiu isso
+
+**É o item mais importante em aberto.** Medido, `npm run pace`, 4 políticas × 5 seeds:
+
+| | com dilatação | sem |
+|---|---|---|
+| agressiva | 0,6 ondas | **0,0** |
+| ritmo | 0,8 | **0,0** |
+| curandeira | 0,0 | 0,0 |
+| triagem | 0,8 | **0,0** |
+
+Nenhuma seed de nenhuma política contém **uma onda sequer**. A causa é mecânica e mensurável:
+todo avanço da doença — fonte, alastramento, necrose, fissão, parto — roda em
+`max(field.idleProgress, worldScale) × dt`. Esse fator, medido no jogo real, era **0,55–0,58**
+nas três políticas móveis. Agora é **1,000**. A doença ficou ~1,8x mais rápida.
+
+O tuning da doença nunca foi escolhido contra 1,0 — foi afinado, sessão após sessão, contra
+um mundo que corria a pouco mais da metade. Desligar o relógio não mudou um número da doença
+e mudou a pressão dela toda.
+
+**Não compensei, de propósito** (`TASTE-LOOP.md` §3.1, um eixo por rodada): mexer no balanço
+no mesmo commit do toggle deixaria as duas leituras impossíveis de separar.
+
+**A alavanca, quando ele quiser:** é uma só e não precisa de número novo — reintroduzir o
+fator ~0,57 como constante do relógio da doença devolve exatamente o balanço contra o qual
+tudo foi afinado. As outras vias (mexer em `sourceRate`, `fissionSeconds`, `spreadSeconds`
+separados) são o erro de 02/08 outra vez: três números onde o problema é um.
+
+**Efeito colateral no rig:** com `fases 0,0` em todas as políticas, o bot perdeu a métrica
+que usava para comparar direção. Ele ainda mede duração, infecção e cicatriz, mas "quantas
+ondas essa política contém" virou zero em todas — e zero não distingue nada.
+
+### 6. A aura plantada é a última mecânica que ainda pede que você pare
+
+`dash.auraBelowSpeed` continua exigindo velocidade quase nula para plantar o foco. O H não a
+citou, e desligá-la junto seria decidir no lugar dele. Mas ela ficou sozinha: é a única coisa
+no jogo que cobra imobilidade num jogo onde parar não compra mais nada.
 
 ---
 
@@ -75,6 +117,21 @@ e está no fim deste arquivo.**
 
 **PORTÃO: 0 STRIKES de 3** — *"a dilatação é lida sem explicação"*, escolha do H em 08/08.
 Conta **"não"**, não "sim": zero é o melhor estado possível. Definição no `CLAUDE.md`.
+
+> **SUSPENSO desde 13/08, por construção — e isto precisa de decisão dele.**
+>
+> O portão mede se um estranho lê a dilatação jogando. A dilatação está **desligada**
+> (`time.dilation: false`), então não há o que ler: um jogador externo hoje não pode produzir
+> "sim" nem "não", porque a linha que o portão pergunta não está no jogo.
+>
+> Isso **não é um strike** e não pode virar um. Strike é "jogou e não entendeu"; aqui é
+> "não havia o que entender", que é nulo pela mesma regra de 02/08. Contar como "não" seria
+> matar a tese com um número que mede a ausência dela.
+>
+> **O contador congela em 0 de 3 enquanto o toggle estiver desligado.** Ele volta a andar no
+> dia em que o relógio voltar. A alternativa — trocar a régua por outra enquanto isso — é
+> chamada do H e não minha: em 08/08 ele reabriu o conceito inteiro justamente porque a régua
+> anterior tinha sido invenção do modelo sob delegação.
 
 Leitura só existe quando **alguém de fora joga sem ninguém explicar**. "Não" = encerrou sem
 entender que o tempo responde ao movimento, ou precisou que explicassem. Nula continua sendo

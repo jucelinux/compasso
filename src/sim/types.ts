@@ -213,6 +213,35 @@ export interface Tuning {
   readonly sim: { readonly hz: number }
   readonly arena: { readonly width: number; readonly height: number }
   readonly time: {
+    /**
+     * A DILATAÇÃO, ligada ou desligada. **Desligada desde 13/08, por chamada
+     * do H.**
+     *
+     * Ela é a tese do projeto — "o tempo só anda quando você anda" — e continua
+     * inteira no código, sob teste, atrás deste booleano. Desligar não é
+     * aposentar: é a decisão dele de evoluir os outros eixos do jogo enquanto a
+     * ideia central espera, para poder ligá-la de volta contra um jogo melhor do
+     * que o que ela tem hoje. Ligar é trocar `false` por `true` e mais nada.
+     *
+     * **Governa DUAS coisas, e as duas são a mesma peça vista de dois lados:**
+     *
+     * 1. `worldScale`, que passa a ser 1 sempre — o mundo anda em tempo real.
+     * 2. A penalidade de velocidade da cura (`field.healSpeedPenalty`), que
+     *    deixa de valer — limpar o limo passa a acontecer ANDANDO.
+     *
+     * O segundo não é carona no primeiro, é consequência dele. A cura só podia
+     * exigir imobilidade porque ficar parado COMPRAVA tempo lento; sem essa
+     * troca, exigir que o jogador pare é cobrar um preço que não paga mais nada,
+     * e o H foi explícito: ele quer combater a manifestação no tick normal, sem
+     * precisar ficar parado. Deixar a penalidade de pé com a dilatação desligada
+     * seria manter meia mecânica — o custo sem a contrapartida.
+     *
+     * O que este booleano NÃO governa: a aura plantada abaixo de
+     * `dash.auraBelowSpeed`. Ela continua pedindo que você pare, e é a última
+     * mecânica de imobilidade de pé. O H não a citou, e decidir por ele seria
+     * exatamente o que o `CLAUDE.md` §4 proíbe.
+     */
+    readonly dilation: boolean
     /** Escala do tempo com a célula parada. Nunca zero, por decisão de 31/07. */
     readonly creep: number
     /**

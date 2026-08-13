@@ -12,7 +12,7 @@ import type { Tuning } from "../src/sim/types.ts"
  */
 
 const SMOKE = resolve(projectRoot, "replays", "smoke.json")
-const BASELINE_HASH = "5e998ba9"
+const BASELINE_HASH = "67004be7"
 
 /**
  * Run real do humano, 7,6 min de input de verdade, do core do dash (`7c952a6`).
@@ -22,7 +22,7 @@ const BASELINE_HASH = "5e998ba9"
  * leitura de ritmo, e não como cobertura de morte.
  */
 const RUN_01 = resolve(projectRoot, "replays", "run-01.json")
-const RUN_01_HASH = "341025c1"
+const RUN_01_HASH = "29cdb63f"
 
 /**
  * Segunda run real: 5 min, 10 ondas, uma morte. Gravada antes da tecla de
@@ -30,7 +30,7 @@ const RUN_01_HASH = "341025c1"
  * Vale como determinismo sobre input humano longo.
  */
 const RUN_02 = resolve(projectRoot, "replays", "run-02.json")
-const RUN_02_HASH = "c23dad4a"
+const RUN_02_HASH = "513bc48b"
 
 /**
  * Terceira run real: 5,7 min de input humano, gravada quando os modificadores
@@ -39,7 +39,7 @@ const RUN_02_HASH = "c23dad4a"
  * Com os patógenos reais este input voltou a morrer, na onda 6.
  */
 const RUN_03 = resolve(projectRoot, "replays", "run-03.json")
-const RUN_03_HASH = "dfba9635"
+const RUN_03_HASH = "045f834c"
 
 /**
  * Fixture do core contínuo, gravada por `npm run rec`. Sintética, não humana:
@@ -61,7 +61,7 @@ const RUN_03_HASH = "dfba9635"
  * isso, um baseline nascido no browser seria verdade só do Node.
  */
 const CORE_ATUAL = resolve(projectRoot, "replays", "core-atual.json")
-const CORE_ATUAL_HASH = "882698f3"
+const CORE_ATUAL_HASH = "331e1c97"
 
 const smoke = () => loadReplay(SMOKE)
 const tuning = () => loadTuning()
@@ -127,6 +127,19 @@ const tuning = () => loadTuning()
  * árvore parada bateu de primeira. Se este arquivo ficar vermelho logo depois
  * de um `npm run rec`, a primeira pergunta é se alguém encostou em `src/`
  * enquanto ele gravava, não o que quebrou na sim.
+ *
+ * SÉTIMA VEZ, no mesmo 13/08: a DILATAÇÃO foi desligada.
+ *
+ * `time.dilation: false`, chamada do H. O `worldScale` passa a ser 1 em todo
+ * tick, e a penalidade de velocidade da cura deixa de valer — dois termos que
+ * entram em praticamente todo avanço da sim, então nenhum hash tinha como
+ * sobreviver. Deriva declarada, âncora regravada antes dos números.
+ *
+ * Vale reparar no que ESTES cinco baselines passaram a ser: replays gravados
+ * num jogo sem relógio lento. A fórmula continua sob teste em `slice.test.ts`
+ * contra um tuning com `dilation: true`, mas NENHUMA fixture a exercita mais.
+ * Quando o H religar o relógio, os cinco caem juntos de novo — e isso é o
+ * comportamento certo, não uma dívida.
  */
 
 /**
@@ -296,7 +309,7 @@ describe("determinismo", () => {
  */
 const PROCEDENCIA: ReadonlyArray<readonly [string, string, string]> = [
   ["smoke.json", "7c952a6", "sintética, regenerável byte a byte por `npm run smoke`"],
-  ["core-atual.json", "0663754", "sintética, VIVA — regravar com `npm run rec`"],
+  ["core-atual.json", "a9ba571", "sintética, VIVA — regravar com `npm run rec`"],
   ["run-01.json", "7c952a6", "humana, core do dash; hoje só âncora de determinismo"],
   ["run-02.json", "7c952a6", "humana, core do dash; hoje só âncora de determinismo"],
   ["run-03.json", "7c952a6", "humana, core do dash; hoje só âncora de determinismo"],

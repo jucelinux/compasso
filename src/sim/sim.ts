@@ -90,6 +90,31 @@ function clamp(v: number, min: number, max: number): number {
 
 const KIND_SHARD = "ecoli_filha"
 
+/**
+ * A DILATAÇÃO, atrás do toggle `time.dilation` — DESLIGADA desde 13/08.
+ *
+ * Com ela ligada, o mundo anda na sua velocidade: parada, a célula deixa o
+ * mundo em `time.creep`; a toda, em 1. Desligada, o mundo anda em tempo real
+ * e ponto — `1`, não `creep`, porque o que o H desligou foi o relógio LENTO,
+ * não o relógio.
+ *
+ * A fórmula fica inteira e sob teste. Ela é a tese do projeto e a única linha
+ * que o portão mede; guardá-la atrás de um booleano é o que permite ligá-la de
+ * volta contra um jogo mais maduro em vez de reescrevê-la de memória — e
+ * `TASTE-LOOP.md` já cobrou caro por prosa sobre restrição morta.
+ *
+ * `t·√t` no lugar de `t^1.5` continua valendo quando ligada: só multiplicação
+ * e raiz, que são exatas entre engines. `Math.pow` não é, e o rig inteiro
+ * depende de Node e browser darem o mesmo hash.
+ */
+function worldScaleFor(tuning: Tuning, sp: number): number {
+  if (!tuning.time.dilation) return 1
+  const t01 = Math.min(1, sp / tuning.player.maxSpeed)
+  const eased = t01 * Math.sqrt(t01)
+  const mix = tuning.time.linearMix
+  return tuning.time.creep + (1 - tuning.time.creep) * (mix * t01 + (1 - mix) * eased)
+}
+
 export function createSim(seed: number, tuning: Tuning): Sim {
   const rng = createRng(seed)
   const dt = 1 / tuning.sim.hz
@@ -169,7 +194,11 @@ export function createSim(seed: number, tuning: Tuning): Sim {
     lastKillX: 0,
     lastKillY: 0,
     lastKillTick: -1,
-    worldScale: tuning.time.creep,
+    // Estado inicial da célula parada: com a dilatação ligada é o `creep`, e
+    // sem ela é 1. Deixar `creep` cravado aqui faria o primeiro tick da run
+    // rodar a 5% com o toggle desligado — um quadro de mundo lento num jogo que
+    // não tem mundo lento, e o tipo de resto que ninguém acha depois.
+    worldScale: worldScaleFor(tuning, 0),
     prevBits: 0,
     rngState: rng.state(),
   }
@@ -208,6 +237,7 @@ export function createSim(seed: number, tuning: Tuning): Sim {
     if (curva.length === 0) return undefined
     return curva[Math.min(s.round - 1, curva.length - 1)]
   }
+
 
   /**
    * Vetor unitário aleatório SEM trigonometria.
@@ -572,12 +602,7 @@ export function createSim(seed: number, tuning: Tuning): Sim {
     p.y = clamp(ny, half, height - half)
 
     // --- O RELÓGIO. A escala do tempo é a sua velocidade, e nada mais.
-    const t01 = Math.min(1, sp / tuning.player.maxSpeed)
-    // `t·√t` no lugar de `t^1.5`: só multiplicação e raiz, que são exatas.
-    const eased = t01 * Math.sqrt(t01)
-    const mix = tuning.time.linearMix
-    s.worldScale =
-      tuning.time.creep + (1 - tuning.time.creep) * (mix * t01 + (1 - mix) * eased)
+    s.worldScale = worldScaleFor(tuning, sp)
     const world = dt * s.worldScale
 
     // --- combo, rastro e cápsulas envelhecem em tempo real
@@ -1081,8 +1106,26 @@ export function createSim(seed: number, tuning: Tuning): Sim {
       s.pulses = vivos
     }
 
-    const healRate =
-      tuning.field.healRate * Math.max(0, 1 - p.speed * tuning.field.healSpeedPenalty)
+    /*
+     * LIMPAR O LIMO, e com a dilatação desligada isso acontece ANDANDO.
+     *
+     * A penalidade de velocidade existe para o mundo em que parar COMPRA tempo
+     * lento: lá, curar rápido seria ganhar os dois lados da troca. Com o relógio
+     * em tempo real não há troca nenhuma, e cobrar imobilidade vira preço sem
+     * contrapartida — o H foi direto ao ponto: combater a manifestação no tick
+     * normal, sem precisar ficar parado.
+     *
+     * O valor sem penalidade é o `healRate` cru, e isso é escolha de âncora, não
+     * preguiça: é literalmente o trabalho que a célula parada já fazia, agora
+     * feito em movimento. Número novo aqui seria chute com cara de decisão, que
+     * é o defeito que o `tuning.anchors.json` existe para travar.
+     *
+     * O gesto vira o verbo do jogo em vez de contrariá-lo: mover É atacar, e
+     * agora atacar alcança o tecido, não só o corpo em cima dele.
+     */
+    const healRate = tuning.time.dilation
+      ? tuning.field.healRate * Math.max(0, 1 - p.speed * tuning.field.healSpeedPenalty)
+      : tuning.field.healRate
     s.healAcc += healRate * dt
     if (s.healAcc >= 1) {
       const n = Math.floor(s.healAcc)
