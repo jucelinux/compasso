@@ -100,6 +100,12 @@ export const GREY0 = 56
 export const GREY1 = 57
 export const GREY2 = 58
 
+// neurônio: rampa PRÓPRIA, para não ser o leucócito
+export const NEU0 = 59
+export const NEU1 = 60
+export const NEU2 = 61
+export const NEU3 = 62
+
 /** RGB de cada índice. A ordem é a das constantes acima e não pode mudar. */
 const RGB: number[] = [
   0x000000, // 0 transparente (alpha 0; o RGB não é lido)
@@ -190,6 +196,29 @@ const RGB: number[] = [
   0x14161c, // 56 GREY0 — o chão
   0x212530, // 57 GREY1 — o relevo
   0x333a4a, // 58 GREY2 — a aresta
+
+  /*
+   * VIOLETA FOSCO do neurônio, acrescentado em 13/08 porque o H não conseguia
+   * achar o próprio glóbulo na tela.
+   *
+   * O neurônio nasceu vestindo `RAMP_LEU` + `RAMP_NUC` — literalmente as duas
+   * rampas do JOGADOR. Reusar foi a decisão certa para a FORMA (a multidão da
+   * arena já resolvia distribuição e respiro) e a errada para a COR: no cérebro
+   * o jogador virou um corpo pálido entre duzentos corpos pálidos idênticos.
+   *
+   * Por que este violeta e não outro tom. No hub estão em cena, ao mesmo tempo,
+   * os CINCO patógenos — laranja `INF`, amarelo `ECO`, violeta `EST`, verde
+   * `SAL`, rosa `COR` —, a moeda dourada e o glóbulo. Cada matiz já pertence a
+   * alguém, então a saída não é achar matiz livre: é achar SATURAÇÃO livre.
+   * Estes quatro tons são fracos e escuros de propósito, bem abaixo do `EST`
+   * (0x9d6bff contra 0x8478ad no topo daqui), e é isso que os mantém como FUNDO
+   * — o problema do H não era só "parecido com o glóbulo", era "tão claro
+   * quanto ele".
+   */
+  0x241f33, // 59 NEU0 — a sombra do soma
+  0x3a3350, // 60 NEU1 — o corpo
+  0x5c5279, // 61 NEU2 — a luz
+  0x8478ad, // 62 NEU3 — o dendrito e o realce
 ]
 
 /**
@@ -439,6 +468,16 @@ export const RAMP_SAL: Ramp = [INK2, SAL0, SAL1, SAL2, SAL3]
 export const RAMP_COR: Ramp = [INK2, COR0, COR1, COR2, COR3]
 /** O chão do cérebro. Frio e escuro, contra o vermelho quente da arena. */
 export const RAMP_GREY: Ramp = [GREY0, GREY0, GREY1, GREY2]
+/**
+ * O neurônio, e ele tem rampa própria desde 13/08 — antes usava a do leucócito.
+ *
+ * Repete `NEU0` no piso pelo mesmo motivo que `RAMP_LEU` repete `LEU0`: alarga a
+ * faixa escura e faz o dither cair mais no fundo que na luz, que é o que dá
+ * volume a um corpo redondo sem clarear o conjunto.
+ */
+export const RAMP_NEU: Ramp = [NEU0, NEU0, NEU1, NEU2]
+/** O núcleo do neurônio: um degrau mais escuro que o corpo, nunca mais claro. */
+export const RAMP_NEU_NUC: Ramp = [INK2, NEU0, NEU1]
 
 export const RAMP_GLD: Ramp = [INK2, GLD0, GLD1, GLD2, WHITE]
 export const RAMP_SHI: Ramp = [INK2, SHI0, SHI1, WHITE]

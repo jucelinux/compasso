@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest"
 import tuningJson from "../tuning.json"
 import type { Tuning } from "../src/sim/types.ts"
-import { PALETTE, cycledPalette } from "../src/render/palette.ts"
+import { INK, INK2, PALETTE, RAMP_LEU, RAMP_NUC, cycledPalette } from "../src/render/palette.ts"
 import {
   bayer,
   diffCount,
@@ -483,5 +483,71 @@ describe("dendrito: a geometria que o sprite e a sinapse dividem", () => {
     const sh = neuronShape(0)
     const d = neuronDendrito(sh.r * 0.1, sh.dendritos, sh.tilt, 0, 0)
     expect(d.reach).toBeLessThan(sh.r)
+  })
+})
+
+/*
+ * O NEURÔNIO NÃO PODE VESTIR A RAMPA DO JOGADOR, e este teste existe porque
+ * exatamente isso aconteceu em 13/08.
+ *
+ * A multidão do cérebro nasceu reusando `crowdLayout` da arena — decisão certa,
+ * porque a distribuição sem grade e o respiro por corpo já estavam resolvidos.
+ * O que veio de carona foi a COR: o `neuronSheet` copiou `RAMP_LEU` + `RAMP_NUC`
+ * do `playerSheet`, e o resultado só apareceu quando o H foi jogar e não achou o
+ * próprio glóbulo entre duzentos corpos idênticos a ele.
+ *
+ * Reuso de forma é barato; reuso de PALETA custa a leitura. A regra que sai
+ * disso é esta asserção: dois corpos que dividem a tela não dividem tom, fora do
+ * contorno e da luz que a paleta inteira compartilha por desenho.
+ */
+describe("o neurônio não pode ser confundido com o jogador", () => {
+  const tonsDe = (s: Sheet): Set<number> => {
+    const t = new Set<number>()
+    for (const f of s.frames) for (const i of distinct(f)) t.add(i)
+    return t
+  }
+
+  it("fora do contorno e da luz, não dividem UM tom sequer", () => {
+    const sh = neuronShape(0)
+    const neuronio = tonsDe(neuronSheet(sh.r, sh.dendritos, sh.tilt, 0))
+    const jogador = tonsDe(playerSheet(tuning.player.size))
+    // Transparente e os dois tons de contorno são de TODA rampa por desenho —
+    // é o que amarra a paleta num conjunto só, e não distingue ninguém.
+    const partilhado = new Set([0, INK, INK2])
+    const colisao = [...neuronio].filter((i) => jogador.has(i) && !partilhado.has(i))
+    expect(colisao, `tons em comum: ${colisao.join(", ")}`).toEqual([])
+  })
+
+  it("o neurônio é ESCURO: nenhum tom dele chega ao brilho do jogador", () => {
+    /*
+     * Separar o matiz não bastava. O problema que o H descreveu tinha duas
+     * metades — "parecido com o glóbulo" e "tão claro quanto ele" —, e um
+     * violeta claríssimo passaria na asserção acima continuando a competir por
+     * atenção. Fundo é fundo: o corpo mais claro da multidão fica abaixo do
+     * corpo mais claro do sujeito.
+     */
+    const luma = (rgb: number): number =>
+      0.299 * ((rgb >> 16) & 255) + 0.587 * ((rgb >> 8) & 255) + 0.114 * (rgb & 255)
+    const sh = neuronShape(0)
+    const maxNeuronio = Math.max(
+      ...[...tonsDe(neuronSheet(sh.r, sh.dendritos, sh.tilt, 0))]
+        .filter((i) => i !== 0)
+        .map((i) => luma(PALETTE[i]!)),
+    )
+    const maxJogador = Math.max(
+      ...[...tonsDe(playerSheet(tuning.player.size))]
+        .filter((i) => i !== 0)
+        .map((i) => luma(PALETTE[i]!)),
+    )
+    expect(maxNeuronio).toBeLessThan(maxJogador * 0.75)
+  })
+
+  it("o caso nulo: a rampa antiga REPROVARIA", () => {
+    // `TASTE-LOOP.md` §2. Sem isto, as duas asserções acima poderiam estar
+    // passando por comparar coisas que nunca se encontram.
+    const jogador = tonsDe(playerSheet(tuning.player.size))
+    const comoEra = new Set([...RAMP_LEU, ...RAMP_NUC])
+    const colisao = [...comoEra].filter((i) => jogador.has(i))
+    expect(colisao.length).toBeGreaterThan(0)
   })
 })

@@ -19,7 +19,7 @@ import {
   ECO2,
   INF3,
   LEU3,
-  NUC0,
+  NEU2,
   NUC1,
   NUC2,
   SAL2,
@@ -926,7 +926,9 @@ export async function createRenderer(
       brainFxLayer
         .moveTo(li.ax, li.ay)
         .lineTo(li.bx, li.by)
-        .stroke({ width: 1, color: col(NUC0), alpha: 0.5 })
+        // Mesma rampa do dendrito que ela liga, um degrau abaixo: o vão entre
+        // duas pontas tem que ler como continuação do braço, não como cabo.
+        .stroke({ width: 1, color: col(NEU2), alpha: 0.5 })
     }
 
     /*
@@ -998,27 +1000,38 @@ export async function createRenderer(
     )
     brainPlayer.position.set(Math.round(cur.player.x), Math.round(cur.player.y))
     /*
-     * O HALO GIRANDO em volta do glóbulo — pedido do H, e o problema que ele
-     * resolve é de PALETA, não de destaque genérico.
+     * O GLOW do glóbulo, e ele existe SÓ nesta tela.
      *
-     * O leucócito e o neurônio compartilham a rampa: pálidos, frios, redondos.
-     * Na arena isso nunca importou, porque lá nada mais usa a rampa; no cérebro
-     * o jogador é um corpo pálido entre duzentos corpos pálidos. Ele mesmo
-     * apontou a saída — a mesma de 13/08 para os itens: quando a COR não pode
-     * separar, separa o COMPORTAMENTO. Nada mais nesta tela gira.
+     * A primeira tentativa foi uma órbita de contas multicoloridas em volta do
+     * corpo, e o H a reprovou por dois motivos que valem mais que o efeito: não
+     * era o que ele tinha pedido, e ela resolvia o sintoma errado. Contas
+     * girando acrescentam MOVIMENTO ao redor de um corpo que continuava do mesmo
+     * tom do fundo — mais coisa na tela para achar a mesma coisa.
      *
-     * Seis contas, uma por cor da roda dos sinais, na mesma rampa que o cérebro
-     * já usa. Não é tinta nova: é o cérebro reconhecendo quem chegou.
+     * A causa era de cor, e foi atacada na causa: o neurônio ganhou rampa
+     * própria e escureceu (`RAMP_NEU`), e o glóbulo ganhou halo. Fundo recua,
+     * sujeito avança — é a ordem certa, e cada metade sozinha teria custado o
+     * dobro para metade do efeito.
      *
-     * Fica no `brainFxLayer`, que está ATRÁS do corpo — halo por cima taparia a
-     * silhueta que ele existe para destacar.
+     * Discos concheiros do maior ao menor, em ciano: glow em pixel art é
+     * DEGRAU, não desfoque, e o ciano é a cor que o próprio corpo já usa para
+     * dizer "sou eu a toda". No `brainFxLayer`, que está atrás do corpo.
+     *
+     * Só aqui: na arena o leucócito é a única coisa pálida em cena e o halo
+     * seria enfeite — e enfeite permanente vira ruído no exato lugar onde o
+     * jogador precisa ler contato.
      */
-    const raioHalo = tuning.player.size / 2 + 4
-    for (let k = 0; k < SINAL.length; k++) {
-      const a = selfClock * 2.2 + (k / SINAL.length) * TAU
-      const hxk = Math.round(cur.player.x + Math.cos(a) * raioHalo)
-      const hyk = Math.round(cur.player.y + Math.sin(a) * raioHalo)
-      brainFxLayer.rect(hxk - 1, hyk - 1, 2, 2).fill(col(SINAL[k]!))
+    const rBase = tuning.player.size / 2
+    const respiro = 1 + 0.08 * Math.sin(selfClock * 2.4)
+    const camadas: ReadonlyArray<readonly [number, number]> = [
+      [rBase * 2.2, 0.09],
+      [rBase * 1.7, 0.13],
+      [rBase * 1.3, 0.18],
+    ]
+    for (const [raio, alpha] of camadas) {
+      brainFxLayer
+        .circle(Math.round(cur.player.x), Math.round(cur.player.y), Math.round(raio * respiro))
+        .fill({ color: col(FAST1), alpha })
     }
     /*
      * O SINAL, agora MULTICOLORIDO e em TODA sinapse — pedido do H em 13/08.

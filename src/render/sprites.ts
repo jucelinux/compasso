@@ -31,8 +31,10 @@ import {
   SHI1,
   GLD2,
   ECO3,
-  NUC0,
-  NUC1,
+  NEU2,
+  NEU3,
+  RAMP_NEU,
+  RAMP_NEU_NUC,
   WHITE,
   type Ramp,
 } from "./palette.ts"
@@ -789,17 +791,24 @@ export function neuronSheet(r: number, dendritos: number, tilt: number, seed: nu
       const reach = d.reach
       const x2 = c + Math.cos(a) * reach
       const y2 = c + Math.sin(a) * reach
-      line(b, c, c, x2, y2, NUC1, 1)
+      line(b, c, c, x2, y2, NEU3, 1)
       // Ramificação na ponta: é o que separa neurônio de estrela do mar.
       const sub = a + (hashNoise(k, seed, 37) - 0.5) * 1.2
-      line(b, x2, y2, x2 + Math.cos(sub) * r * 0.5, y2 + Math.sin(sub) * r * 0.5, NUC0, 1)
+      line(b, x2, y2, x2 + Math.cos(sub) * r * 0.5, y2 + Math.sin(sub) * r * 0.5, NEU2, 1)
     }
     // O soma, com respiro próprio — a mesma respiração da hemácia, e é ela que
     // faz a multidão parecer viva em vez de um mosaico parado.
     const pulso = 1 + 0.05 * Math.sin(ph)
-    body(b, c, c, r * pulso, RAMP_LEU, (th) => r * pulso * (1 + 0.06 * Math.sin(3 * th + ph)))
-    disc(b, c - r * 0.15, c - r * 0.15, r * 0.36, RAMP_NUC)
-    disc(b, c - r * 0.32, c - r * 0.34, r * 0.13, RAMP_SPECULAR)
+    body(b, c, c, r * pulso, RAMP_NEU, (th) => r * pulso * (1 + 0.06 * Math.sin(3 * th + ph)))
+    disc(b, c - r * 0.15, c - r * 0.15, r * 0.36, RAMP_NEU_NUC)
+    /*
+     * SEM brilho especular, e a ausência é a decisão.
+     *
+     * O pixel branco no alto à esquerda é o truque que faz o olho ler "molhado e
+     * redondo" — e era exatamente ele que dava ao neurônio o mesmo acabamento do
+     * glóbulo. Duzentos brilhos brancos idênticos ao do jogador competiam com o
+     * único que precisa ser achado. Fundo não leva realce.
+     */
     outline(b, INK)
     return b
   })
