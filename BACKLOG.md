@@ -442,3 +442,41 @@ mais de um segundo, então dois quadros seguidos caem em respiros diferentes e o
 mostram "3" — eu quase li isso como "a contagem não anda". Está coberto por teste
 (`o dígito da contagem faz 3, 2, 1`), que é o que aritmética merece; a composição é que
 exigia olho.
+
+---
+
+## Itens e feedback, 13/08 — o que ficou aberto
+
+Quatro pedidos do H numa tacada: o estalo do abate, a supressão na cor do limo, o
+COMPLEMENTO (item novo), e animação ao consumir. Todos entregues; o que segue é o que eles
+DEIXARAM em aberto.
+
+### O COMPLEMENTO não foi medido em jogo, e o bot não consegue medir
+
+Ele está travado por seis testes de regra — varre a filha, poupa a mãe, reinicia, segura,
+não é cura disfarçada, carimba o evento. Nenhum deles diz se o item é **bom**.
+
+E o bot não vai dizer: as políticas dele não sabem desviar para pegar cápsula, então elas
+coletam por acidente quando a cápsula nasce no caminho. É a mesma cegueira já registrada
+para a aura — `npm run pace` mede estrutura, e item é decisão.
+
+**A leitura que vale é humana**, e é a mesma que falta para a curva das ondas 4-10.
+
+### O `stunSeconds` é a fração mais chutada do dia
+
+0,75 de uma duplicação está declarado na âncora com os limites em que ele deixa de funcionar
+(abaixo de ~0,3 vira só "reinicia"; acima de ~1,5 o item para a onda pelo jogador). O que não
+existe é medição dentro dessa faixa — a âncora diz em relação a quê, não que está certo.
+
+### O estalo do abate não passou por captura em movimento
+
+`npm run shot` congela um quadro, e o estalo dura ~0,2s. As três camadas foram conferidas
+uma a uma no código e o anel reusa a folha do choque, que já estava em cena — mas
+"conferido olhando" aqui vale menos que de costume, e o `TASTE.md` §2b diz que é
+exatamente onde eu erro.
+
+### HITSTOP fica proposto, não pendente
+
+É o quarto ingrediente óbvio do estalo e ficou de fora por ser decisão de SIM: congelar o
+mundo por alguns quadros muda o hash e, nesta cadência de abate, engasga o jogo. Se o H
+quiser, o desenho é congelar só o ABATE GRANDE — a mãe, não a filha — e aí o custo se paga.

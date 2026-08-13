@@ -1,5 +1,5 @@
 import { Application, Container, Graphics, Sprite, Texture } from "pixi.js"
-import { activeStats, POWERS } from "../sim/powers.ts"
+import { activeStats, COMPLEMENTO, PLAQUETA, POWERS } from "../sim/powers.ts"
 import type { SimState, Tuning } from "../sim/types.ts"
 import { buildAtlas, frameOf, type Atlas } from "./atlas.ts"
 import { BASE_Y, BODY_H, GLYPH_W, textWidth } from "./font.ts"
@@ -15,6 +15,7 @@ import {
   KIND_TINT,
   ORG2,
   PALETTE,
+  SAL2,
   SHI1,
   WHITE,
 } from "./palette.ts"
@@ -482,6 +483,22 @@ export async function createRenderer(
   // ---------------------------------------------------------------- estado
   let particles: Particle[] = []
   let pops: Pop[] = []
+  /**
+   * ANÉIS de impacto do abate e ONDAS do item consumido.
+   *
+   * Vivem no render e só no render: são a resposta ao "crock" que o H pediu, e
+   * nenhum deles toca o hash da sim. É o que permite afinar o feel sem regravar
+   * fixture — a lição de hoje, em que três derivas de determinismo custaram
+   * três regravações.
+   *
+   * `step` conta QUADROS da folha, não segundos, porque a folha é assada em
+   * raios discretos: avançar por tempo contínuo escolheria o mesmo quadro duas
+   * vezes num quadro rápido e pularia raios num lento.
+   */
+  let impactos: Array<{ x: number; y: number; step: number }> = []
+  let ondas: Array<{ x: number; y: number; step: number; patogeno: boolean }> = []
+  /** Último `lastPickTick` já animado. Sem isto a onda renasce todo quadro. */
+  let pickVisto = -1
   const heading = new Map<number, number>()
   let seenIds = new Set<number>()
   let prevLives = -1
@@ -578,14 +595,47 @@ export async function createRenderer(
       )
     }
     for (const d of cur.drops) {
-      const sheet = atlas.drops[d.power] ?? atlas.drops[0]!
+      /*
+       * A cápsula veste a cor do que ela AFETA — chamada do H em 13/08.
+       *
+       * Supressão em verde de limo, COMPLEMENTO na rampa do patógeno da fase.
+       * A escolha mora aqui e não em `POWERS[].color` porque a segunda muda com
+       * a doença em cena, e `POWERS` é estático.
+       */
+      const sheet =
+        d.power === PLAQUETA
+          ? atlas.dropLimo
+          : d.power === COMPLEMENTO
+            ? (atlas.dropsByKind.get(doencaDaFase(cur)) ?? atlas.drops[d.power]!)
+            : (atlas.drops[d.power] ?? atlas.drops[0]!)
+      // Prestes a expirar: pisca em quadro cheio, do jeito do console.
+      const aceso = d.life >= 90 || (cur.tick & 4) === 0
+      /*
+       * O HALO vem ANTES do corpo no pool, então fica atrás dele.
+       *
+       * Ele é a resposta ao conflito que o próprio pedido cria: item da cor do
+       * cenário é item invisível. O anel pisca trocando de matiz, coisa que
+       * nada mais em campo faz, e a cor do corpo continua sendo a pedida.
+       *
+       * O relógio é o `selfClock` (tempo de parede), não o da sim: piscar é
+       * sinal para o OLHO, e tem que ter a mesma cadência com o jogo lento ou
+       * rápido — se dependesse do mundo, o halo quase parava justamente quando
+       * o jogador está parado procurando o que fazer.
+       */
+      if (aceso) {
+        const halo = powerPool.next(frameOf(atlas.halo, 0, 0, Math.floor(selfClock * 14) + d.id))
+        halo.position.set(Math.round(d.x), Math.round(d.y))
+      }
       const sp = powerPool.next(frameOf(sheet, 0, 0, phase + d.id))
       sp.position.set(Math.round(d.x), Math.round(d.y))
-      // Prestes a expirar: pisca em quadro cheio, do jeito do console.
-      sp.visible = d.life >= 90 || (cur.tick & 4) === 0
+      sp.visible = aceso
     }
     powerPool.end()
   }
+
+  /** A doença em cena. O item de patógeno veste a rampa dela. */
+  const doencaDaFase = (cur: SimState): string =>
+    tuning.phases[Math.min(cur.phaseIndex, tuning.phases.length - 1)]!.disease
 
   let lastDir = 0
   const drawPlayer = (cur: SimState, x: number, y: number): void => {
@@ -1306,13 +1356,76 @@ export async function createRenderer(
       const worldPhase = Math.floor(worldClock * 9)
 
       // ------------------------------------------------------------ eventos
+      /*
+       * O ESTALO do abate — o "crock" que o H pediu em 13/08.
+       *
+       * A explosão de partículas já existia e era discreta demais: 8 pontos
+       * saindo devagar lêem como poeira, não como fagocitose. O que faltava é o
+       * que jogo de ação chama de impacto, e ele é feito de três camadas na
+       * mesma posição, não de uma maior:
+       *
+       * 1. ANEL de choque, que dá borda ao evento — sem ele o abate não tem
+       *    silhueta e some contra a colônia;
+       * 2. partículas mais rápidas e mais numerosas, na cor do bicho;
+       * 3. um tranco de câmera MINÚSCULO, que soma quando os abates vêm juntos.
+       *
+       * O tranco é 0,9 e não 3 de propósito: numa run boa morrem dezenas de
+       * bacilos por minuto, e tranco por abate vira tremor contínuo — o efeito
+       * pararia de significar "acertei" e passaria a significar "o jogo está
+       * rodando". Ele acumula no `Math.min`, então uma rajada dá um solavanco e
+       * um abate solto dá um cutucão.
+       *
+       * Tudo isto é RENDER: nenhuma linha aqui entra no hash da sim, e é por
+       * isso que dá para mexer no feel sem regravar fixture nenhuma. O hitstop,
+       * que seria o quarto ingrediente óbvio, ficou de fora justamente por não
+       * caber nessa regra — congelar o mundo por 3 quadros é decisão de sim, e
+       * com esta cadência de abate deixaria o jogo engasgado.
+       */
       const live = new Set(cur.enemies.map((e) => e.id))
+      let abatesNoQuadro = 0
       for (const e of prev.enemies) {
         if (!live.has(e.id) && seenIds.has(e.id)) {
-          burst(e.x, e.y, KIND_TINT[e.kind] ?? WHITE, 8, 2.4)
+          const tint = KIND_TINT[e.kind] ?? WHITE
+          burst(e.x, e.y, tint, 12, 3.4)
+          abatesNoQuadro++
+          impactos.push({ x: e.x, y: e.y, step: 0 })
         }
       }
+      if (abatesNoQuadro > 0) {
+        shake = Math.max(shake, Math.min(3.2, 0.9 + abatesNoQuadro * 0.5))
+      }
       seenIds = live
+
+      /*
+       * A ANIMAÇÃO DO ITEM CONSUMIDO, pedida junto com os itens.
+       *
+       * Lida do carimbo `lastPick*` e não da diferença entre `prev` e `cur`: um
+       * quadro lento roda vários ticks da sim, e a cápsula pode nascer e sumir
+       * inteira dentro dele. Diferença de estado perde o evento; carimbo não.
+       *
+       * A onda sai na cor do EFEITO, que é a mesma do item — verde de limo para
+       * a supressão, rampa do patógeno para o COMPLEMENTO. É o que fecha o laço
+       * que o H desenhou: a bolinha diz o que vai mexer, e a onda mostra
+       * mexendo.
+       */
+      if (cur.lastPickTick > pickVisto && cur.lastPickTick >= cur.tick - 3) {
+        pickVisto = cur.lastPickTick
+        const doPatogeno = cur.lastPickPower === COMPLEMENTO
+        ondas.push({
+          x: cur.lastPickX,
+          y: cur.lastPickY,
+          step: 0,
+          patogeno: doPatogeno,
+        })
+        burst(
+          cur.lastPickX,
+          cur.lastPickY,
+          doPatogeno ? (KIND_TINT[doencaDaFase(cur)] ?? WHITE) : SAL2,
+          16,
+          3.2,
+        )
+        shake = Math.max(shake, 2.2)
+      }
 
       if (prevLives >= 0 && cur.lives < prevLives) {
         flash = 1
@@ -1431,6 +1544,39 @@ export async function createRenderer(
         sp.position.set(Math.round(q.x), Math.round(q.y))
         nextParticles.push(q)
       }
+      /*
+       * Anéis de abate e ondas de item, no MESMO pool das partículas.
+       *
+       * Depois delas de propósito: o anel é a borda do evento e tem que ficar
+       * por cima da poeira, senão a poeira o apaga justo no quadro em que ele
+       * é mais forte.
+       */
+      const proxImpactos: typeof impactos = []
+      for (const q of impactos) {
+        const tex = atlas.shock[Math.min(atlas.shock.length - 1, q.step)]
+        if (tex !== undefined) {
+          const sp = fxPool.next(tex)
+          sp.position.set(Math.round(q.x), Math.round(q.y))
+        }
+        if (!frozen) q.step++
+        if (q.step < atlas.shock.length) proxImpactos.push(q)
+      }
+      impactos = proxImpactos
+
+      const proxOndas: typeof ondas = []
+      for (const o of ondas) {
+        const folha = o.patogeno
+          ? (atlas.pulsesByKind.get(doencaDaFase(cur)) ?? atlas.pulseLimo)
+          : atlas.pulseLimo
+        if (o.step < folha.frames.length) {
+          const sp = fxPool.next(folha.frames[o.step]!)
+          sp.position.set(Math.round(o.x), Math.round(o.y))
+        }
+        if (!frozen) o.step++
+        if (o.step < folha.frames.length) proxOndas.push(o)
+      }
+      ondas = proxOndas
+
       particles = nextParticles
       fxPool.end()
 

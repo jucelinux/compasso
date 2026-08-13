@@ -261,6 +261,7 @@
       "tissueSpread": 0.0,
       "fissionCap": 18,
       "waves": 10,
+      "counter": { "purge": "ecoli_filha", "stunSeconds": 6.0 },
       "curva": [
         { "fissao": 1.0, "teto": 1.0, "focos": 1.0, "abertura": 1.0, "fonte": 1.0 },
         { "fissao": 0.9, "teto": 1.0, "focos": 1.0, "abertura": 1.25, "fonte": 1.1 },

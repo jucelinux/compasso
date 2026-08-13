@@ -28,11 +28,42 @@ export const POWERS: readonly Power[] = [
   { id: 6, name: "ENZIMA", blurb: "engole qualquer coisa", color: 0xff5ad0 },
   { id: 7, name: "SURTO", blurb: "você fica mais rápida", color: 0xffd23d },
   { id: 8, name: "MEMBRANA", blurb: "absorve um toque", color: 0xa0ffd0 },
-  { id: 9, name: "PLAQUETA", blurb: "regenera o tecido", color: 0x6ec2ff },
+  /*
+   * PLAQUETA saiu do azul e foi para o VERDE do limo, a pedido do H em 13/08.
+   *
+   * A cor dela era `0x6ec2ff`, azul de plaqueta, e não dizia nada sobre o que
+   * ela faz. Verde é a cor da colônia no tecido (`RAMP_PUS`, o mesmo verde em
+   * toda fase), então o item passa a anunciar o próprio alvo: você olha a
+   * bolinha e sabe que ela mexe no LIMO, sem texto e sem tutorial.
+   */
+  { id: 9, name: "PLAQUETA", blurb: "regenera o tecido", color: 0x6ee27a },
+  /*
+   * COMPLEMENTO — o item que ataca a REPRODUÇÃO, não o corpo.
+   *
+   * O nome não é enfeite: o sistema complemento é justamente o braço do
+   * imunológico que age contra QUALQUER patógeno, sem ser feito sob medida para
+   * um. É exatamente o que o H descreveu — um item geral cuja AÇÃO é da doença
+   * da vez, e que vai ganhar efeito próprio para cada patógeno conforme a
+   * progressão do jogo crescer.
+   *
+   * A cor é a do PATÓGENO, e é decidida no render por fase, não aqui: este
+   * `color` é só o palpite de rampa para quando não há fase (o preview). Contra
+   * a E. coli o item sai amarelo, como o bacilo.
+   */
+  { id: 10, name: "COMPLEMENTO", blurb: "quebra a colônia", color: 0xffd23d },
 ]
 
 /** Efeito imediato, não temporário: acontece ao encostar e acaba ali. */
-export const INSTANT = new Set([9])
+export const INSTANT = new Set([9, 10])
+
+/**
+ * O COMPLEMENTO, separado por nome em vez de por número solto.
+ *
+ * `grant` precisa distinguir os dois instantâneos, e `power === 10` espalhado
+ * pela sim é o tipo de constante que ninguém acha quando os ids mudarem.
+ */
+export const COMPLEMENTO = 10
+export const PLAQUETA = 9
 
 /** O que está ligado agora. Recalculado todo tick a partir dos ativos. */
 export interface ActiveStats {

@@ -27,6 +27,9 @@ import {
   INF3,
   SAL2,
   SAL3,
+  SHI1,
+  GLD2,
+  ECO3,
   WHITE,
   type Ramp,
 } from "./palette.ts"
@@ -680,4 +683,71 @@ export function ghostOf(src: Buf, keep: number, idx: number): Buf {
   for (let i = 0; i < b.d.length; i++) if (b.d[i] !== 0) b.d[i] = idx
   ditherMask(b, keep)
   return b
+}
+
+/**
+ * HALO do item: um anel que PISCA e troca de cor, atrás da cápsula.
+ *
+ * Existe por um conflito que o próprio H nomeou em 13/08: ele quis que cada
+ * item vestisse a cor do que ele afeta — verde do limo para a supressão,
+ * amarelo do bacilo para o COMPLEMENTO — e essas são exatamente as duas cores
+ * que já cobrem a arena inteira. Um item da cor do cenário é um item invisível.
+ *
+ * A saída não é trair a cor pedida: é dar ao item uma ASSINATURA que o cenário
+ * não tem. Nada em campo pisca trocando de matiz — a colônia respira na mesma
+ * rampa, o tecido cicla devagar no plasma. Um anel percorrendo seis matizes em
+ * um segundo lê como "isto é interativo" à distância, sem tocar na cor do
+ * corpo do item.
+ *
+ * O anel fica ATRÁS e o corpo na frente, então a identidade cromática do item
+ * continua sendo a que ele pediu; o halo só grita que ela existe.
+ */
+export function haloSheet(): Sheet {
+  const S = 30
+  const c = S / 2
+  /*
+   * Seis matizes bem separados, e todos do topo das rampas.
+   *
+   * Tons médios sumiriam contra o tecido vermelho, que é o fundo em 100% das
+   * fases. A regra de 01/08 continua valendo: paleta travada, nada de cor nova
+   * — o halo escolhe entre o que já existe.
+   */
+  const CORES = [SHI1, GLD2, INF3, ECO3, COR1, SAL3]
+  const PH = CORES.length * 2
+  return buildSheet(S, S, 1, 1, PH, (_t, _d, phase) => {
+    const b = makeBuf(S, S)
+    const cor = CORES[Math.floor(phase / 2) % CORES.length]!
+    // Dois raios alternando: é o PISCAR, e em pixel art ele tem que ser degrau
+    // inteiro. Um raio interpolado viraria borrão de meio pixel.
+    const r = phase % 2 === 0 ? 11 : 12.5
+    ring(b, c, c, r, 1, cor, 0.6)
+    ring(b, c, c, r - 1.6, 1, cor, 0.25)
+    return b
+  })
+}
+
+/**
+ * ONDA do item consumido: anel grosso que cresce, na cor do efeito.
+ *
+ * O H pediu que consumir um item tivesse animação do EFEITO dele, e o efeito
+ * dos dois é de área — um limpa o tecido inteiro, o outro varre as filhas do
+ * campo. Área pede onda saindo do ponto, não faísca no ponto.
+ *
+ * Assada em raios discretos pela mesma razão do `shockSheet`: anel de raio
+ * contínuo exigiria redesenhar pixel a pixel todo quadro, e crescer em degraus
+ * visíveis soa mais a console do que uma rampa lisa.
+ */
+export function pulseSheet(ramp: Ramp, steps: number, maxR: number): Sheet {
+  const S = Math.ceil((maxR * 2 + 6) / 2) * 2
+  const c = S / 2
+  return buildSheet(S, S, 1, 1, steps, (_t, _d, phase) => {
+    const b = makeBuf(S, S)
+    const t = (phase + 1) / steps
+    const r = 3 + t * (maxR - 3)
+    // Afina conforme cresce: onda que se dissipa, não bolha que incha.
+    const grossura = t < 0.4 ? 3 : t < 0.75 ? 2 : 1
+    ring(b, c, c, r, grossura, ramp[ramp.length - 1]!, 1 - t * 0.55)
+    if (grossura > 1) ring(b, c, c, r - grossura, 1, ramp[ramp.length - 2]!, 0.5 - t * 0.3)
+    return b
+  })
 }

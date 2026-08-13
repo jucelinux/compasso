@@ -12,7 +12,7 @@ import type { Tuning } from "../src/sim/types.ts"
  */
 
 const SMOKE = resolve(projectRoot, "replays", "smoke.json")
-const BASELINE_HASH = "031eda8c"
+const BASELINE_HASH = "fe57b9ac"
 
 /**
  * Run real do humano, 7,6 min de input de verdade, do core do dash (`7c952a6`).
@@ -22,7 +22,7 @@ const BASELINE_HASH = "031eda8c"
  * leitura de ritmo, e não como cobertura de morte.
  */
 const RUN_01 = resolve(projectRoot, "replays", "run-01.json")
-const RUN_01_HASH = "95ec31fc"
+const RUN_01_HASH = "6996f4b9"
 
 /**
  * Segunda run real: 5 min, 10 ondas, uma morte. Gravada antes da tecla de
@@ -30,7 +30,7 @@ const RUN_01_HASH = "95ec31fc"
  * Vale como determinismo sobre input humano longo.
  */
 const RUN_02 = resolve(projectRoot, "replays", "run-02.json")
-const RUN_02_HASH = "527c9f68"
+const RUN_02_HASH = "b7774bbe"
 
 /**
  * Terceira run real: 5,7 min de input humano, gravada quando os modificadores
@@ -39,7 +39,7 @@ const RUN_02_HASH = "527c9f68"
  * Com os patógenos reais este input voltou a morrer, na onda 6.
  */
 const RUN_03 = resolve(projectRoot, "replays", "run-03.json")
-const RUN_03_HASH = "15436db7"
+const RUN_03_HASH = "813d06f7"
 
 /**
  * Fixture do core contínuo, gravada por `npm run rec`. Sintética, não humana:
@@ -61,7 +61,7 @@ const RUN_03_HASH = "15436db7"
  * isso, um baseline nascido no browser seria verdade só do Node.
  */
 const CORE_ATUAL = resolve(projectRoot, "replays", "core-atual.json")
-const CORE_ATUAL_HASH = "ba59e37a"
+const CORE_ATUAL_HASH = "a85188cf"
 
 const smoke = () => loadReplay(SMOKE)
 const tuning = () => loadTuning()
@@ -152,6 +152,18 @@ const tuning = () => loadTuning()
  * mudanças de jogo pedidas por ele, cada uma medida e commitada separada. O
  * preço de separar é rebasear três vezes; o de juntar seria não saber qual das
  * três fez o quê — que foi exatamente o custo de 02/08.
+ *
+ * NONA VEZ, ainda em 13/08: o COMPLEMENTO entrou.
+ *
+ * Item novo, com efeito na sim — varre as filhas, reinicia e segura o relógio
+ * da fissão. Entraram no hash `fissionStun` e o carimbo `lastPick*`, e o
+ * `phases[0].counter` entrou no `tuningHash`. Deriva declarada.
+ *
+ * O ESTALO do abate, pedido na mesma leva, NÃO aparece aqui — e é exatamente
+ * por isso que ele foi desenhado como render puro. Anel, partículas e tremor de
+ * câmera não tocam um byte do estado, então o feel dá para afinar quantas vezes
+ * for preciso sem regravar fixture nenhuma. Vale como regra e não como sorte:
+ * quando o efeito couber no render, ponha no render.
  */
 
 /**
@@ -321,7 +333,7 @@ describe("determinismo", () => {
  */
 const PROCEDENCIA: ReadonlyArray<readonly [string, string, string]> = [
   ["smoke.json", "7c952a6", "sintética, regenerável byte a byte por `npm run smoke`"],
-  ["core-atual.json", "ab4750c", "sintética, VIVA — regravar com `npm run rec`"],
+  ["core-atual.json", "0654368", "sintética, VIVA — regravar com `npm run rec`"],
   ["run-01.json", "7c952a6", "humana, core do dash; hoje só âncora de determinismo"],
   ["run-02.json", "7c952a6", "humana, core do dash; hoje só âncora de determinismo"],
   ["run-03.json", "7c952a6", "humana, core do dash; hoje só âncora de determinismo"],

@@ -1,7 +1,15 @@
 import { describe, expect, it } from "vitest"
 import { loadTuning } from "../src/harness/loadTuning.ts"
 import { createSim } from "../src/sim/sim.ts"
-import { activeStats, POWERS, quotaFor, spawnIntervalFor } from "../src/sim/powers.ts"
+import {
+  activeStats,
+  COMPLEMENTO,
+  INSTANT,
+  PLAQUETA,
+  POWERS,
+  quotaFor,
+  spawnIntervalFor,
+} from "../src/sim/powers.ts"
 import type { InputFrame, Sim, SimState } from "../src/sim/types.ts"
 
 /**
@@ -821,7 +829,8 @@ describe("poderes automáticos, temporários e aleatórios", () => {
       POWERS.map(() => 0),
     )
     for (const pw of POWERS) {
-      if (pw.id === 8 || pw.id === 9) continue // escudo e cura agem na hora
+      // Escudo, cura e COMPLEMENTO agem na hora: não deixam rastro em `active`.
+      if (pw.id === 8 || INSTANT.has(pw.id)) continue
       const on = activeStats(
         tuning,
         POWERS.map((x) => (x.id === pw.id ? 100 : 0)),
@@ -1142,5 +1151,155 @@ describe("o gate continua medível", () => {
     expect(sim.state().runIndex).toBe(1)
     expect(sim.state().wave).toBe(1)
     expect(sim.state().active.every((n) => n === 0)).toBe(true)
+  })
+})
+
+describe("os itens: supressão e COMPLEMENTO", () => {
+  /** Põe UMA cápsula em cima do jogador e deixa a coleta acontecer. */
+  const consome = (sim: Sim, power: number): void => {
+    const s = mut(sim)
+    s.drops = [{ id: id(), power, x: s.player.x, y: s.player.y, life: 100 }]
+    sim.step(NONE)
+  }
+
+  it("o COMPLEMENTO varre as FILHAS e não encosta na mãe", () => {
+    /*
+     * A divisão de trabalho que dá sentido ao item: ele desmonta a REPRODUÇÃO,
+     * o jogador mata o corpo. Varrer a mãe junto seria limpar a onda por item,
+     * e limpar a onda é o trabalho de quem joga.
+     */
+    const sim = start(200)
+    const s = mut(sim)
+    s.enemies = [
+      virus(60, 60, "ecoli"),
+      virus(90, 60, "ecoli_filha"),
+      virus(120, 60, "ecoli_filha"),
+      virus(150, 60, "ecoli"),
+    ]
+    consome(sim, COMPLEMENTO)
+    const vivos = sim.state().enemies
+    expect(vivos.filter((e) => e.kind === "ecoli_filha"), "filha não sobra").toHaveLength(0)
+    expect(vivos.filter((e) => e.kind === "ecoli").length, "a mãe fica").toBeGreaterThanOrEqual(2)
+  })
+
+  it("o COMPLEMENTO REINICIA e SEGURA o relógio da fissão", () => {
+    const sim = start(201)
+    const s = mut(sim)
+    s.enemies = [virus(60, 60, "ecoli")]
+    // Relógio quase no fim: sem o item, a colônia dobraria em instantes.
+    s.fissionAcc = tuning.phases[0]!.fissionSeconds - 0.1
+    consome(sim, COMPLEMENTO)
+    expect(sim.state().fissionAcc, "o acumulador zera").toBe(0)
+    /*
+     * Quase o valor cheio, não o valor cheio: o passo da fissão roda DEPOIS da
+     * coleta no mesmo tick, então a pausa já nasce com um tick descontado. Isso
+     * é a ordem correta — o item age agora, não no tick seguinte — e cravar o
+     * valor exato aqui só travaria a ordem interna do `stepRun`.
+     */
+    const pausa = tuning.phases[0]!.counter.stunSeconds
+    expect(sim.state().fissionStun).toBeGreaterThan(pausa - 2 / tuning.sim.hz)
+    expect(sim.state().fissionStun).toBeLessThanOrEqual(pausa)
+  })
+
+  it("durante a pausa a colônia NÃO dobra, e depois volta a dobrar", () => {
+    /*
+     * O teste que separa "reinicia" de "segura". Só reiniciar compraria os
+     * segundos que faltavam e mais nada; é a pausa que transforma o item numa
+     * janela de trabalho.
+     */
+    const conta = (comItem: boolean): number => {
+      const sim = start(202)
+      const s = mut(sim)
+      s.field.fill(0)
+      s.infection = 0
+      s.enemies = [virus(40, 40, "ecoli"), virus(600, 330, "ecoli")]
+      if (comItem) consome(sim, COMPLEMENTO)
+      /*
+       * A janela tem que ser MAIOR que o período de fissão e MENOR que
+       * `reinício + pausa`. Ela é derivada dos dois números, e não escrita à
+       * mão: com `fissionSeconds` em 8 e a pausa em 6, qualquer constante que
+       * eu digitasse aqui viraria mentira no dia em que um dos dois mudasse —
+       * e a primeira versão deste teste morreu exatamente assim, medindo uma
+       * janela curta demais e concluindo que o item não fazia nada.
+       */
+      const fissao = tuning.phases[0]!.fissionSeconds
+      const janela = fissao + 1
+      expect(janela, "a janela precisa caber dentro da proteção do item").toBeLessThan(
+        fissao + tuning.phases[0]!.counter.stunSeconds,
+      )
+      const ticks = Math.round(janela * tuning.sim.hz)
+      for (let i = 0; i < ticks; i++) {
+        const st = mut(sim)
+        st.field.fill(0)
+        st.infection = 0
+        // Longe de tudo: o que se mede é a fissão, não a fagocitose.
+        st.player.x = 320
+        st.player.y = 180
+        tick(sim, NONE)
+      }
+      return sim.state().enemies.filter((e) => e.kind === "ecoli").length
+    }
+    const semItem = conta(false)
+    const comItem = conta(true)
+    expect(semItem, "sem item a colônia dobra na janela").toBeGreaterThan(2)
+    expect(comItem, "com item ela fica onde estava").toBe(2)
+  })
+
+  it("a pausa é da ONDA: conter e recomeçar não a carrega junto", () => {
+    const sim = start(203)
+    const s = mut(sim)
+    s.enemies = [virus(60, 60, "ecoli")]
+    consome(sim, COMPLEMENTO)
+    expect(sim.state().fissionStun).toBeGreaterThan(0)
+    const t = mut(sim)
+    t.field.fill(0)
+    t.infection = 0
+    t.enemies = []
+    sim.step(NONE)
+    expect(sim.state().phase).toBe("intervalo")
+    expect(sim.state().fissionStun, "a onda nova começa sem vantagem herdada").toBe(0)
+  })
+
+  it("a supressão continua sendo a do TECIDO, e o COMPLEMENTO não a faz", () => {
+    // Os dois são instantâneos e não podem virar o mesmo item por descuido.
+    const tecido = (power: number): number => {
+      const sim = start(204)
+      const s = mut(sim)
+      s.enemies = [virus(8, 8, "ecoli")]
+      s.field.fill(tuning.field.maxInfection)
+      s.infection = totalOf(sim)
+      const antes = totalOf(sim)
+      consome(sim, power)
+      return antes - totalOf(sim)
+    }
+    /*
+     * Contra CONTROLE, e não contra zero: o jogador cura o chão em que está a
+     * cada tick desde que a dilatação foi desligada, então "limpou alguma
+     * coisa" é verdade até sem item nenhum. A primeira versão deste teste
+     * comparava com zero e reprovava o comportamento certo.
+     */
+    const semItem = tecido(-1)
+    expect(tecido(PLAQUETA) - semItem, "a plaqueta limpa MUITO mais").toBeGreaterThan(1000)
+    expect(tecido(COMPLEMENTO) - semItem, "o complemento não é cura disfarçada").toBe(0)
+  })
+
+  it("consumir CARIMBA o evento, que é o gancho da animação", () => {
+    /*
+     * Sem o carimbo o render teria que diferenciar `prev` e `cur` — e um quadro
+     * lento roda vários ticks, então a cápsula nasce e some dentro dele e a
+     * animação nunca aconteceria.
+     */
+    const sim = start(205)
+    const s = mut(sim)
+    s.enemies = [virus(8, 8, "ecoli")]
+    const px = s.player.x
+    consome(sim, COMPLEMENTO)
+    expect(sim.state().lastPickPower).toBe(COMPLEMENTO)
+    expect(sim.state().lastPickTick).toBe(sim.state().tick - 1)
+    expect(sim.state().lastPickX).toBeCloseTo(px, 5)
+  })
+
+  it("os dois itens caem: o sorteio instantâneo conhece os dois", () => {
+    expect([...INSTANT].sort(), "supressão e complemento").toEqual([PLAQUETA, COMPLEMENTO].sort())
   })
 })

@@ -207,6 +207,49 @@ export interface PhaseSpec {
    * nunca ser a razão de a run parar de subir — `TASTE.md` §1 recusa teto.
    */
   readonly curva: ReadonlyArray<WaveStep>
+  /**
+   * O que o COMPLEMENTO faz contra ESTA doença.
+   *
+   * O item é geral — existe em toda fase, contra qualquer patógeno — e o efeito
+   * é que é da doença. Foi assim que o H pediu: *"esse novo item não é
+   * específico para a E. Coli, é específico para qualquer patógeno; conforme
+   * formos evoluindo na progressão, novas ações podem ser criadas para cada
+   * patógeno"*. Então o item é a PORTA e isto é o que está atrás dela.
+   *
+   * Mora em `PhaseSpec` e não em `KindSpec` porque o que ele conta hoje é
+   * comportamento de FASE (`fissionSeconds` é daqui, não do bicho). Quando as
+   * características primárias e secundárias por patógeno chegarem, esta é a
+   * costura: ou o campo desce para `KindSpec`, ou vira uma lista de efeitos.
+   */
+  readonly counter: CounterSpec
+}
+
+/**
+ * O efeito do COMPLEMENTO. Duas alavancas, e as duas atacam a REPRODUÇÃO.
+ *
+ * Não é dano: dano o jogador já tem, e é o corpo dele. Isto é o que ele não
+ * consegue fazer correndo — desmontar a colônia em vez de aparar o que ela
+ * produziu. Contra a E. coli isso é literal: varre as filhas e devolve o
+ * relógio da fissão para o começo.
+ */
+export interface CounterSpec {
+  /**
+   * Chave em `enemy.kinds` que o item VARRE do campo. Vazio = não varre nada.
+   *
+   * Contra a E. coli é `ecoli_filha` — os bacilos filhos, que são o que sobra
+   * de cada abate apressado. Varrer a mãe seria limpar a onda, e limpar a onda
+   * é o trabalho do jogador.
+   */
+  readonly purge: string
+  /**
+   * Segundos de MUNDO em que a fissão fica parada, e o acumulador dela zera.
+   *
+   * Zerar sozinho quase não vale nada: se a colônia dobra a cada 8s e você
+   * consome o item no segundo 7, zerar compra 7 segundos e mais nada. A pausa é
+   * o que transforma o item em janela de trabalho — e é por isso que ele
+   * REINICIA e SEGURA, não só reinicia.
+   */
+  readonly stunSeconds: number
 }
 
 export interface Tuning {
@@ -676,6 +719,28 @@ export interface SimState {
   spawnTimer: number
   frozen: number
   deadLock: number
+  /**
+   * Segundos de MUNDO em que a FISSÃO fica parada, pelo COMPLEMENTO.
+   *
+   * Em tempo de mundo, e não real, de propósito: ele é uma pausa no relógio da
+   * DOENÇA, e tem que medir o mesmo que o relógio que ele pausa. Se contasse em
+   * tempo real, com a dilatação religada a pausa valeria muito mais para quem
+   * ficasse parado — a ajuda renderia mais justamente para quem não age.
+   */
+  fissionStun: number
+  /**
+   * O último item consumido: tick, qual, e onde. É o gancho da ANIMAÇÃO.
+   *
+   * Mesmo padrão de `lastKill*`, e pela mesma razão: o render desenha quadros,
+   * a sim anda ticks, e num quadro lento cabem vários ticks. Diferença de
+   * estado entre `prev` e `cur` PERDE o que aconteceu no meio; um carimbo no
+   * estado sobrevive, porque o render pergunta "aconteceu nos últimos N ticks?"
+   * em vez de "mudou desde o quadro passado?".
+   */
+  lastPickTick: number
+  lastPickPower: number
+  lastPickX: number
+  lastPickY: number
   /** Ticks restantes de trava do card. Zero libera a dispensa. */
   cardLock: number
   /**

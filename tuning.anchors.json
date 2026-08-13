@@ -91,6 +91,31 @@
       ]
     },
     {
+      "valor": "phases.0.counter.stunSeconds",
+      "ancora": "phases.0.fissionSeconds",
+      "fracao": 0.75,
+      "porque": [
+        "A PAUSA do COMPLEMENTO, medida no relógio que ela pausa. 13/08.",
+        "",
+        "Só faz sentido comparada ao período de duplicação: 'pausa de 6 segundos' não diz",
+        "nada; 'pausa de três quartos de uma duplicação' diz tudo. Se a fissão mudar de 8",
+        "para 12, esta fração mantém a pausa proporcional em vez de virar um número que",
+        "já foi bom.",
+        "",
+        "O QUE O ITEM DE FATO COMPRA, e vale escrever porque não é a pausa sozinha: ele",
+        "REINICIA o acumulador E segura por `stunSeconds`. Colhido logo depois de uma",
+        "divisão, o reinício não vale nada e a pausa vale 6s; colhido às vésperas da",
+        "divisão seguinte, o reinício vale quase 8s e a pausa soma por cima. Nos dois",
+        "extremos o total é o mesmo: `fissionSeconds + stunSeconds` = 14s contra os 8s",
+        "naturais. A soma constante é o desenho — o item não pode valer mais por ser",
+        "guardado, senão guardá-lo vira a jogada certa e o item deixa de ser decisão.",
+        "",
+        "Abaixo de ~0,3 a pausa desaparece dentro do ruído do reinício e o item vira",
+        "'reinicia o relógio', que era a metade fraca. Acima de ~1,5 ele para a onda, e",
+        "parar a onda é o trabalho do jogador."
+      ]
+    },
+    {
       "valor": "phases.0.curva.9.fissao",
       "ancora": "phases.0.curva.0.fissao",
       "fracao": 0.4,

@@ -22,6 +22,7 @@ import {
   RAMP_INF,
   RAMP_LEU,
   RAMP_ORG,
+  KIND_RAMP,
   RAMP_SAL,
   RAMP_SHI,
   SHI1,
@@ -42,6 +43,8 @@ import {
   bloodCell,
   CELL_LEVELS,
   colonyTile,
+  haloSheet,
+  pulseSheet,
   necroticTile,
   TISSUE_LEVELS,
   TISSUE_VARIANTS,
@@ -138,6 +141,16 @@ export interface Atlas {
   /** A CICATRIZ, mesma grade do `colony`. Ver `necroticTile`. */
   readonly necrose: ReadonlyArray<ReadonlyArray<Texture>>
   readonly drops: ReadonlyArray<TexSheet>
+  /** Cápsula no VERDE DO LIMO. É a supressão da doença. */
+  readonly dropLimo: TexSheet
+  /** Cápsula na rampa de cada patógeno. É o COMPLEMENTO. */
+  readonly dropsByKind: ReadonlyMap<string, TexSheet>
+  /** Anel multicolorido piscante: a identidade de "isto é item". */
+  readonly halo: TexSheet
+  /** Onda do efeito consumido, verde do limo. */
+  readonly pulseLimo: TexSheet
+  /** Onda do efeito consumido, na cor do patógeno. */
+  readonly pulsesByKind: ReadonlyMap<string, TexSheet>
   readonly macrophage: TexSheet
   readonly orbiter: Texture
   readonly shock: ReadonlyArray<Texture>
@@ -201,7 +214,44 @@ export function buildAtlas(tuning: Tuning, crowdArea?: number): Atlas {
   const tileW = tuning.arena.width / tuning.field.cols
   const tileH = tuning.arena.height / tuning.field.rows
 
+    /*
+   * Quantos degraus a onda do item cresce. 14 a 60fps são ~0,23s, que é o tempo
+   * de um efeito instantâneo LER como instantâneo — mais longo vira animação de
+   * espera, e o item não faz esperar.
+   */
+  const PULSE_STEPS = 14
+
   const drops = POWERS.map((p) => bake(dropSheet(nearestRamp(p.color))))
+
+  /*
+   * Cápsulas na cor do que elas AFETAM, a pedido do H em 13/08.
+   *
+   * A supressão veste o verde do limo; o COMPLEMENTO veste a rampa do patógeno
+   * da fase. Por isso as duas não podem sair do `POWERS[].color`, que é um só:
+   * a segunda muda de cor conforme a doença em cena.
+   *
+   * `RAMP_SAL` é o verde do limo por um motivo concreto e não por gosto — é a
+   * rampa que o `colonyTile` usa (`RAMP_PUS`) para desenhar a colônia em TODA
+   * fase. Se aquele verde mudar, este item tem que mudar junto, e é isto que
+   * esta linha registra.
+   */
+  const dropLimo = bake(dropSheet(RAMP_SAL))
+  const dropsByKind = new Map<string, TexSheet>()
+  for (const kind of Object.keys(tuning.enemy.kinds)) {
+    dropsByKind.set(kind, bake(dropSheet(KIND_RAMP[kind] ?? RAMP_SAL)))
+  }
+
+  const halo = bake(haloSheet())
+  /*
+   * Uma onda por rampa de efeito. Assadas no boot como todo o resto — a
+   * alternativa seria compor o anel em tempo de execução, que é exatamente o
+   * que este pipeline existe para não fazer.
+   */
+  const pulseLimo = bake(pulseSheet(RAMP_SAL, PULSE_STEPS, 120))
+  const pulsesByKind = new Map<string, TexSheet>()
+  for (const kind of Object.keys(tuning.enemy.kinds)) {
+    pulsesByKind.set(kind, bake(pulseSheet(KIND_RAMP[kind] ?? RAMP_SAL, PULSE_STEPS, 96)))
+  }
 
   const dotCache = new Map<number, Texture>()
   const glyphCache = new Map<string, Texture | null>()
@@ -245,6 +295,11 @@ export function buildAtlas(tuning: Tuning, crowdArea?: number): Atlas {
       ),
     ),
     drops,
+    dropLimo,
+    dropsByKind,
+    halo,
+    pulseLimo,
+    pulsesByKind,
     macrophage: bake(macrophageSheet(tuning.powers.macrophageRadius)),
     orbiter: toTexture(orbiterBuf(tuning.powers.orbitKillRadius)),
     shock: shockRings(tuning.powers.shockRadius, SHI1).map((b) => toTexture(b)),

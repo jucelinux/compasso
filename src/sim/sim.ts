@@ -1,5 +1,13 @@
 import { Packer } from "./hash.ts"
-import { activeStats, INSTANT, POWERS, quotaFor, spawnIntervalFor } from "./powers.ts"
+import {
+  activeStats,
+  COMPLEMENTO,
+  INSTANT,
+  PLAQUETA,
+  POWERS,
+  quotaFor,
+  spawnIntervalFor,
+} from "./powers.ts"
 import {
   crowdAt,
   fieldSpec,
@@ -188,6 +196,11 @@ export function createSim(seed: number, tuning: Tuning): Sim {
     auraTicks: 0,
     instantAcc: 0,
     fissionAcc: 0,
+    fissionStun: 0,
+    lastPickTick: -1000,
+    lastPickPower: -1,
+    lastPickX: 0,
+    lastPickY: 0,
     combo: 0,
     comboTicks: 0,
     comboBest: 0,
@@ -374,6 +387,9 @@ export function createSim(seed: number, tuning: Tuning): Sim {
    */
   const startWave = (): void => {
     s.fissionAcc = 0
+    // A pausa é da ONDA, não da run: carregá-la para a onda seguinte daria uma
+    // vantagem que o jogador não pediu e não veria de onde veio.
+    s.fissionStun = 0
     s.waveKills = 0
     s.quota = quotaFor(tuning, s.wave)
     s.enemies = []
@@ -470,12 +486,31 @@ export function createSim(seed: number, tuning: Tuning): Sim {
 
   /** Liga um poder. Instantâneos agem na hora e não ficam ativos. */
   const grant = (power: number): void => {
-    if (INSTANT.has(power)) {
+    if (power === PLAQUETA) {
       for (let i = 0; i < s.field.length; i++) {
         const v = s.field[i]! - tuning.field.plaquetaHeal
         s.field[i] = v < 0 ? 0 : v
       }
       s.infection = totalInfection(s.field)
+      return
+    }
+    if (power === COMPLEMENTO) {
+      /*
+       * Ataca a REPRODUÇÃO da doença, e o que ele faz é decidido pela FASE.
+       *
+       * Contra a E. coli: varre as filhas e devolve o relógio da fissão ao
+       * começo, com uma pausa por cima. As duas metades são necessárias —
+       * varrer sem pausar deixa a colônia repor em segundos, e pausar sem
+       * varrer deixa em cena tudo que já nasceu.
+       *
+       * Nada aqui menciona "ecoli": a fase diz o que varrer e por quanto
+       * tempo. Quando o segundo patógeno voltar, ele traz o `counter` dele e
+       * este código não muda.
+       */
+      const c = phaseSpec().counter
+      if (c.purge !== "") s.enemies = s.enemies.filter((e) => e.kind !== c.purge)
+      s.fissionStun = c.stunSeconds
+      s.fissionAcc = 0
       return
     }
     if (power === 8) {
@@ -847,8 +882,15 @@ export function createSim(seed: number, tuning: Tuning): Sim {
     for (const d of s.drops) {
       const gx = p.x - d.x
       const gy = p.y - d.y
-      if (Math.sqrt(gx * gx + gy * gy) <= half + 8) grant(d.power)
-      else keptDrops.push(d)
+      if (Math.sqrt(gx * gx + gy * gy) <= half + 8) {
+        // Carimba ANTES de conceder: o `grant` do COMPLEMENTO varre inimigos, e
+        // o render precisa do ponto para desenhar de onde a varredura partiu.
+        s.lastPickTick = s.tick
+        s.lastPickPower = d.power
+        s.lastPickX = d.x
+        s.lastPickY = d.y
+        grant(d.power)
+      } else keptDrops.push(d)
     }
     s.drops = keptDrops
 
@@ -1031,7 +1073,16 @@ export function createSim(seed: number, tuning: Tuning): Sim {
     // A curva aperta o relógio da colônia, e é a alavanca principal dela: das
     // cinco, é a única que muda o quanto a onda PIORA enquanto você decide.
     const fission = phaseSpec().fissionSeconds * (degrau()?.fissao ?? 1)
-    if (fission > 0) {
+    /*
+     * A PAUSA do COMPLEMENTO, e ela come o passo ANTES do acumulador.
+     *
+     * Descontar do relógio em vez de zerar todo tick é o que faz a pausa ter
+     * fim previsível: o jogador vê o item, sabe que comprou uma janela, e a
+     * janela fecha sozinha. Zerar `fissionAcc` a cada tick daria o mesmo efeito
+     * e nenhuma forma — seria uma pausa sem borda.
+     */
+    if (s.fissionStun > 0) s.fissionStun = Math.max(0, s.fissionStun - passo)
+    if (fission > 0 && s.fissionStun <= 0) {
       s.fissionAcc += passo
       if (s.fissionAcc >= fission) {
         s.fissionAcc -= fission
@@ -1475,7 +1526,7 @@ export function createSim(seed: number, tuning: Tuning): Sim {
       .f64(s.worldScale)
       .u32(s.frozen)
       .u32(s.deadLock)
-      .u32(s.cardLock).u32(s.countdown).u32(s.auraTicks).f64(s.instantAcc).u32(s.pick).u32(s.phaseIndex).u32(s.round)
+      .u32(s.cardLock).u32(s.countdown).f64(s.fissionStun).u32(s.auraTicks).f64(s.instantAcc).u32(s.pick).u32(s.phaseIndex).u32(s.round)
       .f64(s.fissionAcc)
       .u32(s.infection)
       .u32(s.necrosed)
