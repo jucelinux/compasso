@@ -85,10 +85,81 @@ const crowdParam = params.get("crowd")
  * `InputFrame` legítimo, então o F9 grava e o replay reproduz um toque com a
  * mesma fidelidade com que reproduz uma tecla.
  */
+/**
+ * O PONTEIRO, em coordenada de ARENA — 13/08, para as portas do cérebro.
+ *
+ * A conversão mora aqui e não na sim pela mesma razão que a escala inteira mora
+ * aqui: a sim não sabe que existe canvas, e não pode saber. O que ela recebe é
+ * um ponto em 640x360, igual ao que ela usa para tudo o mais.
+ *
+ * `getBoundingClientRect` e não a escala calculada em `fitInteger`: o retângulo
+ * é a verdade medida depois do layout, e a escala é a intenção. Elas coincidem
+ * hoje, e no dia em que não coincidirem o clique tem que seguir o que está na
+ * tela — foi o CSS que colocou o canvas onde ele está.
+ */
+const ponteiro = { x: -1, y: -1, down: false }
+
+/**
+ * O PAD DE TOQUE não é a arena, e apertá-lo não é clicar nela.
+ *
+ * Sem esta guarda o mesmo dedo faria duas coisas: o pad vira `action`, e o
+ * `pointerdown` que subiu por baixo dele vira clique na posição do botão. Num
+ * aparelho de toque toda a interação passaria por dois caminhos ao mesmo tempo,
+ * e o segundo é invisível para quem está jogando.
+ */
+const noPad = (event: PointerEvent): boolean =>
+  touchLayer !== null && event.target instanceof Node && touchLayer.contains(event.target)
+
+function atualizaPonteiro(event: PointerEvent): void {
+  const canvas = mount.querySelector("canvas")
+  if (canvas === null) return
+  const r = canvas.getBoundingClientRect()
+  if (r.width === 0 || r.height === 0) return
+  ponteiro.x = ((event.clientX - r.left) / r.width) * tuning.arena.width
+  ponteiro.y = ((event.clientY - r.top) / r.height) * tuning.arena.height
+}
+window.addEventListener("pointermove", (event) => {
+  if (noPad(event)) return
+  atualizaPonteiro(event)
+})
+/**
+ * O clique fica TRAVADO até ser lido uma vez.
+ *
+ * O evento do browser chega quando chega; a sim lê input 60 vezes por segundo.
+ * Um clique curto o bastante desce e sobe entre duas leituras e nunca existe —
+ * e "nunca existe" aqui significa que a porta não abre e ninguém sabe por quê.
+ *
+ * Achado pelo rig, que clica em milissegundos: `npm run shot` passou a não sair
+ * do cérebro. O aparelho é um clicador extremo, mas o defeito é do jogo — um
+ * mouse rápido de verdade cai no mesmo buraco, só que mais raramente, que é a
+ * pior frequência para um defeito ter.
+ */
+let cliquePendente = false
+window.addEventListener("pointerdown", (event) => {
+  if (noPad(event)) return
+  atualizaPonteiro(event)
+  ponteiro.down = true
+  cliquePendente = true
+})
+// `pointerup` na JANELA e não no canvas: soltar o botão fora dele ainda é
+// soltar, e sem isto o clique fica preso ligado para sempre.
+window.addEventListener("pointerup", () => {
+  ponteiro.down = false
+})
+window.addEventListener("pointercancel", () => {
+  ponteiro.down = false
+})
+
 function readInput(): InputFrame {
   const k = keyboard.frame()
   const t = pad?.state()
-  if (t === undefined) return k
+  const m = {
+    pointerX: ponteiro.x,
+    pointerY: ponteiro.y,
+    click: ponteiro.down || cliquePendente,
+  }
+  cliquePendente = false
+  if (t === undefined) return { ...k, ...m }
   const morto = sim.state().phase === "dead"
   return {
     up: k.up || t.up,
@@ -97,6 +168,7 @@ function readInput(): InputFrame {
     right: k.right || t.right,
     action: k.action || (t.press && !morto),
     restart: k.restart || (t.press && morto),
+    ...m,
   }
 }
 

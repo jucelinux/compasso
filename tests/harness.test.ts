@@ -5,7 +5,14 @@ import { loadTuning, projectRoot } from "../src/harness/loadTuning.ts"
 import { createReplay, parseReplay, stringifyReplay } from "../src/harness/replay.ts"
 import { runReplay } from "../src/harness/runReplay.ts"
 import { createRecorder } from "../src/input/recorder.ts"
-import { decodeInput, encodeInput, packInput, unpackInput } from "../src/input/frame.ts"
+import {
+  EMPTY_INPUT,
+  SEM_PONTEIRO,
+  decodeInput,
+  encodeInput,
+  packInput,
+  unpackInput,
+} from "../src/input/frame.ts"
 import { createRng } from "../src/sim/rng.ts"
 import type { InputFrame } from "../src/sim/types.ts"
 
@@ -142,5 +149,60 @@ describe("fronteira da sim", () => {
     for (const source of simFiles) {
       expect(source).not.toMatch(/Math\.(sin|cos|tan|pow|exp|log|atan2|hypot)\b/)
     }
+  })
+})
+
+/*
+ * O PONTEIRO no codec, 13/08 — as portas do cérebro abrem no clique.
+ *
+ * O que estes testes protegem é a promessa que o formato faz: um clique
+ * gravado reproduz no MESMO lugar, e catorze fixtures escritas antes dele
+ * continuam legíveis. Formato de replay é o contrato mais caro deste projeto,
+ * porque quebrá-lo não dá erro — dá um jogo que roda diferente do gravado.
+ */
+describe("codec do ponteiro", () => {
+  const COM_CLIQUE: InputFrame = {
+    ...EMPTY_INPUT,
+    left: true,
+    pointerX: 486,
+    pointerY: 128,
+    click: true,
+  }
+
+  it("clique sobrevive à ida e volta, com o lugar dele", () => {
+    const volta = decodeInput(encodeInput(COM_CLIQUE))
+    expect(volta.click).toBe(true)
+    expect(volta.pointerX).toBe(486)
+    expect(volta.pointerY).toBe(128)
+    expect(volta.left).toBe(true)
+  })
+
+  it("sem clique, o texto continua sendo SÓ o inteiro", () => {
+    /*
+     * O tamanho do arquivo é a razão, e ela é concreta: `run-01` tem 27.464
+     * ticks. Gravar a posição do cursor em todos multiplicaria o arquivo por
+     * quatro para dizer, na quase totalidade deles, que ninguém clicou.
+     */
+    const parado: InputFrame = { ...EMPTY_INPUT, up: true, pointerX: 300, pointerY: 200 }
+    expect(encodeInput(parado)).toBe("1")
+    expect(decodeInput("1").click).toBe(false)
+  })
+
+  it("replay ANTIGO decodifica, e sem ponteiro", () => {
+    // Inteiro puro é o formato de todas as catorze fixtures de `replays/`.
+    const velho = decodeInput("21")
+    expect(velho.click).toBe(false)
+    expect(velho.pointerX).toBe(SEM_PONTEIRO)
+    expect(velho.up).toBe(true)
+    expect(velho.left).toBe(true)
+    expect(velho.action).toBe(true)
+  })
+
+  it("sufixo quebrado é ERRO, não ponteiro em 0,0", () => {
+    // Silenciar aqui seria pior que falhar: um clique lido como (0,0) é um
+    // clique no canto superior esquerdo, que é uma coordenada válida.
+    expect(() => decodeInput("16.10")).toThrow()
+    expect(() => decodeInput("16.10.20.30")).toThrow()
+    expect(() => decodeInput("16.a.20")).toThrow()
   })
 })

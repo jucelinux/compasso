@@ -1,6 +1,7 @@
 import type { InputFrame } from "../sim/types.ts"
+import { EMPTY_INPUT, type Botao } from "./frame.ts"
 
-const KEY_MAP: Readonly<Record<string, keyof InputFrame>> = {
+const KEY_MAP: Readonly<Record<string, Botao>> = {
   ArrowUp: "up",
   ArrowDown: "down",
   ArrowLeft: "left",
@@ -21,7 +22,7 @@ export interface Keyboard {
 }
 
 export function createKeyboard(target: Window = window): Keyboard {
-  const held = {
+  const held: Record<Botao, boolean> = {
     up: false,
     down: false,
     left: false,
@@ -50,7 +51,9 @@ export function createKeyboard(target: Window = window): Keyboard {
   target.addEventListener("blur", onBlur)
 
   return {
-    frame: () => ({ ...held }),
+    // O ponteiro NÃO passa por aqui: ele é do mouse, e juntar os dois neste
+    // objeto faria o teclado responder por um estado que ele não observa.
+    frame: () => ({ ...EMPTY_INPUT, ...held }),
     dispose: () => {
       target.removeEventListener("keydown", onDown)
       target.removeEventListener("keyup", onUp)

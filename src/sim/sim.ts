@@ -199,6 +199,8 @@ export function createSim(seed: number, tuning: Tuning): Sim {
     fissionAcc: 0,
     fissionStun: 0,
     villain: 0,
+    painel: -1,
+    prevClick: false,
     coins: 0,
     bank: 0,
     pickups: [],
@@ -1537,11 +1539,17 @@ export function createSim(seed: number, tuning: Tuning): Sim {
    * chegar nele, não materializar dentro da porta.
    */
   const poeNoCerebro = (): void => {
-    s.player.x = tuning.hub.orbitX
-    s.player.y = Math.min(
-      height - tuning.player.size,
-      tuning.hub.orbitY + tuning.hub.orbitRadius + tuning.player.size * 2,
-    )
+    /*
+     * A PRAÇA, e ela deixou de ser "abaixo da órbita" em 13/08.
+     *
+     * Enquanto havia uma porta só, nascer relativo a ela era a definição certa
+     * de "fora da porta". Com CINCO portas espalhadas pelos cantos e pelo
+     * centro, "fora" deixou de ter dono: o ponto tem que ser longe de TODAS, e
+     * isso é uma posição, não uma fórmula. Ela é o único lugar do cérebro que
+     * não promete nada, que é exatamente o que uma safezone precisa ter.
+     */
+    s.player.x = tuning.hub.spawnX
+    s.player.y = tuning.hub.spawnY
     s.player.vx = 0
     s.player.vy = 0
     s.player.speed = 0
@@ -1603,11 +1611,100 @@ export function createSim(seed: number, tuning: Tuning): Sim {
    * Com a órbita como porta, escolher passa a ter um GESTO: você vai até lá. É o
    * mesmo verbo do jogo inteiro, usado num lugar sem risco.
    */
-  const stepHub = (bits: number): void => {
+  /**
+   * As CINCO PORTAS do cérebro — a órbita e as quatro de 13/08.
+   *
+   * A órbita é a de índice -1 porque ela não está em `hub.nodes`: ela tem
+   * desenho próprio (os patógenos girando) e leva a uma tela que já existia. As
+   * outras quatro são dados puros, e é isso que faz a quinta custar uma linha.
+   */
+  const portaEm = (x: number, y: number): number | null => {
+    const dxo = x - tuning.hub.orbitX
+    const dyo = y - tuning.hub.orbitY
+    if (dxo * dxo + dyo * dyo <= tuning.hub.enterRadius * tuning.hub.enterRadius) return -1
+    const r = tuning.hub.nodeRadius
+    for (let i = 0; i < tuning.hub.nodes.length; i++) {
+      const n = tuning.hub.nodes[i]!
+      const dx = x - n.x
+      const dy = y - n.y
+      if (dx * dx + dy * dy <= r * r) return i
+    }
+    return null
+  }
+
+  const abrePorta = (porta: number): void => {
+    if (porta === -1) {
+      s.phase = "select"
+      return
+    }
+    s.phase = "painel"
+    s.painel = porta
+  }
+
+  /**
+   * O CÉREBRO, agora com CINCO portas e aceitando CLIQUE.
+   *
+   * Duas formas de abrir a mesma coisa, e as duas são o mesmo gesto visto de
+   * ângulos diferentes: LEVAR o glóbulo até a porta, ou APONTAR para ela. O H
+   * pediu as duas em 13/08, e elas não competem — quem está jogando com as mãos
+   * no teclado anda, quem está com o mouse aponta.
+   *
+   * O clique usa a BORDA de descida do botão, não o estado: com o estado, um
+   * botão segurado reabriria a porta no quadro seguinte ao fechamento, que é a
+   * versão de mouse do "dispensar por reflexo" que o `cardLock` já resolve para
+   * as teclas.
+   */
+  const stepHub = (bits: number, input: InputFrame): void => {
     movePlayer(bits)
-    const dx = s.player.x - tuning.hub.orbitX
-    const dy = s.player.y - tuning.hub.orbitY
-    if (Math.sqrt(dx * dx + dy * dy) <= tuning.hub.enterRadius) s.phase = "select"
+    if (input.click && !s.prevClick) {
+      const alvo = portaEm(input.pointerX, input.pointerY)
+      if (alvo !== null) {
+        abrePorta(alvo)
+        return
+      }
+    }
+    const porta = portaEm(s.player.x, s.player.y)
+    if (porta !== null) abrePorta(porta)
+  }
+
+  /**
+   * FECHAR uma tela do cérebro: clique FORA dela, no X, ou a tecla de voltar.
+   *
+   * Devolve `true` quando fechou. Empurrar o jogador para fora da porta é parte
+   * do fechamento e não polimento: sem isso ele reaparece dentro do gatilho e a
+   * tela reabre no quadro seguinte — o mesmo defeito que a `select` já tinha e
+   * que agora vale para cinco portas em vez de uma.
+   */
+  const fechou = (bits: number, input: InputFrame): boolean => {
+    const novo = bits & ~s.prevBits
+    const clicou = input.click && !s.prevClick
+    const px = input.pointerX
+    const py = input.pointerY
+    const w = tuning.hub.panelW
+    const h = tuning.hub.panelH
+    const x0 = (width - w) / 2
+    const y0 = (height - h) / 2
+    const foraDoQuadro = px < x0 || px > x0 + w || py < y0 || py > y0 + h
+    const c = tuning.hub.closeSize
+    // O [X] fica DENTRO do quadro, então ele precisa ser dito à parte: sem isto
+    // a única região da tela que promete fechar seria a que não fecha.
+    const noX = px >= x0 + w - c && px <= x0 + w && py >= y0 && py <= y0 + c
+    if ((novo & BIT_RESTART) === 0 && !(clicou && (foraDoQuadro || noX))) return false
+    s.phase = "hub"
+    s.painel = -1
+    poeNoCerebro()
+    return true
+  }
+
+  /**
+   * As QUATRO portas novas: histórico, inventário, upgrades e modo pandemia.
+   *
+   * A sim não sabe qual é qual, e isso é o desenho: ela abre, segura e fecha.
+   * Nada corre aqui dentro, pela mesma razão que nada corre no hub — é a mesma
+   * safezone, com uma tela por cima.
+   */
+  const stepPainel = (bits: number, input: InputFrame): void => {
+    fechou(bits, input)
   }
 
   /**
@@ -1618,7 +1715,7 @@ export function createSim(seed: number, tuning: Tuning): Sim {
    * Seria a versão de menu do "dispensar por reflexo" que o `cardLock` resolve
    * com tempo — aqui o remédio é geometria.
    */
-  const stepSelect = (bits: number): void => {
+  const stepSelect = (bits: number, input: InputFrame): void => {
     const novo = bits & ~s.prevBits
     const n = villainCount()
     if ((novo & BIT_LEFT) !== 0) s.villain = (s.villain + n - 1) % n
@@ -1627,10 +1724,10 @@ export function createSim(seed: number, tuning: Tuning): Sim {
       startRun()
       return
     }
-    if ((novo & BIT_RESTART) !== 0) {
-      s.phase = "hub"
-      poeNoCerebro()
-    }
+    // Fechar é a MESMA regra das outras quatro portas: clique fora, clique no
+    // [X], ou a tecla de voltar. Escrever aqui uma variante seria ensinar duas
+    // formas de fechar a mesma coisa.
+    fechou(bits, input)
   }
 
   const stepCard = (bits: number): void => {
@@ -1698,13 +1795,15 @@ export function createSim(seed: number, tuning: Tuning): Sim {
   const step = (input: InputFrame): void => {
     const bits = bitsOf(input)
     if (s.phase === "run") stepRun(bits)
-    else if (s.phase === "hub") stepHub(bits)
-    else if (s.phase === "select") stepSelect(bits)
+    else if (s.phase === "hub") stepHub(bits, input)
+    else if (s.phase === "select") stepSelect(bits, input)
+    else if (s.phase === "painel") stepPainel(bits, input)
     else if (s.phase === "card") stepCard(bits)
     else if (s.phase === "intervalo") stepIntervalo()
     else if (s.phase === "closed") stepClosed(bits)
     else stepDead(bits)
     s.prevBits = bits
+    s.prevClick = input.click
     s.rngState = rng.state()
     s.tick++
   }
@@ -1718,6 +1817,8 @@ export function createSim(seed: number, tuning: Tuning): Sim {
           ? 5
           : s.phase === "select"
             ? 6
+          : s.phase === "painel"
+            ? 7
           : s.phase === "run"
           ? 0
           : s.phase === "card"
@@ -1748,7 +1849,7 @@ export function createSim(seed: number, tuning: Tuning): Sim {
       .f64(s.worldScale)
       .u32(s.frozen)
       .u32(s.deadLock)
-      .u32(s.villain).u32(s.coins).u32(s.bank).u32(s.pickups.length).u32(s.cardLock).u32(s.countdown).f64(s.fissionStun).u32(s.auraTicks).f64(s.instantAcc).u32(s.pick).u32(s.phaseIndex).u32(s.round)
+      .u32(s.villain).u32(s.painel + 1).u8(s.prevClick ? 1 : 0).u32(s.coins).u32(s.bank).u32(s.pickups.length).u32(s.cardLock).u32(s.countdown).f64(s.fissionStun).u32(s.auraTicks).f64(s.instantAcc).u32(s.pick).u32(s.phaseIndex).u32(s.round)
       .f64(s.fissionAcc)
       .u32(s.infection)
       .u32(s.necrosed)

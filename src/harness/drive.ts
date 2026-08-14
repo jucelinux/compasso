@@ -20,6 +20,8 @@ export interface Driver {
   page: Page
   /** Segura as teclas por `ms` e solta. Aceita várias ao mesmo tempo. */
   hold(keys: string | ReadonlyArray<string>, ms: number): Promise<void>
+  /** Clica num ponto em coordenada de ARENA (640x360). */
+  clicaArena(x: number, y: number): Promise<void>
   /** Captura só o canvas, no tamanho nativo de 640x360 vezes `scale`. */
   shot(path: string, scale?: number): Promise<void>
   close(): Promise<void>
@@ -129,6 +131,28 @@ export async function drive(
           await page.keyboard.up(k)
           held.delete(k)
         }
+      },
+      /**
+       * CLICA num ponto da arena, em coordenada de 640x360.
+       *
+       * Entrou em 13/08 junto com as cinco portas do cérebro, e não é
+       * conveniência: o rig no browser só enxerga a FASE, pelo texto do HUD, e
+       * nunca soube onde o glóbulo está. Enquanto havia uma porta só logo acima
+       * do ponto de nascimento, segurar CIMA bastava; com as portas nos cantos e
+       * o nascimento na praça, não basta mais.
+       *
+       * Clicar é o outro gesto que o próprio jogador tem, então o aparelho
+       * continua pilotando um caminho que alguém percorre — e de quebra a
+       * gravação passa a exercitar o ponteiro pelo cano inteiro, do evento do
+       * browser ao sufixo no arquivo de replay.
+       */
+      async clicaArena(x, y) {
+        const box = await page.locator("#app canvas").boundingBox()
+        if (box === null) throw new Error("sem canvas para clicar")
+        await page.mouse.click(
+          box.x + (x / 640) * box.width,
+          box.y + (y / 360) * box.height,
+        )
       },
       async shot(path, scale = 2) {
         await page.evaluate((s) => {

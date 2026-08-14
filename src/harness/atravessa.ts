@@ -1,5 +1,5 @@
 import type { InputFrame, SimState, Tuning } from "../sim/types.ts"
-import { unpackInput } from "../input/frame.ts"
+import { EMPTY_INPUT, unpackInput } from "../input/frame.ts"
 
 /**
  * COMO SE ATRAVESSA UMA TELA. Um lugar só, e este é o motivo.
@@ -30,12 +30,14 @@ import { unpackInput } from "../input/frame.ts"
 export const ehTela = (fase: string): boolean =>
   fase === "hub" ||
   fase === "select" ||
+  fase === "painel" ||
   fase === "card" ||
   fase === "intervalo" ||
   fase === "closed"
 
-const NADA = unpackInput(0)
+const NADA = EMPTY_INPUT
 const ACAO = unpackInput(16)
+const VOLTA = unpackInput(32)
 
 /**
  * O input que atravessa a tela em que a sim está.
@@ -57,14 +59,23 @@ export function atravessaTela(s: SimState, tuning: Tuning): InputFrame {
     const dx = tuning.hub.orbitX - s.player.x
     const dy = tuning.hub.orbitY - s.player.y
     return {
+      ...NADA,
       up: dy < -2,
       down: dy > 2,
       left: dx < -2,
       right: dx > 2,
-      action: false,
-      restart: false,
     }
   }
+  /*
+   * `painel` sai pela tecla de VOLTAR, e o aparelho nunca deveria chegar aqui:
+   * ele anda reto até a órbita e o caminho não encosta em porta nenhuma.
+   *
+   * Está escrito assim mesmo porque a geometria do cérebro é `tuning.json`, e
+   * mover uma porta um dia pode pôr uma no caminho. Sem esta linha o rig ficaria
+   * presos numa tela que ele não sabe que abriu — que é a forma mais silenciosa
+   * de o aparelho parar de medir, e já aconteceu duas vezes hoje.
+   */
+  if (s.phase === "painel") return VOLTA
   if (s.phase === "select") return ACAO
   return s.cardLock === 0 ? ACAO : NADA
 }

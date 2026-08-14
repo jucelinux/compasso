@@ -12,7 +12,7 @@ import type { Tuning } from "../src/sim/types.ts"
  */
 
 const SMOKE = resolve(projectRoot, "replays", "smoke.json")
-const BASELINE_HASH = "0314289c"
+const BASELINE_HASH = "151c9191"
 
 /**
  * Run real do humano, 7,6 min de input de verdade, do core do dash (`7c952a6`).
@@ -22,7 +22,7 @@ const BASELINE_HASH = "0314289c"
  * leitura de ritmo, e não como cobertura de morte.
  */
 const RUN_01 = resolve(projectRoot, "replays", "run-01.json")
-const RUN_01_HASH = "fefcb575"
+const RUN_01_HASH = "22748700"
 
 /**
  * Segunda run real: 5 min, 10 ondas, uma morte. Gravada antes da tecla de
@@ -30,7 +30,7 @@ const RUN_01_HASH = "fefcb575"
  * Vale como determinismo sobre input humano longo.
  */
 const RUN_02 = resolve(projectRoot, "replays", "run-02.json")
-const RUN_02_HASH = "49303a28"
+const RUN_02_HASH = "263d9dc2"
 
 /**
  * Terceira run real: 5,7 min de input humano, gravada quando os modificadores
@@ -40,7 +40,7 @@ const RUN_02_HASH = "49303a28"
  * sai mais do cérebro — ver o teste da cobertura, mais abaixo.
  */
 const RUN_03 = resolve(projectRoot, "replays", "run-03.json")
-const RUN_03_HASH = "803c4dca"
+const RUN_03_HASH = "56336abe"
 
 /**
  * Fixture do core contínuo, gravada por `npm run rec`. Sintética, não humana:
@@ -59,14 +59,16 @@ const RUN_03_HASH = "803c4dca"
  * Desde 05/08 toda gravação passa por verificação BROWSER↔NODE: o `npm run rec`
  * colhe pares (tick, hash) do HUD durante a captura e exige que o replay em Node
  * reproduza os mesmos hashes nos mesmos ticks. Sem isso, um baseline nascido no
- * browser seria verdade só do Node. A gravação vigente bateu em 12 testemunhas.
+ * browser seria verdade só do Node. A gravação vigente bateu em 9 testemunhas,
+ * e ela é a primeira que atravessa a porta CLICANDO — o ponteiro de 13/08 passa
+ * pelo cano inteiro, do evento no browser ao sufixo no arquivo, e reproduz.
  *
  * Desde 13/08 esta é também a ÚNICA fixture que cobre morte no core atual: as
  * três humanas não saem mais do cérebro. Regravar quando ela parar de morrer
  * deixou de ser zelo e virou a única forma de a suíte cobrir o fim da run.
  */
 const CORE_ATUAL = resolve(projectRoot, "replays", "core-atual.json")
-const CORE_ATUAL_HASH = "0a7a6762"
+const CORE_ATUAL_HASH = "0636ef0f"
 
 const smoke = () => loadReplay(SMOKE)
 const tuning = () => loadTuning()
@@ -243,6 +245,37 @@ const tuning = () => loadTuning()
  * precisa voltar a bater, senão ela deixa de ser o que o nome diz. A gravação
  * nova bateu em 12 testemunhas browser↔node e mudou de hash — o passeio do
  * gravador é outro, com a porta em outro canto.
+ */
+
+/*
+ * DÉCIMA TERCEIRA VEZ, em 13/08: as CINCO PORTAS e o PONTEIRO.
+ *
+ * Pedido do H: cinco funcionalidades espalhadas pelos cantos e pelo centro, a
+ * órbita encolhida ao tamanho de porta (o gatilho ficou 10% maior que o
+ * glóbulo, e o anel externo caiu na mesma proporção), e o clique como segunda
+ * forma de abrir e a única de fechar sem tecla.
+ *
+ * Três coisas mudaram o hash, e vale separá-las:
+ *
+ * 1. `tuning.hub` inteiro — órbita menor, quatro portas novas, praça de
+ *    nascimento própria e o quadro dos painéis. `tuningHash` novo.
+ * 2. `SimState` ganhou `painel` e `prevClick`, e os dois entraram no pacote.
+ *    Não são enfeite: um diz qual tela está aberta e o outro dá BORDA ao
+ *    clique, e sem borda um botão segurado reabre a porta para sempre.
+ * 3. A fase `painel` entrou na união, com código próprio no hash.
+ *
+ * E o ponteiro entrou no `InputFrame`, o que é mudança de FORMATO DE REPLAY —
+ * o contrato mais caro deste projeto, porque quebrá-lo não dá erro, dá um jogo
+ * que roda diferente do gravado. O sufixo `bits.x.y` só aparece quando há
+ * clique, e inteiro puro continua válido: as catorze fixtures de `replays/`
+ * seguem legíveis sem regravar nenhuma, e é por isso que as três humanas ainda
+ * produzem hash aqui.
+ *
+ * A `smoke` foi REGENERADA de novo, pelo mesmo motivo da última vez: as portas
+ * mudaram de lugar e o prólogo baked dela parou de chegar na run. O sintoma
+ * apareceu no mesmo teste lateral de sempre — `muda o comportamento sem editar
+ * código` parou de mudar hash, porque no cérebro não existe dash. É a segunda
+ * vez que esse teste denuncia o que cinco baselines não denunciam.
  */
 
 /**
@@ -436,8 +469,8 @@ describe("determinismo", () => {
  * alguém dizer o que ele é.
  */
 const PROCEDENCIA: ReadonlyArray<readonly [string, string, string]> = [
-  ["smoke.json", "d838d78", "sintética, regenerável byte a byte por `npm run smoke`"],
-  ["core-atual.json", "43c2626", "sintética, VIVA — regravar com `npm run rec`"],
+  ["smoke.json", "9cc7bf0", "sintética, regenerável byte a byte por `npm run smoke`"],
+  ["core-atual.json", "9cc7bf0", "sintética, VIVA — regravar com `npm run rec`"],
   ["run-01.json", "7c952a6", "humana, core do dash; hoje só âncora de determinismo"],
   ["run-02.json", "7c952a6", "humana, core do dash; hoje só âncora de determinismo"],
   ["run-03.json", "7c952a6", "humana, core do dash; hoje só âncora de determinismo"],

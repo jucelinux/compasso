@@ -230,11 +230,23 @@
     "instantEverySeconds": 18.0
   },
   "hub": {
-    "orbitX": 486,
-    "orbitY": 128,
-    "orbitRadius": 62,
-    "enterRadius": 26,
-    "orbitSpeed": 0.11
+    "orbitX": 544,
+    "orbitY": 96,
+    "orbitRadius": 26,
+    "enterRadius": 11,
+    "orbitSpeed": 0.11,
+    "spawnX": 320,
+    "spawnY": 300,
+    "nodeRadius": 11,
+    "panelW": 240,
+    "panelH": 176,
+    "closeSize": 13,
+    "nodes": [
+      { "id": "historico", "x": 96, "y": 96 },
+      { "id": "inventario", "x": 96, "y": 264 },
+      { "id": "upgrades", "x": 320, "y": 180 },
+      { "id": "pandemia", "x": 544, "y": 264 }
+    ]
   },
   "coin": {
     "lifeTicks": 420,

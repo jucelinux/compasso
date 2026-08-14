@@ -12,6 +12,7 @@
 import { createSim } from "../sim/sim.ts"
 import { fieldSpec, tileAt } from "../sim/field.ts"
 import type { Enemy, InputFrame, SimState, Tuning } from "../sim/types.ts"
+import { EMPTY_INPUT } from "../input/frame.ts"
 import { atravessaTela, ehTela } from "./atravessa.ts"
 import { loadTuning } from "./loadTuning.ts"
 
@@ -26,15 +27,7 @@ const DIRS: ReadonlyArray<{ dx: number; dy: number; frame: Partial<InputFrame> }
   { dx: 0.7071, dy: 0.7071, frame: { down: true, right: true } },
 ]
 
-const IN = (o: Partial<InputFrame> = {}): InputFrame => ({
-  up: false,
-  down: false,
-  left: false,
-  right: false,
-  action: false,
-  restart: false,
-  ...o,
-})
+const IN = (o: Partial<InputFrame> = {}): InputFrame => ({ ...EMPTY_INPUT, ...o })
 
 function dist2(ax: number, ay: number, bx: number, by: number): number {
   return (ax - bx) * (ax - bx) + (ay - by) * (ay - by)

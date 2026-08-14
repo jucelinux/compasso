@@ -16,6 +16,22 @@ export interface InputFrame {
    * reinício virava reflexo, e o gate mede intenção.
    */
   readonly restart: boolean
+  /**
+   * O PONTEIRO, em coordenada de arena. 13/08, pedido do H para o cérebro.
+   *
+   * Entra no `InputFrame` e não num atalho de render porque input que decide
+   * jogo tem que atravessar o mesmo cano de sempre: gravado pelo F9,
+   * reproduzido pelo replay, refletido no hash. Um clique tratado fora da sim
+   * seria a única coisa do jogo que o rig não consegue reproduzir.
+   *
+   * `click` é o ESTADO do botão, não a borda — a borda é derivada dentro da
+   * sim, como já é feito com as teclas, para que o mesmo gesto tenha a mesma
+   * regra. Sem ponteiro (teclado puro, toque, replay antigo) vale `-1, -1` e
+   * `false`, e nada nesta tela repara na diferença.
+   */
+  readonly pointerX: number
+  readonly pointerY: number
+  readonly click: boolean
 }
 
 export interface SimSnapshot {
@@ -385,6 +401,39 @@ export interface Tuning {
     readonly enterRadius: number
     /** Voltas por segundo dos patógenos na órbita. */
     readonly orbitSpeed: number
+    /** Onde o jogador aparece ao chegar no cérebro. */
+    readonly spawnX: number
+    readonly spawnY: number
+    /**
+     * Raio das outras PORTAS do cérebro. Igual ao `enterRadius` da órbita de
+     * propósito: cinco portas com alcances diferentes ensinariam cinco regras.
+     */
+    readonly nodeRadius: number
+    /**
+     * O quadro das telas do cérebro, CENTRADO na arena.
+     *
+     * Mora no tuning e não no render porque desde 13/08 ele decide jogo: clicar
+     * FORA dele fecha a tela. Geometria que responde a input não é decoração, e
+     * duas cópias dela — uma que desenha e outra que decide — divergiriam com a
+     * primeira mudança de layout, com o clique fechando onde ainda há painel.
+     */
+    readonly panelW: number
+    readonly panelH: number
+    /** Lado do [X] de fechar, no canto superior direito do quadro. */
+    readonly closeSize: number
+    /**
+     * As outras quatro funcionalidades do cérebro, em 13/08 — pedido do H.
+     *
+     * `id` é o que o render usa para saber o que desenhar dentro; a sim só
+     * conhece POSIÇÃO e ÍNDICE. É o que mantém "abrir um painel" como uma regra
+     * só em vez de quatro, e é o que faz a quinta porta custar uma linha de
+     * `tuning.json` em vez de um ramo novo.
+     */
+    readonly nodes: ReadonlyArray<{
+      readonly id: string
+      readonly x: number
+      readonly y: number
+    }>
   }
   /**
    * A MOEDA: o que o abate deixa para a próxima run. 13/08.
@@ -584,7 +633,24 @@ export interface Tuning {
  * AUSÊNCIA de escolha — a onda passou a pagar em dificuldade, não em poder.
  * Detalhe e desdobramentos no `DECISIONS.md`.
  */
-export type Phase = "hub" | "select" | "card" | "intervalo" | "closed" | "run" | "dead"
+/**
+ * `painel` é UMA fase para as QUATRO portas novas de 13/08, e não quatro fases.
+ *
+ * Qual delas está aberta mora em `SimState.painel`, um índice em
+ * `tuning.hub.nodes`. A alternativa — `historico | inventario | upgrades |
+ * pandemia` na união — faria a sim conhecer o NOME de cada funcionalidade, e a
+ * sim não conhece: ela sabe abrir e fechar uma porta. Quem sabe o que tem
+ * dentro é o render, e a quinta porta custa uma linha de `tuning.json`.
+ */
+export type Phase =
+  | "hub"
+  | "select"
+  | "painel"
+  | "card"
+  | "intervalo"
+  | "closed"
+  | "run"
+  | "dead"
 
 export interface Enemy {
   id: number
@@ -821,6 +887,21 @@ export interface SimState {
    * silêncio até a segunda doença voltar.
    */
   villain: number
+  /**
+   * Qual porta do cérebro está aberta: índice em `tuning.hub.nodes`, ou -1.
+   *
+   * Vale -1 fora da fase `painel`, e não "o último aberto": estado que sobrevive
+   * ao fechamento é estado que reabre sozinho na próxima entrada do hub.
+   */
+  painel: number
+  /**
+   * O botão do ponteiro no tick anterior. É o que dá BORDA ao clique.
+   *
+   * Irmão de `prevBits`, e existe pela mesma razão: sem borda, um botão segurado
+   * reabre a porta no quadro seguinte ao fechamento. Está no estado, e portanto
+   * no hash, porque a borda é o que decide — e o que decide é reproduzido.
+   */
+  prevClick: boolean
   /**
    * MOEDAS da run corrente. Cada patógeno abatido larga uma.
    *

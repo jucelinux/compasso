@@ -222,18 +222,73 @@ const PROMPTS = {
   teclado: {
     comecar: "ESPAÇO PRA COMEÇAR",
     outra: "R OU ENTER PRA OUTRA",
-    entrar: "LEVE O GLÓBULO ATÉ A ÓRBITA",
     lutar: "ESPAÇO PRA LUTAR",
-    voltar: "R VOLTA AO CÉREBRO",
+    voltar: "R OU CLIQUE FORA VOLTA",
+    fechar: "R OU CLIQUE FORA FECHA",
   },
   toque: {
     comecar: "TOQUE PRA COMEÇAR",
     outra: "TOQUE PRA OUTRA",
-    entrar: "LEVE O GLÓBULO ATÉ A ÓRBITA",
     lutar: "TOQUE PRA LUTAR",
-    voltar: "TOQUE LONGO VOLTA",
+    voltar: "TOQUE FORA VOLTA",
+    fechar: "TOQUE FORA FECHA",
   },
 } as const
+
+/**
+ * O que cada porta do cérebro é. 13/08, nomes do H.
+ *
+ * Tabela e não `switch`: a sim só conhece índice, então o nome, a cor e o corpo
+ * de cada tela são dados do render. A quinta porta é uma linha aqui e uma linha
+ * no `tuning.json` — se fosse ramo de código, seria um lugar a mais para
+ * esquecer.
+ */
+const PORTA_NOME: Readonly<Record<string, string>> = {
+  historico: "HISTÓRICO",
+  inventario: "MEU INVENTÁRIO",
+  upgrades: "UPGRADES",
+  pandemia: "MODO PANDEMIA",
+}
+
+const PORTA_COR: Readonly<Record<string, number>> = {
+  historico: NUC2,
+  inventario: SHI1,
+  upgrades: GLD2,
+  pandemia: HURT1,
+}
+
+/**
+ * O CORPO de cada tela, e a regra dele é uma só: só o que hoje é VERDADE.
+ *
+ * O H nomeou as cinco portas e ainda não desenhou o que vai dentro de quatro
+ * delas. Onde há estado real — runs terminadas, memória acumulada — o número
+ * sai do estado. Onde não há, a tela diz que não há. Encher com número
+ * inventado seria decidir por ele quatro funcionalidades de uma vez, e um
+ * placeholder que MENTE é pior que um que se assume.
+ */
+const PORTA_CORPO: Readonly<Record<string, (cur: SimState) => ReadonlyArray<string>>> = {
+  historico: (cur) => [
+    `${cur.runIndex} ${cur.runIndex === 1 ? "RUN" : "RUNS"}`,
+    "O QUE FOI ATÉ AQUI",
+  ],
+  inventario: () => ["VAZIO", "O QUE VOCÊ CARREGA ENTRE RUNS"],
+  upgrades: (cur) => [`${cur.bank} DE MEMÓRIA`, "NADA PARA GASTAR AINDA"],
+  pandemia: () => ["FECHADO", "OUTRO JEITO DE JOGAR"],
+}
+
+/**
+ * A linha de baixo: o que a tela ainda NÃO faz, dita na própria tela.
+ *
+ * Curtas porque o quadro tem 240px e a fonte 6px por letra: 38 caracteres é o
+ * teto real, e a primeira versão passou dele — a nota do histórico saía pelos
+ * dois lados do painel, sobre a multidão, na cor que só funciona sobre painel.
+ */
+const PORTA_NOTA: Readonly<Record<string, string>> = {
+  historico: "nada guardado entre sessões ainda",
+  inventario: "sem itens persistentes ainda",
+  upgrades: "o que ela compra vem depois",
+  pandemia: "regras ainda não definidas",
+}
 
 export async function createRenderer(
   mount: HTMLElement,
@@ -429,11 +484,20 @@ export async function createRenderer(
    * nenhum deles encoste no anel de fora.
    */
   const CLAREIRA = tuning.hub.orbitRadius + 30
-  const neuronios = atlas.brainCrowd.filter((c) => {
+  /** Clareira das outras quatro: elas não têm anel externo, então o vão é o do rótulo. */
+  const CLAREIRA_NODE = tuning.hub.nodeRadius + 30
+  const longeDasPortas = (c: { hx: number; hy: number }): boolean => {
     const dx = c.hx - tuning.hub.orbitX
     const dy = c.hy - tuning.hub.orbitY
-    return dx * dx + dy * dy > CLAREIRA * CLAREIRA
-  })
+    if (dx * dx + dy * dy <= CLAREIRA * CLAREIRA) return false
+    for (const n of tuning.hub.nodes) {
+      const ex = c.hx - n.x
+      const ey = c.hy - n.y
+      if (ex * ex + ey * ey <= CLAREIRA_NODE * CLAREIRA_NODE) return false
+    }
+    return true
+  }
+  const neuronios = atlas.brainCrowd.filter(longeDasPortas)
 
   /*
    * DERIVA e EMPURRÃO dos neurônios — pedido do H, "do mesmo jeito das hemácias".
@@ -777,6 +841,8 @@ export async function createRenderer(
   overlay.addChild(cardBicho)
   const cardLines = [0, 1, 2, 3].map(() => new Label(overlay, atlas))
   const cardPicks = [0, 1, 2].map(() => new Label(overlay, atlas))
+  /** Um rótulo por PORTA do cérebro: a órbita e as quatro de 13/08. */
+  const hubLabels = [0, 1, 2, 3, 4].map(() => new Label(overlay, atlas))
   const cardBlurbs = [0, 1, 2].map(() => new Label(overlay, atlas))
   // O que SAI do build se você levar este. Só aparece com o build cheio.
   const cardCusto = [0, 1, 2].map(() => new Label(overlay, atlas))
@@ -1086,6 +1152,30 @@ export async function createRenderer(
     brainFxLayer
       .circle(hx, hy, tuning.hub.enterRadius + Math.round(Math.sin(selfClock * 4) * 1.5))
       .stroke({ width: 1, color: col(GLD2), alpha: 0.35 + perto * 0.55 })
+
+    /*
+     * As OUTRAS QUATRO PORTAS — 13/08, pedido do H.
+     *
+     * Mesmo anel pulsante da órbita, e o pulso mede a mesma coisa: a distância
+     * até o glóbulo. Cinco portas com cinco linguagens visuais fariam o jogador
+     * aprender cinco vezes que ali se entra; com uma linguagem só ele aprende
+     * na primeira e reconhece nas outras quatro.
+     *
+     * O que muda entre elas é a COR, e ela não é enfeite: é o que liga o anel no
+     * cérebro ao quadro que abre em cima dele.
+     */
+    for (const n of tuning.hub.nodes) {
+      const ex = cur.player.x - n.x
+      const ey = cur.player.y - n.y
+      const p = Math.max(0, 1 - Math.sqrt(ex * ex + ey * ey) / (tuning.hub.nodeRadius * 5))
+      const cor = col(PORTA_COR[n.id] ?? NUC2)
+      brainFxLayer
+        .circle(n.x, n.y, tuning.hub.nodeRadius + 6)
+        .stroke({ width: 1, color: cor, alpha: 0.18 + p * 0.25 })
+      brainFxLayer
+        .circle(n.x, n.y, tuning.hub.nodeRadius + Math.round(Math.sin(selfClock * 4) * 1.5))
+        .stroke({ width: 1, color: cor, alpha: 0.35 + p * 0.55 })
+    }
 
     /*
      * TODOS os patógenos girando no anel — o H pediu todos, não só o jogável.
@@ -1898,52 +1988,166 @@ export async function createRenderer(
     const cx = tuning.arena.width / 2
     rewardPanels.clear()
 
-    // FAIXA DE CIMA: a memória imunológica, com a moeda ao lado do número.
-    rewardPanels.rect(0, 8, tuning.arena.width, 26).fill({ color: col(INK), alpha: 0.8 })
-    cardLines[0]!.set("MEMÓRIA IMUNOLÓGICA", NUC2, cx - 34, 12, 1, true, true)
-    cardLines[1]!.set(`${cur.bank}`, GLD2, cx + 62, 13, 2, true, true)
-    // A moeda DESENHADA, e não a palavra "moedas": o jogador vê no chão o mesmo
-    // objeto que vê aqui, e a ligação entre juntar e acumular fica sem texto.
+    /*
+     * A MEMÓRIA perdeu as palavras e ficou só o número — chamada do H em 13/08.
+     *
+     * Ele achou a legenda desnecessária, e ele está certo pelo motivo que vale:
+     * uma moeda desenhada ao lado de um número não precisa de alguém explicando
+     * que aquilo é a moeda. Texto que repete o desenho não informa, ocupa. A
+     * mesma tesoura levou o "leve o glóbulo até a órbita" do rodapé.
+     *
+     * O que ficou é DADO, não mensagem: quanto você tem. Isso a tela não diz
+     * sozinha, então continua escrito.
+     */
+    rewardPanels.rect(cx - 40, 8, 80, 22).fill({ color: col(INK), alpha: 0.8 })
+    cardLines[0]!.set(`${cur.bank}`, GLD2, cx + 10, 11, 2, true, true)
     hubCoin.texture = frameOf(atlas.coin, 0, 0, Math.floor(selfClock * 8))
-    hubCoin.position.set(Math.round(cx + 38), 21)
+    hubCoin.position.set(Math.round(cx - 14), 19)
     hubCoin.visible = true
 
     /*
-     * O RÓTULO DA ÓRBITA, acima dela — pedido literal do H.
+     * As CINCO PORTAS, desenhadas pela mesma regra — pedido do H em 13/08.
      *
-     * Ele é a única instrução da tela, e por isso leva chão próprio em vez de
-     * confiar na sombra: fica sobre a multidão de neurônios, que é justamente o
-     * fundo contra o qual a sombra já falhou uma vez hoje.
+     * Um laço só para a órbita e as quatro novas, e não um bloco por porta: elas
+     * SÃO a mesma coisa vista de fora (um alvo que se abre ao chegar ou ao
+     * clicar), e desenhá-las com códigos diferentes seria a primeira chance de
+     * elas passarem a se comportar diferente sem ninguém decidir isso.
+     *
+     * A órbita entra na lista com o desenho extra dela — os patógenos girando —
+     * feito à parte, no `drawBrain`. O que ela divide com as outras é o anel de
+     * gatilho, o rótulo e o pulso de proximidade.
      */
     /*
-     * O rótulo acompanha a ÓRBITA, e não o centro da arena.
+     * O afastamento do rótulo é POR PORTA, e não um número só.
      *
-     * Ele nasceu centrado em `cx` porque a órbita estava no meio da tela e os
-     * dois valores coincidiam — coincidência não é ligação, e em 13/08 a órbita
-     * mudou para o canto superior direito (o H reservou o centro para o upgrade
-     * do glóbulo) e o rótulo ficou para trás, anunciando uma porta a 166px dele.
-     * Agora sai do `tuning.hub`, como tudo o mais desta tela.
+     * A órbita tem cinco corpos girando no raio dela, e sprite de patógeno
+     * transborda o raio — com o afastamento das outras quatro, o rótulo saía
+     * debaixo da E. coli. As quatro novas não têm nada girando, então o vão
+     * delas é só o do próprio anel.
      */
-    const ox = tuning.hub.orbitX
-    const oy = tuning.hub.orbitY - tuning.hub.orbitRadius - 26
-    rewardPanels.rect(ox - 92, oy - 2, 184, 14).fill({ color: col(INK), alpha: 0.78 })
-    cardLines[2]!.set("COMBATER PATÓGENOS", GLD2, ox, oy + 1, 1, true, true)
-    /*
-     * O prompt de baixo leva chão pela MESMA razão do rótulo — e ele não tinha.
-     *
-     * Na primeira captura do cérebro navegável ele saía por cima dos neurônios E
-     * por cima da linha de depuração do HUD, três textos disputando as mesmas
-     * fileiras de pixel. A sombra da letra não resolve isso: ela dá contorno
-     * contra fundo irregular, não separa texto de texto.
-     */
-    const py = tuning.arena.height - 24
-    rewardPanels.rect(0, py - 2, tuning.arena.width, 14).fill({ color: col(INK), alpha: 0.78 })
-    cardLines[3]!.set(prompt.entrar, SHI1, cx, py + 1, 1, true, true)
+    const portas: ReadonlyArray<readonly [number, number, string, number]> = [
+      [
+        tuning.hub.orbitX,
+        tuning.hub.orbitY,
+        "COMBATER PATÓGENOS",
+        tuning.hub.orbitRadius + tuning.enemy.size,
+      ],
+      ...tuning.hub.nodes.map(
+        (n) =>
+          [n.x, n.y, PORTA_NOME[n.id] ?? n.id.toUpperCase(), tuning.hub.nodeRadius + 6] as const,
+      ),
+    ]
+    for (let i = 0; i < portas.length; i++) {
+      const [nx, ny, nome, vao] = portas[i]!
+      const w = textWidth(nome.toUpperCase()) + 8
+      // O rótulo fica ABAIXO da porta, e o da órbita também. Ele ficava acima
+      // enquanto a órbita era grande e o texto teria que atravessá-la; com o
+      // alvo reduzido a 26px o de cima passou a colidir com a faixa da memória.
+      const ly = ny + vao
+      rewardPanels.rect(Math.round(nx - w / 2), ly - 2, w, 12).fill({ color: col(INK), alpha: 0.78 })
+      hubLabels[i]!.set(nome, GLD2, nx, ly, 1, true, true)
+    }
+    for (let i = portas.length; i < hubLabels.length; i++) hubLabels[i]!.hide()
+
+    cardLines[1]!.hide()
+    cardLines[2]!.hide()
+    cardLines[3]!.hide()
     cardPicks[0]!.hide()
     cardPicks[1]!.hide()
     cardPicks[2]!.hide()
     cardBicho.visible = false
     for (const l of cardBlurbs) l.hide()
+    for (const l of cardCusto) l.hide()
+    cardBlurb.hide()
+  }
+
+  /**
+   * O QUADRO comum das telas do cérebro, com o [X] no canto.
+   *
+   * A geometria vem do `tuning.hub` e não de constantes daqui porque a SIM usa
+   * a mesma para decidir o que é "clicar fora". Duas cópias — uma que desenha e
+   * outra que decide — divergiriam na primeira mudança de layout, e o sintoma
+   * seria o pior possível: o clique fechando onde ainda há painel desenhado.
+   */
+  const quadro = (tint: number): { x0: number; y0: number; w: number; h: number } => {
+    const w = tuning.hub.panelW
+    const h = tuning.hub.panelH
+    const x0 = Math.round((tuning.arena.width - w) / 2)
+    const y0 = Math.round((tuning.arena.height - h) / 2)
+    const c = tuning.hub.closeSize
+    rewardPanels
+      .clear()
+      .rect(x0, y0, w, h)
+      .fill({ color: col(INK), alpha: 0.95 })
+      .stroke({ width: 1, color: tint, alignment: 0 })
+      .rect(x0, y0, w, 16)
+      .fill({ color: tint, alpha: 0.24 })
+      // O [X], desenhado como duas diagonais e não como a letra: a fonte tem X,
+      // mas a letra lê como texto e este é um botão.
+      .rect(x0 + w - c, y0, c, c)
+      .fill({ color: col(INK), alpha: 0.9 })
+      .stroke({ width: 1, color: tint, alignment: 0 })
+    /*
+     * As diagonais são QUADRADO A QUADRADO, e não duas linhas com `stroke`.
+     *
+     * A primeira versão era `moveTo/lineTo/stroke` e saiu uma caixa VAZIA — a
+     * moldura apareceu, o X não. Não fui atrás de por quê: num arquivo onde a
+     * regra é grade de pixel, uma diagonal de 4px pedida a um traçador vetorial
+     * é a construção errada antes de ser a construção que falhou. Pôr o pixel
+     * onde ele vai ficar não tem como sair diferente do que se pediu.
+     */
+    const bx = x0 + w - c
+    for (let i = 0; i < c - 6; i++) {
+      rewardPanels
+        .rect(bx + 3 + i, y0 + 3 + i, 1, 1)
+        .rect(bx + c - 4 - i, y0 + 3 + i, 1, 1)
+        .fill({ color: col(WHITE), alpha: 0.9 })
+    }
+    return { x0, y0, w, h }
+  }
+
+  /**
+   * As QUATRO portas novas — histórico, inventário, upgrades e modo pandemia.
+   *
+   * O H pediu os cinco LUGARES e nomeou cada um; o que vai DENTRO de quatro
+   * deles ele ainda não desenhou. Então cada tela mostra o que hoje é verdade —
+   * e só isso. Inventar conteúdo aqui seria decidir por ele quatro
+   * funcionalidades de uma vez, que é exatamente o que o `CLAUDE.md` §4 proíbe.
+   *
+   * Números vêm do estado real onde existe estado real: runs terminadas e
+   * memória acumulada são fatos hoje. Onde não há fato, a tela diz que não há,
+   * em vez de encher com número inventado — placeholder que mente é pior que
+   * placeholder que se assume.
+   */
+  const drawPainel = (cur: SimState): void => {
+    const node = tuning.hub.nodes[cur.painel]
+    const id = node?.id ?? ""
+    const tint = col(PORTA_COR[id] ?? NUC2)
+    const { x0, y0, w } = quadro(tint)
+    const cxq = x0 + w / 2
+    hubCoin.visible = false
+    cardBicho.visible = false
+    for (const l of hubLabels) l.hide()
+
+    cardLines[0]!.set(PORTA_NOME[id] ?? id.toUpperCase(), GLD2, cxq, y0 + 5, 1, true)
+
+    const linhas = PORTA_CORPO[id]?.(cur) ?? []
+    for (let i = 0; i < cardBlurbs.length; i++) {
+      const t = linhas[i]
+      if (t === undefined) cardBlurbs[i]!.hide()
+      else cardBlurbs[i]!.set(t, i === 0 ? WHITE : NUC2, cxq, y0 + 44 + i * 22, i === 0 ? 2 : 1, true)
+    }
+    cardLines[1]!.set(PORTA_NOTA[id] ?? "", DIM1, cxq, y0 + 140, 1, true)
+    cardLines[2]!.hide()
+    cardLines[3]!.hide()
+    // Chão sob o prompt: ele fica FORA do quadro, sobre a multidão, e é a
+    // terceira vez hoje que um texto desta tela pede isso.
+    const fy = y0 + tuning.hub.panelH + 8
+    const fw = textWidth(prompt.fechar.toUpperCase()) + 10
+    rewardPanels.rect(Math.round(cxq - fw / 2), fy - 2, fw, 12).fill({ color: col(INK), alpha: 0.8 })
+    cardPicks[0]!.set(prompt.fechar, SHI1, cxq, fy, 1, true, true)
+    cardPicks[1]!.hide()
+    cardPicks[2]!.hide()
     for (const l of cardCusto) l.hide()
     cardBlurb.hide()
   }
@@ -1964,17 +2168,10 @@ export async function createRenderer(
     const tint = col(KIND_TINT[spec.disease] ?? WHITE)
 
     hubCoin.visible = false
-    const W = 240
-    const H = 176
-    const x0 = Math.round(cx - W / 2)
-    const y0 = Math.round(tuning.arena.height / 2 - H / 2)
-    rewardPanels
-      .clear()
-      .rect(x0, y0, W, H)
-      .fill({ color: col(INK), alpha: 0.95 })
-      .stroke({ width: 1, color: tint, alignment: 0 })
-      .rect(x0, y0, W, 16)
-      .fill({ color: tint, alpha: 0.24 })
+    // MESMO quadro das outras quatro portas, com o mesmo [X]. Ele tinha medidas
+    // próprias em constantes locais; virou `tuning.hub` no dia em que a sim
+    // passou a decidir por elas o que é "clicar fora".
+    const { x0, y0, w: W, h: H } = quadro(tint)
     /*
      * Os dois prompts ficam FORA do painel, sobre a multidão, então levam chão
      * próprio — mesma correção do hub, mesmo motivo. E o "R volta ao cérebro"
@@ -2025,7 +2222,8 @@ export async function createRenderer(
     const isCard = cur.phase === "card"
     const isIntervalo = cur.phase === "intervalo"
     const isClosed = cur.phase === "closed"
-    const telaDeCima = isHub || isSelect || isCard || isIntervalo || isClosed
+    const isPainel = cur.phase === "painel"
+    const telaDeCima = isHub || isSelect || isPainel || isCard || isIntervalo || isClosed
     const on = cur.phase === "dead" || telaDeCima
     overlay.visible = on
     cardVeil.visible = telaDeCima
@@ -2040,12 +2238,13 @@ export async function createRenderer(
      */
     // Nem o hub nem a seleção levam véu: o cérebro é a tela, não um fundo a
     // esconder, e a seleção já tem painel opaco próprio.
-    cardVeil.visible = telaDeCima && !isHub && !isSelect
+    cardVeil.visible = telaDeCima && !isHub && !isSelect && !isPainel
     cardVeil.texture = atlas.veil(INK, isClosed ? 2 : 1)
     cardBicho.visible = isCard || isSelect
     hubCoin.visible = isHub
+    for (const l of hubLabels) if (!isHub) l.hide()
     for (const l of cardLines) if (!telaDeCima) l.hide()
-    if (!isClosed && !isHub && !isSelect) {
+    if (!isClosed && !isHub && !isSelect && !isPainel) {
       for (const l of cardPicks) l.hide()
       for (const l of cardBlurbs) l.hide()
       for (const l of cardCusto) l.hide()
@@ -2061,6 +2260,10 @@ export async function createRenderer(
     }
     if (isSelect) {
       drawSelect(cur, phase)
+      return
+    }
+    if (isPainel) {
+      drawPainel(cur)
       return
     }
     if (isCard) {
@@ -2304,7 +2507,8 @@ export async function createRenderer(
        * instante em que o jogador entra na órbita, e o gesto de entrar perderia
        * a continuidade que é a razão de ele existir.
        */
-      const noHub = cur.phase === "hub" || cur.phase === "select"
+      const noHub =
+        cur.phase === "hub" || cur.phase === "select" || cur.phase === "painel"
       brain.visible = noHub
       world.visible = !noHub
       if (noHub) {

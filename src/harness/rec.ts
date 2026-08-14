@@ -6,21 +6,32 @@ import { parseReplay, replayInputs } from "./replay.ts"
 import { runReplay } from "./runReplay.ts"
 import { createSim } from "../sim/sim.ts"
 
+/** A porta vem do `tuning.json`: a posição dela é dado, não constante do rig. */
+const HUB = loadTuning().hub
+
 /**
  * Atravessa a tela em que o jogo está, seja ela qual for.
  *
- * Deixou de ser "aperte espaço" em 13/08: o cérebro virou navegável, e sair
- * dele exige ANDAR até a órbita dos patógenos. O aparelho passa a pilotar o
- * glóbulo, que é o mesmo que o jogador faz — qualquer atalho aqui faria o rig
- * medir um caminho que ninguém percorre.
+ * Deixou de ser "aperte espaço" em 13/08, duas vezes no mesmo dia. Primeiro o
+ * cérebro virou navegável e sair dele passou a ser ANDAR até a órbita; segurar
+ * CIMA bastava, porque havia uma porta só e o jogador nascia logo abaixo dela.
+ * Depois as portas viraram CINCO, espalhadas pelos cantos e pelo centro, e o
+ * nascimento virou uma praça longe de todas — e aí segurar CIMA não leva a
+ * lugar nenhum.
  *
- * A órbita fica no centro-baixo da arena e o jogador nasce logo abaixo dela,
- * então segurar CIMA basta. Fica escrito porque a posição vem do `tuning.hub`,
- * e mudar o centro da órbita mexe nisto.
+ * Agora ele CLICA na porta. Este rig só enxerga a FASE, pelo texto do HUD, e
+ * nunca soube onde o glóbulo está; clicar é o outro gesto que o próprio jogador
+ * tem, então o aparelho continua pilotando um caminho que alguém percorre — e
+ * de quebra a gravação passa a exercitar o ponteiro pelo cano inteiro.
+ *
+ * `painel` sai pela tecla de voltar. Ele nunca deveria abrir aqui, mas o clique
+ * erra quando a porta muda de lugar, e rig preso numa tela que ele não sabe que
+ * abriu é a forma mais silenciosa de o aparelho parar de medir.
  */
 async function atravessaTela(d: Driver, fase: () => Promise<string>): Promise<void> {
   const f = await fase()
-  if (f === "hub") await d.hold(["ArrowUp"], 220)
+  if (f === "hub") await d.clicaArena(HUB.orbitX, HUB.orbitY)
+  else if (f === "painel") await d.hold(["KeyR"], 120)
   else await d.hold([" "], 150)
 }
 

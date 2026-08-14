@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest"
 import { loadTuning } from "../src/harness/loadTuning.ts"
+import { EMPTY_INPUT } from "../src/input/frame.ts"
 import { atravessaTela, ehTela } from "../src/harness/atravessa.ts"
 import { createSim } from "../src/sim/sim.ts"
 import {
@@ -39,15 +40,7 @@ const tuning = loadTuning()
  */
 const LENTO = { ...tuning, time: { ...tuning.time, dilation: true } }
 
-const IN = (o: Partial<InputFrame> = {}): InputFrame => ({
-  up: false,
-  down: false,
-  left: false,
-  right: false,
-  action: false,
-  restart: false,
-  ...o,
-})
+const IN = (o: Partial<InputFrame> = {}): InputFrame => ({ ...EMPTY_INPUT, ...o })
 const NONE = IN()
 const RIGHT = IN({ right: true })
 const RESTART = IN({ restart: true })
@@ -1607,5 +1600,202 @@ describe("o cérebro NAVEGÁVEL e a órbita como porta", () => {
 
   it("o gatilho é MENOR que a órbita, e isso é a regra, não um número solto", () => {
     expect(tuning.hub.enterRadius).toBeLessThan(tuning.hub.orbitRadius)
+  })
+})
+
+/*
+ * AS CINCO PORTAS do cérebro, 13/08 — nomes e lugares do H.
+ *
+ * O que estes testes travam não é a decoração das telas, que ele ainda vai
+ * desenhar: é a REGRA de porta. Abrir andando, abrir clicando, fechar clicando
+ * fora, fechar no [X], fechar na tecla, e não reabrir sozinha no quadro
+ * seguinte. Cinco portas com uma regra só é o desenho inteiro — se uma delas
+ * passar a se comportar diferente, é aqui que aparece.
+ */
+describe("as cinco portas do cérebro", () => {
+  const CLIQUE = (x: number, y: number): InputFrame =>
+    IN({ pointerX: x, pointerY: y, click: true })
+
+  const noHub = (seed = 700): Sim => {
+    const sim = createSim(seed, tuning)
+    expect(sim.state().phase).toBe("hub")
+    return sim
+  }
+
+  it("ANDAR até cada porta abre a tela dela", () => {
+    for (let i = 0; i < tuning.hub.nodes.length; i++) {
+      const node = tuning.hub.nodes[i]!
+      const sim = noHub(800 + i)
+      let guarda = 0
+      while (sim.state().phase === "hub" && guarda++ < 900) {
+        const s = sim.state()
+        sim.step(
+          IN({
+            up: node.y - s.player.y < -2,
+            down: node.y - s.player.y > 2,
+            left: node.x - s.player.x < -2,
+            right: node.x - s.player.x > 2,
+          }),
+        )
+      }
+      expect(sim.state().phase, `porta ${node.id} não abriu andando`).toBe("painel")
+      expect(sim.state().painel, `porta ${node.id} abriu a tela errada`).toBe(i)
+    }
+  })
+
+  it("CLICAR em cada porta abre a tela dela, sem andar", () => {
+    for (let i = 0; i < tuning.hub.nodes.length; i++) {
+      const node = tuning.hub.nodes[i]!
+      const sim = noHub(900 + i)
+      const antes = { ...sim.state().player }
+      sim.step(CLIQUE(node.x, node.y))
+      expect(sim.state().phase, `clique não abriu ${node.id}`).toBe("painel")
+      expect(sim.state().painel).toBe(i)
+      // O clique não move o glóbulo: apontar e andar são gestos diferentes.
+      expect(sim.state().player.x).toBe(antes.x)
+      expect(sim.state().player.y).toBe(antes.y)
+    }
+  })
+
+  it("clicar na ÓRBITA abre a escolha do inimigo, não um painel", () => {
+    const sim = noHub()
+    sim.step(CLIQUE(tuning.hub.orbitX, tuning.hub.orbitY))
+    expect(sim.state().phase).toBe("select")
+    expect(sim.state().painel).toBe(-1)
+  })
+
+  it("clicar no VAZIO não abre nada", () => {
+    // O caso nulo da regra: se qualquer clique abrisse algo, os testes acima
+    // estariam passando por acidente.
+    const sim = noHub()
+    sim.step(CLIQUE(4, 4))
+    expect(sim.state().phase).toBe("hub")
+  })
+
+  it("clicar FORA do quadro fecha, e devolve o jogador à praça", () => {
+    const sim = noHub()
+    sim.step(CLIQUE(tuning.hub.nodes[0]!.x, tuning.hub.nodes[0]!.y))
+    expect(sim.state().phase).toBe("painel")
+    sim.step(NONE)
+    sim.step(CLIQUE(4, 4))
+    const s = sim.state()
+    expect(s.phase).toBe("hub")
+    expect(s.painel, "a tela aberta não pode sobreviver ao fechamento").toBe(-1)
+    expect(s.player.x).toBe(tuning.hub.spawnX)
+    expect(s.player.y).toBe(tuning.hub.spawnY)
+  })
+
+  it("clicar no [X] fecha, mesmo estando DENTRO do quadro", () => {
+    const sim = noHub()
+    sim.step(CLIQUE(tuning.hub.nodes[1]!.x, tuning.hub.nodes[1]!.y))
+    sim.step(NONE)
+    const x = (tuning.arena.width + tuning.hub.panelW) / 2 - tuning.hub.closeSize / 2
+    const y = (tuning.arena.height - tuning.hub.panelH) / 2 + tuning.hub.closeSize / 2
+    sim.step(CLIQUE(x, y))
+    expect(sim.state().phase).toBe("hub")
+  })
+
+  it("clicar DENTRO do quadro, fora do [X], NÃO fecha", () => {
+    // A outra metade do par: sem ela, "fecha no X" passaria com uma regra que
+    // fecha em qualquer clique.
+    const sim = noHub()
+    sim.step(CLIQUE(tuning.hub.nodes[1]!.x, tuning.hub.nodes[1]!.y))
+    sim.step(NONE)
+    sim.step(CLIQUE(tuning.arena.width / 2, tuning.arena.height / 2))
+    expect(sim.state().phase).toBe("painel")
+  })
+
+  it("a tecla de voltar também fecha", () => {
+    const sim = noHub()
+    sim.step(CLIQUE(tuning.hub.nodes[2]!.x, tuning.hub.nodes[2]!.y))
+    sim.step(NONE)
+    sim.step(RESTART)
+    expect(sim.state().phase).toBe("hub")
+  })
+
+  it("botão SEGURADO não reabre a porta no quadro seguinte", () => {
+    /*
+     * A versão de mouse do "dispensar por reflexo" que o `cardLock` resolve para
+     * as teclas: sem borda, fechar com o botão apertado devolve ao hub e o mesmo
+     * clique reabre a porta no tick seguinte, para sempre.
+     *
+     * O jogador volta à praça, longe de toda porta, então o que este teste mede
+     * é o clique — e por isso ele segura o botão sobre uma porta.
+     */
+    const sim = noHub()
+    const n = tuning.hub.nodes[3]!
+    sim.step(CLIQUE(n.x, n.y))
+    expect(sim.state().phase).toBe("painel")
+    // SOLTA antes de fechar. A primeira versão deste teste não soltava e falhou
+    // — e a falha era do teste: sem soltar não há borda, e sem borda o jogo faz
+    // exatamente o que ele promete, que é nada. O gesto real é clicar, soltar,
+    // clicar.
+    sim.step(NONE)
+    sim.step(CLIQUE(4, 4))
+    expect(sim.state().phase).toBe("hub")
+    // Continua apertado, agora sobre a porta: não pode abrir de novo.
+    for (let i = 0; i < 30; i++) sim.step(CLIQUE(n.x, n.y))
+    expect(sim.state().phase, "o botão preso reabriu a porta").toBe("hub")
+    // Soltar e clicar de novo abre: a trava é da BORDA, não do lugar.
+    sim.step(NONE)
+    sim.step(CLIQUE(n.x, n.y))
+    expect(sim.state().phase).toBe("painel")
+  })
+
+  it("nada corre dentro de um painel", () => {
+    // Mesma promessa do hub: o cérebro é safezone, e uma tela por cima dele não
+    // pode ser um lugar onde o tempo anda.
+    const sim = noHub()
+    sim.step(CLIQUE(tuning.hub.nodes[0]!.x, tuning.hub.nodes[0]!.y))
+    const antes = sim.state()
+    const foto = {
+      infeccao: antes.infection,
+      inimigos: antes.enemies.length,
+      vidas: antes.lives,
+      onda: antes.wave,
+    }
+    for (let i = 0; i < 600; i++) sim.step(NONE)
+    const s = sim.state()
+    expect(s.phase).toBe("painel")
+    expect(s.infection).toBe(foto.infeccao)
+    expect(s.enemies.length).toBe(foto.inimigos)
+    expect(s.lives).toBe(foto.vidas)
+    expect(s.wave).toBe(foto.onda)
+  })
+
+  it("a praça de nascimento fica LONGE de todas as portas", () => {
+    /*
+     * A regra que torna o resto possível: se o ponto de chegada encostasse numa
+     * porta, o cérebro abriria uma tela sozinho a cada morte — e o jogador
+     * nunca veria a safezone que ele voltou para ver.
+     *
+     * Medido contra o raio real de cada porta, não contra um número escrito
+     * aqui: mover uma porta no `tuning.json` tem que derrubar este teste.
+     */
+    const px = tuning.hub.spawnX
+    const py = tuning.hub.spawnY
+    const dOrbita = Math.hypot(px - tuning.hub.orbitX, py - tuning.hub.orbitY)
+    expect(dOrbita).toBeGreaterThan(tuning.hub.enterRadius * 3)
+    for (const n of tuning.hub.nodes) {
+      expect(Math.hypot(px - n.x, py - n.y), `nasce em cima de ${n.id}`).toBeGreaterThan(
+        tuning.hub.nodeRadius * 3,
+      )
+    }
+  })
+
+  it("as portas não se sobrepõem entre si", () => {
+    const todas = [
+      { id: "orbita", x: tuning.hub.orbitX, y: tuning.hub.orbitY, r: tuning.hub.orbitRadius },
+      ...tuning.hub.nodes.map((n) => ({ ...n, r: tuning.hub.nodeRadius })),
+    ]
+    for (let i = 0; i < todas.length; i++) {
+      for (let j = i + 1; j < todas.length; j++) {
+        const a = todas[i]!
+        const b = todas[j]!
+        expect(Math.hypot(a.x - b.x, a.y - b.y), `${a.id} encosta em ${b.id}`).toBeGreaterThan(
+          a.r + b.r + 8,
+        )
+      }
+    }
   })
 })
