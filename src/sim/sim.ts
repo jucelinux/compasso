@@ -12,7 +12,6 @@ import {
   crowdAt,
   fieldSpec,
   healAround,
-  zerados,
   healNecroseAround,
   applyNecroseFloor,
   liveInfection,
@@ -640,7 +639,7 @@ export function createSim(seed: number, tuning: Tuning): Sim {
    * uma habilidade que o jogador não pode acionar.
    */
   const iconeEm = (x: number, y: number): number => {
-    const r = tuning.hud.habRaio
+    const r = tuning.hud.habToque
     let slot = 0
     for (let i = 0; i < s.habilidades.length; i++) {
       if (s.habilidades[i]!.nivel <= 0) continue
@@ -653,7 +652,14 @@ export function createSim(seed: number, tuning: Tuning): Sim {
     return 0
   }
 
-  /** Soma uma carga a toda habilidade comprada cujo gatilho seja este. */
+  /**
+   * Soma carga a toda habilidade comprada cujo gatilho seja este.
+   *
+   * `quanto` está na unidade do GATILHO — um abate, um tile, um segundo. É o
+   * que permite os três conviverem sem que a sim saiba qual é qual: a `recarga`
+   * do nível está na mesma unidade, e a razão entre as duas é a única coisa que
+   * importa aqui.
+   */
   const carrega = (gatilho: string, quanto = 1): void => {
     for (let i = 0; i < s.habilidades.length; i++) {
       const spec = tuning.habilidades[i]
@@ -695,6 +701,16 @@ export function createSim(seed: number, tuning: Tuning): Sim {
      * habilidade sem custo não é decisão.
      */
     for (const h of s.habilidades) if (h.ativa > 0) h.ativa--
+    /*
+     * A carga por TEMPO, e ela corre SÓ na run — chamada do H em 14/08.
+     *
+     * Duas escolhas dentro disso, e as duas mudam o jogo:
+     *
+     * 1. Tempo REAL e não de mundo. A adrenalina freia o relógio do mundo; se a
+     *    recarga contasse nele, a habilidade atrasaria a própria volta e usá-la
+     *    sairia mais caro quanto melhor ela funcionasse.
+     * 2. Só DENTRO da run — ver a chamada em `step`, que é onde ela mora.
+     */
     if (input.ability > 0) aciona(input.ability)
     /*
      * O ÍCONE também aciona, para o dedo — pedido do H: no celular clica no
@@ -1149,7 +1165,15 @@ export function createSim(seed: number, tuning: Tuning): Sim {
        * é cria" com uma definição só — duas listas divergiriam no segundo
        * patógeno, e a habilidade passaria a carregar com o que não devia.
        */
-      if (e.kind !== phaseSpec().counter.purge) carrega("abate")
+      /*
+       * O gatilho `abate` saiu em 14/08 e o código ficou — a chamada some, a
+       * regra não.
+       *
+       * O H trocou os dois gatilhos por TEMPO para simplificar o primeiro
+       * momento, mas `carrega("abate")` continua sendo o jeito de uma habilidade
+       * carregar por abate quando alguma voltar a fazê-lo. Deixar a chamada aqui
+       * seria pior: ela some do jogo e continua custando um teste por patógeno.
+       */
       /*
        * A MOEDA que o patógeno larga. Uma por corpo, chamada do H em 13/08.
        *
@@ -1438,7 +1462,9 @@ export function createSim(seed: number, tuning: Tuning): Sim {
       // A carga da FEBRE conta ERRADICAÇÃO de limo, não pontos curados: o H
       // pediu "a cada X erradicação do limo", e tile limpo é o que isso quer
       // dizer em estado. Medido antes de escolher o X — ver a âncora.
-      if (zerados > 0) carrega("limo", zerados)
+      // O gatilho `limo` também saiu em 14/08, pela mesma chamada do H. A
+      // contagem de tiles erradicados continua exposta por `healAround`: ela é
+      // barata, e é o que a febre volta a usar se o gatilho por tempo não pegar.
       // A CICATRIZ cede ao mesmo gesto, mais devagar. É o único trabalho do
       // jogo que a velocidade não faz — e por isso é o que faz parar ter razão
       // de existir, que a medição de 05/08 mostrou que não tinha.
@@ -2082,6 +2108,18 @@ export function createSim(seed: number, tuning: Tuning): Sim {
 
   const step = (input: InputFrame): void => {
     const bits = bitsOf(input)
+    /*
+     * A CARGA POR TEMPO corre na run E no respiro, e em mais lugar nenhum.
+     *
+     * No cérebro não, porque esperar parado numa tela viraria a forma mais
+     * eficiente de recarregar e o hub deixaria de ser descanso. No RESPIRO sim,
+     * porque os 3 segundos entre ondas são parte da run — sem eles, a cadência
+     * da habilidade passaria a depender de quantas ondas você conteve, e "a
+     * cada 1 minuto" deixaria de ser um minuto.
+     *
+     * Medido: sem o respiro, um minuto de relógio rendia 51 segundos de carga.
+     */
+    if (s.phase === "run" || s.phase === "intervalo") carrega("tempo", dt)
     if (s.phase === "run") stepRun(bits, input)
     else if (s.phase === "hub") stepHub(bits, input)
     else if (s.phase === "select") stepSelect(bits, input)

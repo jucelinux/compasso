@@ -233,21 +233,22 @@
     {
       "id": "adrenalina",
       "custo": 500,
-      "gatilho": "abate",
-      "niveis": [{ "duracao": 3.0, "recarga": 200, "escala": 0.05, "raio": 0 }]
+      "gatilho": "tempo",
+      "niveis": [{ "duracao": 10.0, "recarga": 60, "escala": 0.05, "raio": 0 }]
     },
     {
       "id": "febre",
       "custo": 500,
-      "gatilho": "limo",
-      "niveis": [{ "duracao": 3.0, "recarga": 2000, "escala": 1.0, "raio": 66 }]
+      "gatilho": "tempo",
+      "niveis": [{ "duracao": 3.0, "recarga": 60, "escala": 1.0, "raio": 66 }]
     }
   ],
   "hud": {
-    "habX": 14,
-    "habY": 330,
-    "habStep": 34,
-    "habRaio": 11
+    "habX": 300,
+    "habY": 332,
+    "habStep": 40,
+    "habRaio": 13,
+    "habToque": 20
   },
   "hub": {
     "orbitX": 544,

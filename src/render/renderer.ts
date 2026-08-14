@@ -476,6 +476,15 @@ export async function createRenderer(
   const flashVeil = new Sprite()
   flashVeil.visible = false
   world.addChild(flashVeil)
+  /**
+   * A moldura da CÂMERA LENTA. Por cima de tudo do mundo, abaixo do HUD.
+   *
+   * Fica no `world` e não no `hud` de propósito: ela é o que está acontecendo
+   * COM O MUNDO, e um quadro desenhado por cima do HUD leria como aviso de
+   * interface em vez de estado do jogo.
+   */
+  const lentoLayer = new Graphics()
+  world.addChild(lentoLayer)
 
   /*
    * ------------------------------------------------------------- O CÉREBRO
@@ -1773,10 +1782,106 @@ export async function createRenderer(
     for (let k = slot; k < habTeclas.length; k++) habTeclas[k]!.hide()
   }
 
+  /**
+   * A CÂMERA LENTA, evidente e com prazo — chamada do H em 14/08.
+   *
+   * "Alguma animação que evidencie que ele está em câmera lenta e que ele tem
+   * um tempo limitado nesse estado." São duas informações, e elas pedem peças
+   * diferentes:
+   *
+   * - QUE ESTÁ: uma moldura ciano pulsando na borda da arena. Borda porque é a
+   *   única região da tela que não disputa espaço com o jogo — véu por cima
+   *   apagaria justamente o que a câmera lenta existe para deixar você ver.
+   *   Ciano porque é a cor que o corpo do jogador já usa para dizer relógio.
+   * - QUANTO FALTA: a moldura ENCOLHE pelas bordas conforme o prazo corre, e há
+   *   uma barra no alto que drena. Duas leituras do mesmo número, uma
+   *   periférica e uma direta: a moldura você vê sem olhar, a barra você
+   *   confere quando quer.
+   *
+   * O pulso corre no relógio de PAREDE. Um aviso de que o tempo está lento não
+   * pode ficar lento junto — ficaria quase parado, que é o oposto de evidente.
+   *
+   * Qual habilidade é "a que freia" sai do DADO (`escala < 1`), e não do nome:
+   * a segunda habilidade de tempo que aparecer acende esta moldura sozinha.
+   */
+  const drawLento = (cur: SimState): void => {
+    lentoLayer.clear()
+    let resta = 0
+    let total = 1
+    for (let i = 0; i < cur.habilidades.length; i++) {
+      const h = cur.habilidades[i]!
+      if (h.ativa <= 0) continue
+      const spec = tuning.habilidades[i]
+      const nv = spec?.niveis[Math.min(h.nivel - 1, spec.niveis.length - 1)]
+      if (nv === undefined || nv.escala >= 1) continue
+      resta = h.ativa
+      total = Math.max(1, Math.round(nv.duracao * tuning.sim.hz))
+    }
+    if (resta <= 0) return
+
+    const frac = Math.min(1, resta / total)
+    const W = tuning.arena.width
+    const H = tuning.arena.height
+    const cor = col(FAST1)
+    // Pulsa entre 2 e 4px: fino demais some no upscale, grosso demais come a
+    // arena. E o pulso é o que separa "moldura" de "borda desenhada".
+    const esp = 3 + Math.round(1 + Math.sin(selfClock * 7))
+    lentoLayer
+      .rect(0, 0, W, esp)
+      .rect(0, H - esp, W, esp)
+      .rect(0, 0, esp, H)
+      .rect(W - esp, 0, esp, H)
+      .fill({ color: cor, alpha: 0.5 + 0.18 * Math.sin(selfClock * 7) })
+    /*
+     * Um HALO interno some para dentro: a borda não é uma linha, é a tela
+     * inteira sendo apertada.
+     *
+     * Duas faixas finas logo depois da moldura, cada vez mais fracas. Custa dois
+     * retângulos e é o que separa "desenharam uma borda" de "alguma coisa está
+     * acontecendo com o quadro" — que é o que o H pediu ao dizer EVIDENCIE.
+     */
+    for (let k = 1; k <= 3; k++) {
+      const o = esp + k * 3
+      lentoLayer
+        .rect(o, o, W - o * 2, 1)
+        .rect(o, H - o - 1, W - o * 2, 1)
+        .rect(o, o, 1, H - o * 2)
+        .rect(W - o - 1, o, 1, H - o * 2)
+        .fill({ color: cor, alpha: (0.22 - k * 0.05) * (0.7 + 0.3 * Math.sin(selfClock * 7)) })
+    }
+
+    /*
+     * Os CANTOS encolhem com o prazo: cheios no começo, ausentes no fim.
+     *
+     * É a leitura periférica — o olho pega comprimento de canto sem precisar
+     * ler nada, e quatro cantos encurtando dizem "acabando" antes de qualquer
+     * barra ser consultada.
+     */
+    const perna = Math.round(Math.min(W, H) * 0.22 * frac)
+    if (perna > 0) {
+      const g = 3
+      lentoLayer
+        .rect(0, 0, perna, g).rect(0, 0, g, perna)
+        .rect(W - perna, 0, perna, g).rect(W - g, 0, g, perna)
+        .rect(0, H - g, perna, g).rect(0, H - perna, g, perna)
+        .rect(W - perna, H - g, perna, g).rect(W - g, H - perna, g, perna)
+        .fill({ color: cor, alpha: 0.85 })
+    }
+
+    // A barra que drena, no alto, abaixo da faixa do HUD.
+    const bw = Math.round(W * 0.5)
+    const bx = Math.round((W - bw) / 2)
+    lentoLayer.rect(bx, 16, bw, 3).fill({ color: col(INK), alpha: 0.7 })
+    lentoLayer
+      .rect(bx, 16, Math.max(1, Math.round(bw * frac)), 3)
+      .fill({ color: cor, alpha: 0.95 })
+  }
+
   const drawHud = (cur: SimState, dt: number): void => {
     buildDots.clear()
     hudBars.clear()
     drawHabilidades(cur)
+    drawLento(cur)
 
     for (let i = 0; i < Math.max(0, cur.lives); i++) {
       hudBars.rect(tuning.arena.width - 11 - i * 7, 6, 5, 5).fill(col(WHITE))

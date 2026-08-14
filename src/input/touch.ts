@@ -117,7 +117,15 @@ interface Dedo {
  * não mira: ele cai onde a mão já está. Os círculos na tela são afordância —
  * a área que responde é a metade inteira.
  */
-export function createTouchPad(layer: HTMLElement): TouchPad {
+/**
+ * Um ponto de tela que pertence ao HUD, e não ao pad.
+ *
+ * Quem responde é `main.ts`, que conhece a geometria do HUD e o retângulo do
+ * canvas. O pad não pode conhecer nem um nem outro — ele lê dedos, não layout.
+ */
+export type EhHud = (clientX: number, clientY: number) => boolean
+
+export function createTouchPad(layer: HTMLElement, ehHud: EhHud = () => false): TouchPad {
   const manche = layer.querySelector<HTMLElement>("#manche")
   const botao = layer.querySelector<HTMLElement>("#botao-manche")
   const impulso = layer.querySelector<HTMLElement>("#impulso")
@@ -190,6 +198,24 @@ export function createTouchPad(layer: HTMLElement): TouchPad {
     // O botão de tela cheia é o único filho que recebe ponteiro. Deixa passar.
     if (event.target instanceof Element && event.target.closest("#tela-cheia") !== null) return
     event.preventDefault()
+    /*
+     * O HUD não é pad — 14/08, chamada do H.
+     *
+     * Os ícones de habilidade ficavam no canto inferior esquerdo, que é
+     * exatamente onde o manche nasce: apertar um ícone significava mover o
+     * glóbulo ao mesmo tempo. Mudá-los de lugar não bastaria, porque a camada
+     * de toque cobre a tela INTEIRA — em qualquer canto eles cairiam sobre
+     * manche ou impulso.
+     *
+     * Aqui o dedo que cai num ícone não vira manche nem impulso: vira TOQUE, e
+     * mais nada. É a mesma exceção que o botão de tela cheia já tinha, agora
+     * dita por geometria em vez de por elemento — o HUD é desenhado no canvas e
+     * não existe como DOM para ser perguntado.
+     */
+    if (ehHud(event.clientX, event.clientY)) {
+      tap = { x: event.clientX, y: event.clientY }
+      return
+    }
     inicio.set(event.pointerId, { x: event.clientX, y: event.clientY, t: 0 })
     dedo = { x: event.clientX, y: event.clientY }
     if (isDireita(event.clientX)) {

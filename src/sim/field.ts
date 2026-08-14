@@ -257,6 +257,12 @@ export function infectAt(field: Uint8Array, index: number, amount: number, max: 
  * nada, um tile no talo erradica um. Módulo-escopo em vez de out-param porque a
  * sim é single-threaded por construção e lê o valor no tick da chamada — o
  * mesmo padrão que qualquer contador de uma passada.
+ *
+ * SEM LEITOR desde 14/08, e de propósito: o H trocou os gatilhos das duas
+ * habilidades por tempo, e a febre parou de carregar por erradicação. O
+ * contador fica porque ele é o que "erradicar limo" quer dizer em estado, e
+ * custa uma comparação por tile já visitado — apagá-lo agora seria apagar a
+ * definição junto com o uso dela.
  */
 export let zerados = 0
 

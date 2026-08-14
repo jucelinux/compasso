@@ -72,7 +72,38 @@ if (touch) {
 
 const sim = createSim(seed, tuning)
 const keyboard = createKeyboard()
-const pad = touch ? createTouchPad(touchLayer) : null
+/**
+ * O ponto de tela cai num ÍCONE de habilidade?
+ *
+ * Mora aqui porque só aqui se sabe as duas coisas de que a resposta precisa: a
+ * geometria do HUD (do `tuning`) e onde o canvas está na tela. O pad lê dedos;
+ * o render desenha; a ponte entre os dois é este arquivo, como já era para o
+ * ponteiro.
+ *
+ * A fileira é a das habilidades COMPRADAS, e ela precisa ser a mesma que a sim
+ * usa em `iconeEm` e que o render desenha. Três leituras da mesma fileira é
+ * duas a mais do que seria seguro — mas as três derivam do mesmo `tuning.hud` e
+ * do mesmo `nivel > 0`, e há teste exigindo que elas concordem.
+ */
+function noIconeDeHabilidade(cx: number, cy: number): boolean {
+  const s = sim.state()
+  if (s.phase !== "run") return false
+  const p = paraArena(cx, cy)
+  if (p === null) return false
+  const r = tuning.hud.habToque
+  let slot = 0
+  for (const h of s.habilidades) {
+    if (h.nivel <= 0) continue
+    const ix = tuning.hud.habX + slot * tuning.hud.habStep
+    const dx = p.x - ix
+    const dy = p.y - tuning.hud.habY
+    if (dx * dx + dy * dy <= r * r) return true
+    slot++
+  }
+  return false
+}
+
+const pad = touch ? createTouchPad(touchLayer, noIconeDeHabilidade) : null
 const recorder = createRecorder(seed, tuning, browserGitSha())
 const crowdParam = params.get("crowd")
 

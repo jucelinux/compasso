@@ -2003,41 +2003,72 @@ describe("as habilidades da loja", () => {
     expect(sim.state().bank).toBe(depois)
   })
 
-  it("a ADRENALINA carrega com patógeno, e NÃO com cria", () => {
+  it("carrega por TEMPO: um minuto de jogo enche a carga", () => {
     /*
-     * Pedido literal do H: "patógeno, não bacilos filhos nem efeito
-     * secundário". É a promessa mais fácil de quebrar sem ninguém ver — a cria
-     * é o corpo mais numeroso do jogo, e contá-la encheria a carga sozinha.
+     * Chamada do H em 14/08 — os dois gatilhos por evento (abate e limo) saíram
+     * e viraram tempo, "para facilitar nesse primeiro momento".
+     *
+     * Tempo REAL e não de mundo: a adrenalina freia o relógio do mundo, e se a
+     * recarga contasse nele ela atrasaria a própria volta — a habilidade sairia
+     * mais cara quanto melhor funcionasse.
      */
     const sim = start(4242)
     compra(sim, IDX.adrenalina)
-    const cria = tuning.phases[0]!.counter.purge
-    const s = sim.state()
-    s.enemies.length = 0
-    for (let i = 0; i < 400; i++) tick(sim, NONE)
-    const carga0 = sim.state().habilidades[IDX.adrenalina]!.carga
-    // Um bando de CRIA em cima do jogador: engolir tudo não pode carregar nada.
-    const st = sim.state()
-    for (let i = 0; i < 6; i++) {
-      st.enemies.push({
-        ...st.enemies[0]!,
-        id: 9000 + i,
-        kind: cria,
-        x: st.player.x + i,
-        y: st.player.y,
-      })
-    }
-    expect(sim.state().habilidades[IDX.adrenalina]!.carga).toBe(carga0)
+    const nv = nivel1(IDX.adrenalina)
+    expect(sim.state().habilidades[IDX.adrenalina]!.carga).toBe(0)
+    /*
+     * Mede a TAXA, e não espera a carga encher.
+     *
+     * A primeira versão rodava um minuto e conferia o total — e deu 50,88 em
+     * vez de 60, porque parada a run MORRE aos ~51s. O teste estava medindo
+     * quanto tempo o jogador sobrevive, não quanto a habilidade carrega. A taxa
+     * responde a pergunta certa e não depende de sobreviver a nada.
+     */
+    const SEGUNDOS = 10
+    for (let i = 0; i < SEGUNDOS * tuning.sim.hz; i++) tick(sim, NONE)
+    expect(sim.state().phase, "morreu no meio; a medição seria de outra coisa").toBe("run")
+    expect(sim.state().habilidades[IDX.adrenalina]!.carga).toBeCloseTo(SEGUNDOS, 1)
+    // E a recarga do nível está em SEGUNDOS, então a carga cheia é um minuto.
+    expect(nv.recarga).toBe(60)
+  })
+
+  it("a carga NÃO corre fora da run — o cérebro não é farm", () => {
+    /*
+     * O caso nulo do gatilho por tempo, e ele é a metade que decide: contando
+     * no cérebro, esperar parado numa tela seria a forma mais eficiente de
+     * recarregar, e o hub deixaria de ser descanso para virar trabalho. "A cada
+     * 1 minuto" quer dizer de JOGO.
+     */
+    const sim = createSim(4243, tuning)
+    compra(sim, IDX.adrenalina)
+    expect(sim.state().phase).toBe("hub")
+    for (let i = 0; i < 60 * 120; i++) sim.step(NONE)
+    expect(sim.state().phase, "saiu do hub sozinho; o teste mediria outra coisa").toBe("hub")
+    expect(sim.state().habilidades[IDX.adrenalina]!.carga).toBe(0)
+  })
+
+  it("a carga tem TETO: run longa não vira estoque de usos", () => {
+    const sim = start(4244)
+    compra(sim, IDX.adrenalina)
+    const nv = nivel1(IDX.adrenalina)
+    // Planta a carga no teto e roda mais: ela não pode passar dali. Rodar três
+    // minutos de verdade mediria sobrevivência outra vez.
+    sim.state().habilidades[IDX.adrenalina]!.carga = nv.recarga
+    for (let i = 0; i < 600; i++) tick(sim, NONE)
+    expect(sim.state().habilidades[IDX.adrenalina]!.carga).toBeLessThanOrEqual(nv.recarga)
   })
 
   it("acionar SEM carga cheia não faz nada, e não gasta o que há", () => {
     const sim = start(5)
     compra(sim, IDX.adrenalina)
-    sim.state().habilidades[IDX.adrenalina]!.carga = nivel1(IDX.adrenalina).recarga - 1
+    const quase = nivel1(IDX.adrenalina).recarga - 1
+    sim.state().habilidades[IDX.adrenalina]!.carga = quase
     tick(sim, HAB(1))
     const h = sim.state().habilidades[IDX.adrenalina]!
     expect(h.ativa).toBe(0)
-    expect(h.carga).toBe(nivel1(IDX.adrenalina).recarga - 1)
+    // Não GASTA: a carga só pode ter subido, pelo tick de tempo que acabou de
+    // correr. Comparar com igualdade exata seria medir o gatilho, não a recusa.
+    expect(h.carga).toBeGreaterThanOrEqual(quase)
   })
 
   it("acionar com carga cheia gasta a carga e liga pelo prazo do nível", () => {

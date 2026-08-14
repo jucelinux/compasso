@@ -68,7 +68,7 @@ const RUN_03_HASH = "dbbfb078"
  * deixou de ser zelo e virou a única forma de a suíte cobrir o fim da run.
  */
 const CORE_ATUAL = resolve(projectRoot, "replays", "core-atual.json")
-const CORE_ATUAL_HASH = "28d9247b"
+const CORE_ATUAL_HASH = "a6e81fcf"
 
 const smoke = () => loadReplay(SMOKE)
 const tuning = () => loadTuning()
@@ -316,6 +316,24 @@ const tuning = () => loadTuning()
  * `npm run smoke` vem junto.
  */
 
+/*
+ * DÉCIMA SEXTA VEZ, em 14/08: as habilidades passaram a carregar por TEMPO.
+ *
+ * Chamada do H — os dois gatilhos por evento (200 abates, 2000 tiles de limo)
+ * viraram um minuto de jogo cada, "para facilitar nesse primeiro momento". A
+ * adrenalina foi de 3 para 10 segundos de duração, e os ícones mudaram de canto
+ * e de tamanho.
+ *
+ * E aqui a deriva foi MENOR do que parece, o que vale registrar: só a âncora
+ * mudou de hash, e por ter sido regravada. `smoke` e os três replays humanos
+ * saíram com os MESMOS hashes de antes — nenhum deles compra habilidade, e
+ * habilidade não comprada não carrega, não aciona e não toca no mundo. O
+ * `tuningHash` mudou para todos; o comportamento, para nenhum.
+ *
+ * Isso não é sorte: é a propriedade que `nivel 0 = não comprada` compra. Uma
+ * habilidade que começasse ligada teria movido os cinco.
+ */
+
 /**
  * A ÂNCORA, e o que ela tripwire.
  *
@@ -507,8 +525,8 @@ describe("determinismo", () => {
  * alguém dizer o que ele é.
  */
 const PROCEDENCIA: ReadonlyArray<readonly [string, string, string]> = [
-  ["smoke.json", "ae02dd9", "sintética, regenerável byte a byte por `npm run smoke`"],
-  ["core-atual.json", "ae02dd9", "sintética, VIVA — regravar com `npm run rec`"],
+  ["smoke.json", "bea2885", "sintética, regenerável byte a byte por `npm run smoke`"],
+  ["core-atual.json", "bea2885", "sintética, VIVA — regravar com `npm run rec`"],
   ["run-01.json", "7c952a6", "humana, core do dash; hoje só âncora de determinismo"],
   ["run-02.json", "7c952a6", "humana, core do dash; hoje só âncora de determinismo"],
   ["run-03.json", "7c952a6", "humana, core do dash; hoje só âncora de determinismo"],

@@ -121,6 +121,19 @@ try {
   await d.page.waitForTimeout(900)
   await d.shot(resolve(dir, "1-parada.png"))
 
+  /*
+   * A CÂMERA LENTA não é capturada aqui, e a ausência é decisão.
+   *
+   * Ver a moldura exige a adrenalina COMPRADA, e comprar exige 500 de memória —
+   * que este passeio não junta. Apertar "1" sem ter a habilidade não faz nada, e
+   * a captura sairia com o nome `camera-lenta` mostrando uma run comum: o
+   * artefato de nome mentiroso que este arquivo existe para não produzir.
+   *
+   * Ela foi conferida OLHANDO em 14/08, com uma concessão temporária no estado
+   * inicial da sim, capturada e revertida no mesmo passo — o mesmo caminho que
+   * o HUD das habilidades usou em 13/08. Quando o banco atravessar sessões, ou
+   * quando houver um jeito honesto de plantar a compra, isto vira captura fixa.
+   */
   await d.hold(["ArrowRight"], 700)
   await d.hold(["ArrowLeft"], 500)
   await d.page.keyboard.down("ArrowLeft")

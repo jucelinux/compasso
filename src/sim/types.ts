@@ -440,6 +440,16 @@ export interface Tuning {
     readonly habY: number
     readonly habStep: number
     readonly habRaio: number
+    /**
+     * Raio de ACERTO do ícone, maior que o desenho dele.
+     *
+     * Separado do raio visual porque dedo não é cursor: o alvo precisa ser
+     * maior do que parece, e o desenho não pode crescer junto sem comer a
+     * arena. É o mesmo número que o pad usa para saber que ali não é manche —
+     * dois valores diferentes deixariam uma coroa onde o toque move o glóbulo E
+     * aciona a habilidade.
+     */
+    readonly habToque: number
   }
   readonly hub: {
     /** Centro da ÓRBITA dos patógenos, onde se entra para escolher o inimigo. */
