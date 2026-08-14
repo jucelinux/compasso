@@ -25,6 +25,22 @@ export interface Axis {
 export interface TouchState extends Axis {
   /** O botão de impulso, segurado. Vira `action` ou `restart` conforme a fase. */
   readonly press: boolean
+  /**
+   * O TOQUE CURTO, em px de tela — encostar e soltar sem arrastar. 14/08.
+   *
+   * Existe porque o cérebro ganhou cinco portas que se abrem no ponteiro, e no
+   * iPad NENHUM clique chegava à sim: a camada de toque cobre a tela inteira,
+   * então o guarda que impede o pad de virar clique engolia todos. Medido — a
+   * porta não abria no toque, e um painel aberto ANDANDO virava armadilha,
+   * porque `restart` no toque só existe na tela de morte.
+   *
+   * A desambiguação é a mais antiga que existe: arrastou é manche, tocou é
+   * ponteiro. Um toque sem arrasto não move nada (fica dentro da zona morta),
+   * então as duas leituras não competem pelo mesmo gesto.
+   *
+   * `null` quando não houve toque no tick. Consumido na leitura, como o trinco.
+   */
+  readonly tap: { readonly x: number; readonly y: number } | null
 }
 
 export interface TouchPad {
@@ -116,6 +132,18 @@ export function createTouchPad(layer: HTMLElement): TouchPad {
    */
   let latch = false
 
+  /**
+   * O TOQUE CURTO pendente, e o que faz dele curto.
+   *
+   * `DEAD_ZONE` de deslocamento é o mesmo limiar que decide se o manche saiu do
+   * neutro — reusado de propósito: o gesto que não moveu o jogador é
+   * exatamente o gesto que sobra para significar outra coisa. Dois limiares
+   * diferentes deixariam uma faixa onde o dedo move E toca.
+   */
+  const TAP_MS = 400
+  let tap: { x: number; y: number } | null = null
+  const inicio = new Map<number, { x: number; y: number; t: number }>()
+
   const isDireita = (x: number): boolean => x >= window.innerWidth / 2
 
   const pinta = (): void => {
@@ -141,6 +169,7 @@ export function createTouchPad(layer: HTMLElement): TouchPad {
     // O botão de tela cheia é o único filho que recebe ponteiro. Deixa passar.
     if (event.target instanceof Element && event.target.closest("#tela-cheia") !== null) return
     event.preventDefault()
+    inicio.set(event.pointerId, { x: event.clientX, y: event.clientY, t: performance.now() })
     if (isDireita(event.clientX)) {
       pressing.add(event.pointerId)
       latch = true
@@ -162,6 +191,14 @@ export function createTouchPad(layer: HTMLElement): TouchPad {
   }
 
   const onUp = (event: PointerEvent): void => {
+    const i0 = inicio.get(event.pointerId)
+    inicio.delete(event.pointerId)
+    if (i0 !== undefined) {
+      const andou = Math.hypot(event.clientX - i0.x, event.clientY - i0.y)
+      // O toque é registrado onde ele COMEÇOU, não onde soltou: o dedo escorrega
+      // alguns pixels ao levantar, e o alvo é onde a pessoa mirou.
+      if (andou < DEAD_ZONE && performance.now() - i0.t < TAP_MS) tap = { x: i0.x, y: i0.y }
+    }
     if (stick !== null && stick.id === event.pointerId) stick = null
     pressing.delete(event.pointerId)
     pinta()
@@ -176,8 +213,10 @@ export function createTouchPad(layer: HTMLElement): TouchPad {
   const solta = (): void => {
     stick = null
     pressing.clear()
+    inicio.clear()
     // O trinco cai junto: um toque perdido junto com a página não é toque.
     latch = false
+    tap = null
     pinta()
   }
 
@@ -197,7 +236,9 @@ export function createTouchPad(layer: HTMLElement): TouchPad {
         : stickBits(stick.dedo.x - stick.dedo.ox, stick.dedo.y - stick.dedo.oy)
       const press = pressing.size > 0 || latch
       latch = false
-      return { ...eixo, press }
+      const t = tap
+      tap = null
+      return { ...eixo, press, tap: t }
     },
     dispose: () => {
       layer.removeEventListener("pointerdown", onDown)

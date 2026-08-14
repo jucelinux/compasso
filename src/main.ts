@@ -110,13 +110,23 @@ const ponteiro = { x: -1, y: -1, down: false }
 const noPad = (event: PointerEvent): boolean =>
   touchLayer !== null && event.target instanceof Node && touchLayer.contains(event.target)
 
-function atualizaPonteiro(event: PointerEvent): void {
+/** Ponto de TELA para ponto de ARENA. `null` quando não há canvas medido. */
+function paraArena(cx: number, cy: number): { x: number; y: number } | null {
   const canvas = mount.querySelector("canvas")
-  if (canvas === null) return
+  if (canvas === null) return null
   const r = canvas.getBoundingClientRect()
-  if (r.width === 0 || r.height === 0) return
-  ponteiro.x = ((event.clientX - r.left) / r.width) * tuning.arena.width
-  ponteiro.y = ((event.clientY - r.top) / r.height) * tuning.arena.height
+  if (r.width === 0 || r.height === 0) return null
+  return {
+    x: ((cx - r.left) / r.width) * tuning.arena.width,
+    y: ((cy - r.top) / r.height) * tuning.arena.height,
+  }
+}
+
+function atualizaPonteiro(event: PointerEvent): void {
+  const p = paraArena(event.clientX, event.clientY)
+  if (p === null) return
+  ponteiro.x = p.x
+  ponteiro.y = p.y
 }
 window.addEventListener("pointermove", (event) => {
   if (noPad(event)) return
@@ -161,6 +171,18 @@ function readInput(): InputFrame {
   cliquePendente = false
   if (t === undefined) return { ...k, ...m }
   const morto = sim.state().phase === "dead"
+  /*
+   * O TOQUE CURTO vira CLIQUE, em coordenada de arena. 14/08.
+   *
+   * Sem isto o iPad não tinha ponteiro nenhum: a camada de toque cobre a tela
+   * inteira, o guarda que impede o pad de virar clique engolia todo evento, e
+   * as cinco portas do cérebro — que abrem no ponteiro — eram inalcançáveis.
+   * Pior: um painel aberto ANDANDO virava armadilha, porque `restart` no toque
+   * só existe na tela de morte.
+   *
+   * O toque tem prioridade sobre o `ponteiro`, que no iPad nunca é atualizado.
+   */
+  const alvo = t.tap === null ? null : paraArena(t.tap.x, t.tap.y)
   return {
     up: k.up || t.up,
     down: k.down || t.down,
@@ -169,6 +191,7 @@ function readInput(): InputFrame {
     action: k.action || (t.press && !morto),
     restart: k.restart || (t.press && morto),
     ...m,
+    ...(alvo === null ? {} : { pointerX: alvo.x, pointerY: alvo.y, click: true }),
   }
 }
 
