@@ -18,7 +18,9 @@
     "palettes": "node src/harness/palettes.ts",
     "rec": "node src/harness/rec.ts",
     "deploy": "node src/harness/deploy.ts",
-    "toque": "node src/harness/toque.ts"
+    "toque": "node src/harness/toque.ts",
+    "ouvido": "node src/harness/ouvido.ts",
+    "trilha": "node src/harness/trilha.ts"
   },
   "dependencies": {
     "pixi.js": "^8.6.6"

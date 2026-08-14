@@ -12,6 +12,7 @@ import {
 import { createRecorder, downloadReplay } from "./input/recorder.ts"
 import { browserGitSha } from "./harness/gitSha.ts"
 import { createRenderer, type Renderer } from "./render/renderer.ts"
+import { criaTrilha } from "./audio/audio.ts"
 import { applyPaletteVariant, PALETTE_NAMES } from "./render/palette.ts"
 
 const tuning = tuningJson as Tuning
@@ -349,6 +350,73 @@ const MAX_FRAME_SECONDS = 0.25
 const frameMs: number[] = []
 let fpsLabel = "—"
 
+/**
+ * A PONTE entre o jogo e a trilha. 14/08.
+ *
+ * Ela lê estado e nunca escreve — a música é RENDER, no mesmo sentido em que o
+ * estalo visual do abate é render desde 13/08. Se um dia o som mudar um byte do
+ * hash, algo está no lugar errado.
+ *
+ * Os eventos são lidos por CARIMBO (`lastKillTick`, `lastPickTick`) e não por
+ * diferença entre quadros, pelo mesmo motivo que o render já usa carimbo: um
+ * quadro lento roda vários ticks, e diferença de estado perde o que aconteceu
+ * no meio. Som perdido é pior que som atrasado — atrasado ninguém nota, perdido
+ * vira "o jogo às vezes não faz barulho ao abater".
+ */
+const audio = criaTrilha()
+const TETO_INF = tuning.field.cols * tuning.field.rows * tuning.field.maxInfection
+let ultimoAbate = -1
+let ultimoItem = -1
+let ultimaOnda = 0
+let ultimasVidas = -1
+let ultimaHabilidade = 0
+
+const CENA_DE: Readonly<Record<string, "cerebro" | "arena" | "respiro" | "morte">> = {
+  hub: "cerebro",
+  select: "cerebro",
+  painel: "cerebro",
+  card: "cerebro",
+  closed: "cerebro",
+  intervalo: "respiro",
+  run: "arena",
+  dead: "morte",
+}
+
+function trilha(s: SimState): void {
+  audio.quadro({
+    cena: CENA_DE[s.phase] ?? "arena",
+    relogio: s.worldScale,
+    doenca: Math.min(1, s.infection / (TETO_INF * tuning.field.loseFraction)),
+    onda: s.wave,
+    vidas: s.lives,
+  })
+
+  if (s.lastKillTick !== ultimoAbate) {
+    if (ultimoAbate >= 0) audio.toca("abate")
+    ultimoAbate = s.lastKillTick
+  }
+  if (s.lastPickTick !== ultimoItem) {
+    if (ultimoItem >= 0) audio.toca("item")
+    ultimoItem = s.lastPickTick
+  }
+  // Habilidade LIGANDO: a soma dos prazos sobe de um quadro para o outro só
+  // quando alguma acabou de ser acionada.
+  const ativas = s.habilidades.reduce((n, h) => n + h.ativa, 0)
+  if (ativas > ultimaHabilidade) audio.toca("habilidade")
+  ultimaHabilidade = ativas
+  if (s.phase === "run" && s.wave > ultimaOnda && ultimaOnda > 0) audio.toca("onda")
+  if (s.phase === "run" || s.phase === "intervalo") ultimaOnda = s.wave
+  if (ultimasVidas >= 0 && s.lives < ultimasVidas) audio.toca("dano")
+  ultimasVidas = s.lives
+}
+
+/** Tecla M: cala a boca. Preferência de quem ouve, e não estado de jogo. */
+window.addEventListener("keydown", (event) => {
+  if (event.code !== "KeyM") return
+  const m = audio.mudo()
+  console.info(m ? "trilha muda" : "trilha ligada")
+})
+
 function frame(now: number): void {
   const elapsed = Math.min((now - last) / 1000, MAX_FRAME_SECONDS)
   frameMs.push(elapsed * 1000)
@@ -371,6 +439,7 @@ function frame(now: number): void {
   }
 
   renderer.draw(prev, sim.state(), accumulator / STEP)
+  trilha(sim.state())
 
   const s = sim.state()
   // `fase` está aqui para o `npm run rec` saber quando a run morreu sem
