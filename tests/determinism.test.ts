@@ -12,7 +12,7 @@ import type { Tuning } from "../src/sim/types.ts"
  */
 
 const SMOKE = resolve(projectRoot, "replays", "smoke.json")
-const BASELINE_HASH = "8d66b8df"
+const BASELINE_HASH = "546c62d3"
 
 /**
  * Run real do humano, 7,6 min de input de verdade, do core do dash (`7c952a6`).
@@ -22,7 +22,7 @@ const BASELINE_HASH = "8d66b8df"
  * leitura de ritmo, e não como cobertura de morte.
  */
 const RUN_01 = resolve(projectRoot, "replays", "run-01.json")
-const RUN_01_HASH = "f6014d86"
+const RUN_01_HASH = "8e1a9de2"
 
 /**
  * Segunda run real: 5 min, 10 ondas, uma morte. Gravada antes da tecla de
@@ -30,7 +30,7 @@ const RUN_01_HASH = "f6014d86"
  * Vale como determinismo sobre input humano longo.
  */
 const RUN_02 = resolve(projectRoot, "replays", "run-02.json")
-const RUN_02_HASH = "cdd0637c"
+const RUN_02_HASH = "c66b28fe"
 
 /**
  * Terceira run real: 5,7 min de input humano, gravada quando os modificadores
@@ -40,7 +40,7 @@ const RUN_02_HASH = "cdd0637c"
  * sai mais do cérebro — ver o teste da cobertura, mais abaixo.
  */
 const RUN_03 = resolve(projectRoot, "replays", "run-03.json")
-const RUN_03_HASH = "dbbfb078"
+const RUN_03_HASH = "c1d5a43a"
 
 /**
  * Fixture do core contínuo, gravada por `npm run rec`. Sintética, não humana:
@@ -68,7 +68,7 @@ const RUN_03_HASH = "dbbfb078"
  * deixou de ser zelo e virou a única forma de a suíte cobrir o fim da run.
  */
 const CORE_ATUAL = resolve(projectRoot, "replays", "core-atual.json")
-const CORE_ATUAL_HASH = "a6e81fcf"
+const CORE_ATUAL_HASH = "e05de224"
 
 const smoke = () => loadReplay(SMOKE)
 const tuning = () => loadTuning()
@@ -334,6 +334,25 @@ const tuning = () => loadTuning()
  * habilidade que começasse ligada teria movido os cinco.
  */
 
+/*
+ * DÉCIMA SÉTIMA VEZ, em 14/08: a RETOMADA e as portas mais largas.
+ *
+ * Três chamadas do H no mesmo pedido: custo 200 em vez de 500, habilidade
+ * comprada começando DISPONÍVEL, e retomar de qualquer onda já alcançada. Mais
+ * o alvo das portas, que ele disse estar preciso demais para o dedo.
+ *
+ * Entraram no hash `recordes` (a maior onda por doença, que decide de onde a
+ * próxima run pode começar) e `ondaEscolhida`. E desta vez os CINCO se moveram,
+ * ao contrário da deriva anterior: os replays humanos atravessam o cérebro, e o
+ * raio das portas subiu de 11 para 18 — a trajetória deles passa a encostar em
+ * porta onde antes passava reto.
+ *
+ * Vale reparar no que as duas derivas juntas dizem: mudança em mecânica que
+ * ninguém comprou não move fixture nenhuma; mudança na GEOMETRIA do lugar por
+ * onde todo replay passa move todas. O hash não mede o tamanho da mudança, mede
+ * o quanto ela fica no caminho.
+ */
+
 /**
  * A ÂNCORA, e o que ela tripwire.
  *
@@ -525,8 +544,8 @@ describe("determinismo", () => {
  * alguém dizer o que ele é.
  */
 const PROCEDENCIA: ReadonlyArray<readonly [string, string, string]> = [
-  ["smoke.json", "bea2885", "sintética, regenerável byte a byte por `npm run smoke`"],
-  ["core-atual.json", "bea2885", "sintética, VIVA — regravar com `npm run rec`"],
+  ["smoke.json", "e022aa2", "sintética, regenerável byte a byte por `npm run smoke`"],
+  ["core-atual.json", "e022aa2", "sintética, VIVA — regravar com `npm run rec`"],
   ["run-01.json", "7c952a6", "humana, core do dash; hoje só âncora de determinismo"],
   ["run-02.json", "7c952a6", "humana, core do dash; hoje só âncora de determinismo"],
   ["run-03.json", "7c952a6", "humana, core do dash; hoje só âncora de determinismo"],

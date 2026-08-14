@@ -215,6 +215,8 @@ export function createSim(seed: number, tuning: Tuning): Sim {
     villain: 0,
     painel: -1,
     prevClick: false,
+    recordes: tuning.phases.map(() => 1),
+    ondaEscolhida: 1,
     habilidades: tuning.habilidades.map(() => ({ nivel: 0, carga: 0, ativa: 0 })),
     historico: [],
     runStartTick: 0,
@@ -449,9 +451,24 @@ export function createSim(seed: number, tuning: Tuning): Sim {
     s.countdown = Math.max(1, Math.round(tuning.run.intervalSeconds * tuning.sim.hz))
   }
 
+  /** Até que onda esta doença já foi. Nunca menos que 1. */
+  const recordeDe = (v: number): number => Math.max(1, s.recordes[v] ?? 1)
+
   const startRun = (): void => {
     s.runStartTick = s.tick
-    s.wave = 1
+    /*
+     * A run começa na onda ESCOLHIDA — pedido do H em 14/08.
+     *
+     * "Se morreu no nível 4, poderá retomar dos níveis 1, 2, 3 ou 4." O teto é
+     * o recorde da doença, e ele é grampeado aqui e não só na tela: a tela é
+     * uma das formas de escolher, e a regra não pode morar em nenhuma delas.
+     *
+     * `round` anda junto com `wave` desde 05/08 — é `round` que indexa a curva
+     * de dificuldade. Começar na onda 4 tem que começar na DIFICULDADE 4, senão
+     * retomar seria uma forma de jogar a onda 4 fácil.
+     */
+    const alvo = Math.min(Math.max(1, s.ondaEscolhida), recordeDe(s.villain))
+    s.wave = alvo
     /*
      * A run começa no vilão ESCOLHIDO no hub, não no primeiro da lista.
      *
@@ -464,7 +481,7 @@ export function createSim(seed: number, tuning: Tuning): Sim {
     // nesta tentativa" de "o que o organismo aprendeu".
     s.coins = 0
     s.pickups = []
-    s.round = 1
+    s.round = alvo
     s.kills = 0
     s.score = 0
     s.bestMult = 1
@@ -502,6 +519,20 @@ export function createSim(seed: number, tuning: Tuning): Sim {
     s.player.dashCooldown = 0
     s.player.invulnerable = false
     s.countdown = 0
+    /*
+     * A habilidade comprada começa DISPONÍVEL — chamada do H em 14/08.
+     *
+     * "O default da habilidade é começar já disponível para uso." Sem isto, o
+     * primeiro minuto de toda run é jogado sem nada do que se comprou, e o item
+     * de 200 seria comprado para ser usado na segunda metade das runs.
+     */
+    for (let i = 0; i < s.habilidades.length; i++) {
+      const h = s.habilidades[i]!
+      h.ativa = 0
+      if (h.nivel <= 0) continue
+      const n = nivelDe(tuning, i, h.nivel)
+      h.carga = n === undefined ? 0 : n.recarga
+    }
     startWave()
     /*
      * A run abre no CARD, e ele é a única tela que ainda pede uma tecla.
@@ -537,6 +568,15 @@ export function createSim(seed: number, tuning: Tuning): Sim {
   const bankCoins = (venceu: boolean): void => {
     // O registro nasce ANTES do banco somar: `coins` é o que ESTA run rendeu, e
     // depois de somar ele já não é de ninguém.
+    /*
+     * O RECORDE sobe com a onda ALCANÇADA, e não com a vencida.
+     *
+     * Chegar na onda 4 e morrer nela já desbloqueia retomar da 4: o que se
+     * ganha é o direito de tentar de novo dali, não a prova de que se venceu.
+     * Exigir vitória faria o desbloqueio depender de conter a onda, e conter é
+     * justamente o que não se conseguiu.
+     */
+    if (s.wave > recordeDe(s.villain)) s.recordes[s.villain] = s.wave
     s.historico.unshift({
       wave: s.wave,
       kills: s.kills,
@@ -1852,11 +1892,12 @@ export function createSim(seed: number, tuning: Tuning): Sim {
    * desenho próprio (os patógenos girando) e leva a uma tela que já existia. As
    * outras quatro são dados puros, e é isso que faz a quinta custar uma linha.
    */
-  const portaEm = (x: number, y: number): number | null => {
+  const portaEm = (x: number, y: number, folga = 0): number | null => {
+    const ro = tuning.hub.enterRadius + folga
     const dxo = x - tuning.hub.orbitX
     const dyo = y - tuning.hub.orbitY
-    if (dxo * dxo + dyo * dyo <= tuning.hub.enterRadius * tuning.hub.enterRadius) return -1
-    const r = tuning.hub.nodeRadius
+    if (dxo * dxo + dyo * dyo <= ro * ro) return -1
+    const r = tuning.hub.nodeRadius + folga
     for (let i = 0; i < tuning.hub.nodes.length; i++) {
       const n = tuning.hub.nodes[i]!
       const dx = x - n.x
@@ -1890,8 +1931,20 @@ export function createSim(seed: number, tuning: Tuning): Sim {
    */
   const stepHub = (bits: number, input: InputFrame): void => {
     movePlayer(bits)
+    /*
+     * O DEDO tem alvo maior que o GLÓBULO — chamada do H em 14/08.
+     *
+     * "O raio é muito preciso; pra quem joga do mobile há dificuldade em
+     * acertar a órbita." São dois gestos com precisões diferentes: quem ANDA
+     * mira com o corpo e vê onde ele está; quem TOCA mira com um dedo que cobre
+     * mais pixels do que enxerga. Um raio só serviria mal aos dois.
+     *
+     * O raio da CAMINHADA também cresceu (11 → 18), porque no manche o glóbulo
+     * é conduzido e não teleportado — mas menos, para que passear pelo cérebro
+     * não abra porta sem querer.
+     */
     if (input.click && !s.prevClick) {
-      const alvo = portaEm(input.pointerX, input.pointerY)
+      const alvo = portaEm(input.pointerX, input.pointerY, tuning.hub.folgaToque)
       if (alvo !== null) {
         abrePorta(alvo)
         return
@@ -2004,11 +2057,56 @@ export function createSim(seed: number, tuning: Tuning): Sim {
    * Seria a versão de menu do "dispensar por reflexo" que o `cardLock` resolve
    * com tempo — aqui o remédio é geometria.
    */
+  /**
+   * Qual onda o ponto escolhe na FAIXA da tela de seleção, ou 0.
+   *
+   * A faixa é uma fileira de células dentro do quadro, uma por onda liberada.
+   * Ela existe porque no toque não há setas: a tela inteira é ponteiro desde
+   * 14/08, e escolher precisava de alvo para o dedo como qualquer outra coisa.
+   *
+   * Geometria no `tuning.hub`, como o resto do quadro — o render lê os mesmos
+   * números, senão o dedo escolheria a onda de cima da que está desenhada.
+   */
+  const ondaNaFaixa = (px: number, py: number): number => {
+    /*
+     * Sem onda para escolher, a faixa NÃO EXISTE.
+     *
+     * Com o recorde em 1 ela seria uma banda do painel que não fecha, não
+     * confirma e não muda nada — uma região morta no meio de uma tela onde todo
+     * ponto faz alguma coisa. Some, e aquele pedaço volta a confirmar como o
+     * resto do quadro.
+     */
+    if (recordeDe(s.villain) < 2) return 0
+    const w = tuning.hub.panelW
+    const h = tuning.hub.panelH
+    const x0 = (width - w) / 2
+    const y0 = (height - h) / 2
+    const fy = y0 + tuning.hub.ondaTop
+    if (py < fy || py > fy + tuning.hub.ondaH) return 0
+    if (px < x0 || px > x0 + w) return 0
+    const total = recordeDe(s.villain)
+    const i = Math.floor(((px - x0) / w) * total)
+    return Math.min(total, Math.max(1, i + 1))
+  }
+
   const stepSelect = (bits: number, input: InputFrame): void => {
     const novo = bits & ~s.prevBits
     const n = villainCount()
     if ((novo & BIT_LEFT) !== 0) s.villain = (s.villain + n - 1) % n
     if ((novo & BIT_RIGHT) !== 0) s.villain = (s.villain + 1) % n
+    /*
+     * CIMA e BAIXO escolhem a onda; ESQUERDA e DIREITA, a doença.
+     *
+     * Dois eixos para duas escolhas, e não uma lista só: com uma doença a
+     * horizontal parece morta hoje, mas juntar as duas faria a segunda doença
+     * exigir desfazer isto — e no meio do caminho o jogador teria aprendido uma
+     * regra que ia mudar.
+     */
+    const teto = recordeDe(s.villain)
+    if ((novo & BIT_UP) !== 0) s.ondaEscolhida = Math.min(teto, s.ondaEscolhida + 1)
+    if ((novo & BIT_DOWN) !== 0) s.ondaEscolhida = Math.max(1, s.ondaEscolhida - 1)
+    // Trocar de doença pode deixar a escolha acima do recorde da nova.
+    s.ondaEscolhida = Math.min(Math.max(1, s.ondaEscolhida), teto)
     /*
      * CONFIRMAR: a tecla de ação, ou um clique DENTRO do quadro. 14/08.
      *
@@ -2022,7 +2120,23 @@ export function createSim(seed: number, tuning: Tuning): Sim {
      * fecha, dentro confirma — o dedo passa a dizer a mesma coisa que o mouse
      * diz, e a metade direita da tela deixa de ter opinião.
      */
-    const dentro = input.click && !s.prevClick && noQuadro(input.pointerX, input.pointerY).dentro
+    const clicou = input.click && !s.prevClick
+    /*
+     * A FAIXA vem antes do confirmar, e a ordem é o que a faz existir.
+     *
+     * Clicar nela é um clique DENTRO do quadro, e clique dentro do quadro
+     * confirma. Se o confirmar rodasse primeiro, escolher a onda 3 começaria a
+     * partida na onda que estivesse escolhida — o mesmo defeito de ordem que a
+     * loja teve em 13/08, e o mesmo conserto.
+     */
+    if (clicou) {
+      const onda = ondaNaFaixa(input.pointerX, input.pointerY)
+      if (onda > 0) {
+        s.ondaEscolhida = onda
+        return
+      }
+    }
+    const dentro = clicou && noQuadro(input.pointerX, input.pointerY).dentro
     if ((novo & BIT_ACTION) !== 0 || dentro) {
       startRun()
       return
@@ -2172,6 +2286,9 @@ export function createSim(seed: number, tuning: Tuning): Sim {
     for (const h of s.habilidades) {
       packer.u32(h.nivel).u32(h.carga).u32(h.ativa)
     }
+    // O RECORDE decide de onde a próxima run pode começar, então ele decide
+    // jogo — e o que decide jogo entra no hash.
+    for (const r of s.recordes) packer.u32(r)
     packer
       .u32(s.wave)
       .u32(s.waveKills)
@@ -2192,7 +2309,7 @@ export function createSim(seed: number, tuning: Tuning): Sim {
       .f64(s.worldScale)
       .u32(s.frozen)
       .u32(s.deadLock)
-      .u32(s.villain).u32(s.painel + 1).u8(s.prevClick ? 1 : 0).u32(s.historico.length).u32(s.habilidades.length).u32(s.coins).u32(s.bank).u32(s.pickups.length).u32(s.cardLock).u32(s.countdown).f64(s.fissionStun).u32(s.auraTicks).f64(s.instantAcc).u32(s.pick).u32(s.phaseIndex).u32(s.round)
+      .u32(s.villain).u32(s.painel + 1).u8(s.prevClick ? 1 : 0).u32(s.ondaEscolhida).u32(s.historico.length).u32(s.habilidades.length).u32(s.coins).u32(s.bank).u32(s.pickups.length).u32(s.cardLock).u32(s.countdown).f64(s.fissionStun).u32(s.auraTicks).f64(s.instantAcc).u32(s.pick).u32(s.phaseIndex).u32(s.round)
       .f64(s.fissionAcc)
       .u32(s.infection)
       .u32(s.necrosed)

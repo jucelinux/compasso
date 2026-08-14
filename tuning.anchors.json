@@ -194,7 +194,13 @@
         "POR QUE TEMPO E MAIS SIMPLES, e nao so mais facil: gatilho por evento acopla a",
         "habilidade a POLITICA de quem joga — quem cura muito nunca carregava a adrenalina,",
         "quem so caca nunca carregava a febre. Com tempo, as duas voltam na mesma cadencia",
-        "para todo mundo, e o que se aprende jogando e QUANDO usar, nao como carregar."
+        "para todo mundo, e o que se aprende jogando e QUANDO usar, nao como carregar.",
+        "",
+        "14/08, mais tarde: o CUSTO das duas caiu de 500 para 200, chamada do H — 'no",
+        "nivel atual esse valor ja habilita o jogador a comprar os 2 itens na primeira",
+        "run, caso ele chegue no nivel 4'. Custo nao e ancorado aqui porque ele nao e",
+        "magnitude de mecanica: e preco, e o preco se mede contra o que uma run rende,",
+        "que e coisa que muda toda rodada."
       ]
     },
     {

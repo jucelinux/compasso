@@ -924,6 +924,8 @@ export async function createRenderer(
   const lojaLinhas = [0, 1, 2, 3].map(() => new Label(overlay, atlas))
   const lojaPrecos = [0, 1, 2, 3].map(() => new Label(overlay, atlas))
   const lojaBlurbs = [0, 1, 2, 3].map(() => new Label(overlay, atlas))
+  /** Uma etiqueta por onda liberada, na faixa de retomada. Dez é o teto da curva. */
+  const ondaCelulas = Array.from({ length: 10 }, () => new Label(overlay, atlas))
   const cardBlurbs = [0, 1, 2].map(() => new Label(overlay, atlas))
   // O que SAI do build se você levar este. Só aparece com o build cheio.
   const cardCusto = [0, 1, 2].map(() => new Label(overlay, atlas))
@@ -2545,13 +2547,13 @@ export async function createRenderer(
     cardLines[0]!.set("ESCOLHA O INIMIGO", GLD2, cx, y0 + 5, 1, true)
     if (sheet !== undefined) {
       cardBicho.texture = frameOf(sheet, 0, Math.floor(phase * 0.18) & 7, phase)
-      cardBicho.position.set(cx, y0 + 64)
+      cardBicho.position.set(cx, y0 + 50)
       cardBicho.visible = true
     } else {
       cardBicho.visible = false
     }
-    cardLines[1]!.set((kind?.real ?? spec.disease).toUpperCase(), WHITE, cx, y0 + 108, 2, true)
-    cardLines[2]!.set(`${(kind?.form ?? "").toUpperCase()} · ${spec.waves} ONDAS`, GLD2, cx, y0 + 132, 1, true)
+    cardLines[1]!.set((kind?.real ?? spec.disease).toUpperCase(), WHITE, cx, y0 + 90, 2, true)
+    cardLines[2]!.set(`${(kind?.form ?? "").toUpperCase()} · ${spec.waves} ONDAS`, GLD2, cx, y0 + 114, 1, true)
     /*
      * Quantos existem, e onde você está — em pontos, não em setas.
      *
@@ -2564,10 +2566,44 @@ export async function createRenderer(
       n > 1 ? `◄ ${"·".repeat(cur.villain)}●${"·".repeat(n - cur.villain - 1)} ►` : "",
       DIM0,
       cx,
-      y0 + 150,
+      y0 + 130,
       1,
       true,
     )
+
+    /*
+     * A FAIXA DE ONDAS — retomar de onde já chegou. 14/08, pedido do H.
+     *
+     * Uma célula por onda liberada, a escolhida acesa. Ela só aparece quando há
+     * mais de uma: com o recorde em 1 não há escolha, e desenhar uma fileira de
+     * um item anunciaria uma decisão que não existe.
+     *
+     * Geometria do `tuning.hub`, a mesma que a sim usa para saber o que o dedo
+     * escolheu — é a regra de 13/08 outra vez, e aqui o sintoma de duas cópias
+     * seria acender uma célula e começar noutra onda.
+     */
+    const teto = Math.max(1, cur.recordes[cur.villain] ?? 1)
+    if (teto > 1) {
+      const fy = y0 + tuning.hub.ondaTop
+      const cw = W / teto
+      lojaLinhas[0]!.set("RETOMAR DA ONDA", NUC2, cx, fy - 12, 1, true)
+      for (let i = 1; i < lojaLinhas.length; i++) lojaLinhas[i]!.hide()
+      for (let i = 0; i < ondaCelulas.length; i++) {
+        if (i >= teto) {
+          ondaCelulas[i]!.hide()
+          continue
+        }
+        const escolhida = i + 1 === cur.ondaEscolhida
+        const cxi = x0 + cw * (i + 0.5)
+        rewardPanels
+          .rect(Math.round(x0 + cw * i) + 1, fy, Math.max(2, Math.round(cw) - 2), tuning.hub.ondaH)
+          .fill({ color: tint, alpha: escolhida ? 0.42 : 0.12 })
+        ondaCelulas[i]!.set(`${i + 1}`, escolhida ? WHITE : NUC2, cxi, fy + 8, 1, true)
+      }
+    } else {
+      lojaLinhas[0]!.hide()
+      for (const l of ondaCelulas) l.hide()
+    }
     cardPicks[0]!.set(prompt.lutar, SHI1, cx, y0 + H + 8, 1, true, true)
     cardPicks[1]!.set(prompt.voltar, NUC2, cx, y0 + H + 22, 1, true, true)
     cardPicks[2]!.hide()
@@ -2604,7 +2640,8 @@ export async function createRenderer(
     hubCoin.visible = isHub
     for (const l of hubLabels) if (!isHub) l.hide()
     for (const l of painelLinhas) if (!isPainel) l.hide()
-    if (!isPainel) {
+    for (const l of ondaCelulas) if (!isSelect) l.hide()
+    if (!isPainel && !isSelect) {
       for (const l of lojaLinhas) l.hide()
       for (const l of lojaPrecos) l.hide()
       for (const l of lojaBlurbs) l.hide()

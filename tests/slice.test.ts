@@ -2307,3 +2307,175 @@ describe("o quadro: fora fecha, [X] fecha, dentro confirma", () => {
     expect(sim.state().phase).toBe("run")
   })
 })
+
+/*
+ * RETOMAR DE ONDE JÁ CHEGOU, 14/08 — pedido do H.
+ *
+ * "Se morreu no nível 4, poderá retomar dos níveis 1, 2, 3 ou 4." O que estes
+ * testes travam é o par que faz isso ser jogo e não atalho: o recorde só sobe
+ * chegando, e retomar na onda 4 tem que retomar na DIFICULDADE 4.
+ */
+describe("retomar da onda", () => {
+  const CLIQUE = (x: number, y: number): InputFrame =>
+    IN({ pointerX: x, pointerY: y, click: true })
+
+  const abreSelecao = (sim: Sim): void => {
+    sim.step(CLIQUE(tuning.hub.orbitX, tuning.hub.orbitY))
+    expect(sim.state().phase).toBe("select")
+    sim.step(NONE)
+  }
+
+  it("começa com recorde 1: não há de onde retomar antes de jogar", () => {
+    const s = createSim(1, tuning).state()
+    expect(s.recordes.length).toBe(tuning.phases.length)
+    for (const r of s.recordes) expect(r).toBe(1)
+    expect(s.ondaEscolhida).toBe(1)
+  })
+
+  it("o recorde sobe com a onda ALCANÇADA, mesmo morrendo nela", () => {
+    /*
+     * Chegar na onda N e morrer nela já libera retomar da N: o que se ganha é o
+     * direito de tentar de novo dali, não a prova de que se venceu. Exigir
+     * vitória faria o desbloqueio depender de conter a onda — que é justamente
+     * o que não se conseguiu.
+     */
+    const sim = start(4242)
+    let g = 0
+    while (sim.state().phase !== "dead" && g++ < 60 * 60 * 6) {
+      if (sim.state().phase === "run") tick(sim, IN({ right: true }))
+      else tick(sim, NONE)
+    }
+    const s = sim.state()
+    expect(s.phase, "a run não terminou; o teste não mediria nada").toBe("dead")
+    expect(s.recordes[s.villain]).toBe(Math.max(1, s.historico[0]!.wave))
+  })
+
+  it("a escolha é grampeada pelo recorde, venha da tecla ou do clique", () => {
+    const sim = createSim(500, tuning)
+    ;(sim.state() as { recordes: number[] }).recordes[0] = 3
+    abreSelecao(sim)
+    // Sobe além do teto: para em 3.
+    for (let i = 0; i < 10; i++) {
+      sim.step(IN({ up: true }))
+      sim.step(NONE)
+    }
+    expect(sim.state().ondaEscolhida).toBe(3)
+    // E desce sem passar de 1.
+    for (let i = 0; i < 10; i++) {
+      sim.step(IN({ down: true }))
+      sim.step(NONE)
+    }
+    expect(sim.state().ondaEscolhida).toBe(1)
+  })
+
+  it("clicar numa célula da FAIXA escolhe a onda — e não começa a luta", () => {
+    /*
+     * A faixa é um clique DENTRO do quadro, e clique dentro do quadro confirma.
+     * Sem a ordem certa, escolher a onda 3 começaria a partida na onda que
+     * estivesse escolhida — o mesmo defeito de ordem que a loja teve em 13/08.
+     */
+    const sim = createSim(501, tuning)
+    ;(sim.state() as { recordes: number[] }).recordes[0] = 4
+    abreSelecao(sim)
+    const x0 = (tuning.arena.width - tuning.hub.panelW) / 2
+    const y0 = (tuning.arena.height - tuning.hub.panelH) / 2
+    const cw = tuning.hub.panelW / 4
+    sim.step(CLIQUE(x0 + cw * 2.5, y0 + tuning.hub.ondaTop + 5))
+    expect(sim.state().phase, "a faixa começou a luta").toBe("select")
+    expect(sim.state().ondaEscolhida).toBe(3)
+  })
+
+  it("com recorde 1 a faixa NÃO existe, e aquele pedaço confirma", () => {
+    /*
+     * O caso nulo da faixa. Sem isto ela seria uma banda do painel que não
+     * fecha, não confirma e não muda nada — região morta numa tela onde todo
+     * ponto faz alguma coisa.
+     */
+    const sim = createSim(502, tuning)
+    abreSelecao(sim)
+    const x0 = (tuning.arena.width - tuning.hub.panelW) / 2
+    const y0 = (tuning.arena.height - tuning.hub.panelH) / 2
+    sim.step(CLIQUE(x0 + tuning.hub.panelW / 2, y0 + tuning.hub.ondaTop + 5))
+    expect(sim.state().phase).toBe("card")
+  })
+
+  it("retomar da onda 4 começa na onda 4 E na dificuldade 4", () => {
+    /*
+     * O par que impede o atalho: `round` é o que indexa a curva, e começar na
+     * onda 4 com a dificuldade da 1 faria retomar virar uma forma de jogar a
+     * onda 4 fácil.
+     */
+    const sim = createSim(503, tuning)
+    ;(sim.state() as { recordes: number[] }).recordes[0] = 4
+    abreSelecao(sim)
+    for (let i = 0; i < 3; i++) {
+      sim.step(IN({ up: true }))
+      sim.step(NONE)
+    }
+    expect(sim.state().ondaEscolhida).toBe(4)
+    sim.step(ACTION)
+    const s = sim.state()
+    expect(s.phase).toBe("card")
+    expect(s.wave).toBe(4)
+    expect(s.round).toBe(4)
+  })
+
+  it("a habilidade comprada começa DISPONÍVEL na run", () => {
+    // "O default da habilidade é começar já disponível para uso." Sem isto o
+    // primeiro minuto de toda run é jogado sem nada do que se comprou.
+    const sim = createSim(504, tuning)
+    sim.state().habilidades[0]!.nivel = 1
+    abreSelecao(sim)
+    sim.step(ACTION)
+    const h = sim.state().habilidades[0]!
+    expect(h.carga).toBe(tuning.habilidades[0]!.niveis[0]!.recarga)
+    expect(h.ativa).toBe(0)
+  })
+
+  it("a não comprada NÃO ganha carga de graça no começo da run", () => {
+    const sim = createSim(505, tuning)
+    abreSelecao(sim)
+    sim.step(ACTION)
+    expect(sim.state().habilidades[0]!.carga).toBe(0)
+  })
+})
+
+/*
+ * O ALVO DO DEDO, 14/08 — "o raio é muito preciso", palavras do H.
+ *
+ * Dois gestos com precisões diferentes: quem ANDA mira com o corpo e vê onde
+ * ele está; quem TOCA mira com um dedo que cobre mais pixels do que enxerga.
+ */
+describe("as portas são mais fáceis de acertar no dedo", () => {
+  const CLIQUE = (x: number, y: number): InputFrame =>
+    IN({ pointerX: x, pointerY: y, click: true })
+
+  it("o clique acerta a órbita de MAIS LONGE que o corpo", () => {
+    const fora = tuning.hub.enterRadius + tuning.hub.folgaToque - 2
+    const sim = createSim(600, tuning)
+    sim.step(CLIQUE(tuning.hub.orbitX + fora, tuning.hub.orbitY))
+    expect(sim.state().phase, `clique a ${fora}px não abriu`).toBe("select")
+  })
+
+  it("mas não de longe DEMAIS: a folga é folga, não a tela inteira", () => {
+    // O caso nulo do alvo maior. Sem ele, "ficou mais fácil" poderia significar
+    // "qualquer clique abre qualquer porta".
+    const longe = tuning.hub.enterRadius + tuning.hub.folgaToque + 8
+    const sim = createSim(601, tuning)
+    sim.step(CLIQUE(tuning.hub.orbitX + longe, tuning.hub.orbitY))
+    expect(sim.state().phase).toBe("hub")
+  })
+
+  it("a folga do dedo NÃO vale para quem anda", () => {
+    /*
+     * Andar tem alvo menor de propósito: passear pelo cérebro não pode abrir
+     * porta sem querer, e quem conduz o glóbulo vê exatamente onde ele está.
+     */
+    const sim = createSim(602, tuning)
+    const s = sim.state()
+    ;(s.player as { x: number; y: number }).x = tuning.hub.orbitX + tuning.hub.enterRadius + 6
+    ;(s.player as { x: number; y: number }).y = tuning.hub.orbitY
+    sim.step(NONE)
+    expect(sim.state().phase).toBe("hub")
+  })
+})

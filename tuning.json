@@ -232,13 +232,13 @@
   "habilidades": [
     {
       "id": "adrenalina",
-      "custo": 500,
+      "custo": 200,
       "gatilho": "tempo",
       "niveis": [{ "duracao": 10.0, "recarga": 60, "escala": 0.05, "raio": 0 }]
     },
     {
       "id": "febre",
-      "custo": 500,
+      "custo": 200,
       "gatilho": "tempo",
       "niveis": [{ "duracao": 3.0, "recarga": 60, "escala": 1.0, "raio": 66 }]
     }
@@ -254,11 +254,14 @@
     "orbitX": 544,
     "orbitY": 96,
     "orbitRadius": 26,
-    "enterRadius": 11,
+    "enterRadius": 18,
     "orbitSpeed": 0.11,
     "spawnX": 320,
     "spawnY": 300,
-    "nodeRadius": 11,
+    "nodeRadius": 18,
+    "folgaToque": 12,
+    "ondaTop": 142,
+    "ondaH": 24,
     "panelW": 240,
     "panelH": 176,
     "closeSize": 13,

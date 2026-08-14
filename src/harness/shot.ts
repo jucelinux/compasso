@@ -221,11 +221,42 @@ try {
     }
   }
 
+  /*
+   * A FAIXA DE RETOMADA, e ela também só existe DEPOIS de morrer.
+   *
+   * Ela aparece quando o recorde passa de 1, e o recorde só sobe alcançando uma
+   * onda — então na primeira visita à seleção não há o que capturar. Mesma razão
+   * do histórico cheio, logo acima: conferir uma fileira de escolhas com uma
+   * escolha só é conferir nada.
+   */
+  let viuRetomar = false
+  // Fecha o painel do histórico, que ficou aberto no bloco acima.
+  if ((await fase()) === "painel") await d.hold(["KeyR"], 120)
+  if ((await fase()) === "hub") {
+    await d.clicaArena(HUB.orbitX, HUB.orbitY)
+    await d.page.waitForTimeout(220)
+    if ((await fase()) === "select") {
+      await d.shot(resolve(dir, "9-retomar.png"))
+      viuRetomar = true
+    }
+  }
+
   console.log(`capturas em ${dir}`)
   console.log(
     viuIntervalo
       ? "  respiro capturado em 4-intervalo.png"
       : "  SEM respiro nesta seed: o passeio não conteve nenhuma onda",
+  )
+  /*
+   * A faixa de retomada é BEST-EFFORT pela mesma razão do respiro: ela só
+   * aparece com o recorde acima de 1, e o recorde só sobe alcançando a onda 2.
+   * Este passeio morre na onda 1 na maioria das seeds — e prometer uma tela que
+   * pode não acontecer é a mentira ao contrário.
+   */
+  console.log(
+    viuRetomar
+      ? "  seleção capturada em 9-retomar.png"
+      : "  SEM faixa de retomada: o passeio não passou da onda 1",
   )
   if (d.errors.length > 0) console.error(`ERROS NO BROWSER:\n${d.errors.join("\n")}`)
   else console.log("nenhum erro de browser")

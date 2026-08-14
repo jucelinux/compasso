@@ -488,6 +488,18 @@ export interface Tuning {
     readonly panelH: number
     /** Lado do [X] de fechar, no canto superior direito do quadro. */
     readonly closeSize: number
+    /**
+     * Quanto o alvo do PONTEIRO é maior que o da caminhada. 14/08.
+     *
+     * Duas precisões porque são dois gestos: quem ANDA até a porta está mirando
+     * com o glóbulo e vê onde ele está; quem TOCA mira com um dedo que cobre
+     * mais pixels do que enxerga. Um raio só serviria mal aos dois — apertado
+     * demais para o dedo, frouxo demais para quem só passeia.
+     */
+    readonly folgaToque: number
+    /** A FAIXA de escolha de onda dentro do quadro: topo e altura. */
+    readonly ondaTop: number
+    readonly ondaH: number
     /** Altura de uma linha da loja, e onde a primeira começa dentro do quadro. */
     readonly rowH: number
     readonly rowTop: number
@@ -994,6 +1006,22 @@ export interface SimState {
    * ao fechamento é estado que reabre sozinho na próxima entrada do hub.
    */
   painel: number
+  /**
+   * A maior onda ALCANÇADA em cada doença. 14/08, pedido do H.
+   *
+   * Sobrevive à morte como o banco, e pela mesma razão: é o que o organismo
+   * aprendeu, não o que aconteceu numa tentativa. É ele que abre a retomada —
+   * morreu na 4, pode recomeçar da 1, 2, 3 ou 4.
+   */
+  recordes: number[]
+  /**
+   * De qual onda a próxima run começa. Escolha do jogador, na tela de seleção.
+   *
+   * Separada de `wave` de propósito: uma é INTENÇÃO e sobrevive à run, a outra
+   * é onde a run está agora. Uni-las faria escolher a onda 4 e morrer na 2
+   * rebaixar a própria escolha sem ninguém pedir.
+   */
+  ondaEscolhida: number
   /**
    * As últimas runs terminadas, da mais NOVA para a mais velha.
    *
