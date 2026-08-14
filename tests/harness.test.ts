@@ -27,7 +27,16 @@ describe("codec de input", () => {
   })
 
   it("rejeita input fora de faixa", () => {
-    expect(() => decodeInput("64")).toThrow()
+    /*
+     * O teto subiu de 63 para 511 em 14/08, com os três bits de habilidade.
+     *
+     * Vale reparar no que NÃO mudou: 64 deixou de ser inválido porque agora
+     * significa "habilidade 1", e é um valor legítimo. O caso nulo continua
+     * existindo logo acima do teto novo — sem ele, este teste passaria a
+     * afirmar que a faixa é infinita.
+     */
+    expect(decodeInput("64").ability).toBe(1)
+    expect(() => decodeInput("512")).toThrow()
     expect(() => decodeInput("abc")).toThrow()
     expect(() => decodeInput("-1")).toThrow()
   })

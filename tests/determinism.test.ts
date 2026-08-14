@@ -12,7 +12,7 @@ import type { Tuning } from "../src/sim/types.ts"
  */
 
 const SMOKE = resolve(projectRoot, "replays", "smoke.json")
-const BASELINE_HASH = "1a3210b1"
+const BASELINE_HASH = "8d66b8df"
 
 /**
  * Run real do humano, 7,6 min de input de verdade, do core do dash (`7c952a6`).
@@ -22,7 +22,7 @@ const BASELINE_HASH = "1a3210b1"
  * leitura de ritmo, e não como cobertura de morte.
  */
 const RUN_01 = resolve(projectRoot, "replays", "run-01.json")
-const RUN_01_HASH = "6e345970"
+const RUN_01_HASH = "f6014d86"
 
 /**
  * Segunda run real: 5 min, 10 ondas, uma morte. Gravada antes da tecla de
@@ -30,7 +30,7 @@ const RUN_01_HASH = "6e345970"
  * Vale como determinismo sobre input humano longo.
  */
 const RUN_02 = resolve(projectRoot, "replays", "run-02.json")
-const RUN_02_HASH = "7da3f752"
+const RUN_02_HASH = "cdd0637c"
 
 /**
  * Terceira run real: 5,7 min de input humano, gravada quando os modificadores
@@ -40,7 +40,7 @@ const RUN_02_HASH = "7da3f752"
  * sai mais do cérebro — ver o teste da cobertura, mais abaixo.
  */
 const RUN_03 = resolve(projectRoot, "replays", "run-03.json")
-const RUN_03_HASH = "a629c5ce"
+const RUN_03_HASH = "dbbfb078"
 
 /**
  * Fixture do core contínuo, gravada por `npm run rec`. Sintética, não humana:
@@ -68,7 +68,7 @@ const RUN_03_HASH = "a629c5ce"
  * deixou de ser zelo e virou a única forma de a suíte cobrir o fim da run.
  */
 const CORE_ATUAL = resolve(projectRoot, "replays", "core-atual.json")
-const CORE_ATUAL_HASH = "eb5884dd"
+const CORE_ATUAL_HASH = "28d9247b"
 
 const smoke = () => loadReplay(SMOKE)
 const tuning = () => loadTuning()
@@ -295,6 +295,27 @@ const tuning = () => loadTuning()
  * de "rebasei porque estava vermelho".
  */
 
+/*
+ * DÉCIMA QUINTA VEZ, em 14/08: as HABILIDADES.
+ *
+ * Adrenalina e febre entraram na loja, e com elas três coisas que mexem no
+ * hash: `tuning.habilidades` e `tuning.hud` novos (tuningHash), o estado
+ * `habilidades[]` com nível, carga e prazo de cada uma, e o `ability` no
+ * `InputFrame` — que é mudança de FORMATO DE REPLAY pela segunda vez em dois
+ * dias.
+ *
+ * O formato aguentou de novo pela mesma propriedade que salvou o ponteiro: os
+ * três bits de habilidade ocupam posições que valiam zero antes, e zero
+ * significa "nenhuma". O teto do decodificador subiu de 63 para 511 e nenhum
+ * valor antigo mudou de sentido — as catorze fixtures continuam legíveis sem
+ * regravar nenhuma, e as três humanas seguem produzindo hash aqui.
+ *
+ * A `smoke` foi regenerada pela terceira vez em dois dias, sempre pelo mesmo
+ * motivo: ela é a única fixture com prólogo BAKED, e prólogo baked morre quando
+ * a geometria da porta muda. Vale como padrão — quando o cérebro mexer, o
+ * `npm run smoke` vem junto.
+ */
+
 /**
  * A ÂNCORA, e o que ela tripwire.
  *
@@ -486,8 +507,8 @@ describe("determinismo", () => {
  * alguém dizer o que ele é.
  */
 const PROCEDENCIA: ReadonlyArray<readonly [string, string, string]> = [
-  ["smoke.json", "96a57fc", "sintética, regenerável byte a byte por `npm run smoke`"],
-  ["core-atual.json", "96a57fc", "sintética, VIVA — regravar com `npm run rec`"],
+  ["smoke.json", "ae02dd9", "sintética, regenerável byte a byte por `npm run smoke`"],
+  ["core-atual.json", "ae02dd9", "sintética, VIVA — regravar com `npm run rec`"],
   ["run-01.json", "7c952a6", "humana, core do dash; hoje só âncora de determinismo"],
   ["run-02.json", "7c952a6", "humana, core do dash; hoje só âncora de determinismo"],
   ["run-03.json", "7c952a6", "humana, core do dash; hoje só âncora de determinismo"],

@@ -12,7 +12,7 @@ import {
   quotaFor,
   spawnIntervalFor,
 } from "../src/sim/powers.ts"
-import type { InputFrame, Sim, SimState } from "../src/sim/types.ts"
+import type { Enemy, InputFrame, Sim, SimState } from "../src/sim/types.ts"
 
 /**
  * As regras do core reescrito em 01/08, asseridas mecanicamente.
@@ -1902,5 +1902,288 @@ describe("o histórico de runs", () => {
     a.state().historico.push({ wave: 3, kills: 10, coins: 2, venceu: false, ticks: 600 })
     b.state().historico.push({ wave: 3, kills: 10, coins: 2, venceu: true, ticks: 600 })
     expect(a.snapshot().hash).not.toBe(b.snapshot().hash)
+  })
+})
+
+/*
+ * AS HABILIDADES, 14/08 — adrenalina e febre, chamada do H.
+ *
+ * O que estes testes travam é o que a mecânica PROMETE, e cada promessa tem um
+ * jeito de quebrar em silêncio: carga que conta o que não devia, efeito que
+ * dura mais do que diz, e — a pior — a adrenalina alimentando o próprio prazo,
+ * porque ela mexe justamente no relógio que poderia medi-la.
+ */
+/**
+ * Um inimigo plantado, copiado de um VIVO da cena.
+ *
+ * Copiar em vez de escrever o objeto à mão porque `Enemy` tem campos que só
+ * alguns tipos usam (cambalhota, veneno acumulado) — escrever um literal aqui
+ * congelaria a forma dele no teste e quebraria no dia em que a sim ganhasse
+ * mais um campo. Exige uma cena com pelo menos um corpo, o que toda run tem.
+ */
+const criaInimigo = (s: SimState, id: number, x: number, y: number): Enemy => {
+  const molde = s.enemies[0]
+  if (molde === undefined) throw new Error("cena sem inimigo para copiar")
+  return { ...molde, id, x, y, hp: 1 }
+}
+
+describe("as habilidades da loja", () => {
+  const IDX = { adrenalina: 0, febre: 1 } as const
+  const HAB = (n: number): InputFrame => IN({ ability: n })
+  const CLIQUE = (x: number, y: number): InputFrame =>
+    IN({ pointerX: x, pointerY: y, click: true })
+
+  /**
+   * Planta saldo no banco.
+   *
+   * `state()` devolve leitura, e escrever nele pede um empurrão de tipo. A
+   * alternativa seria JOGAR duas runs inteiras para ganhar 1200 de memória em
+   * cada teste de loja — o que mediria o jogo inteiro para afirmar uma coisa
+   * sobre a loja, e quebraria no dia em que o rendimento por run mudasse.
+   */
+  const põeSaldo = (sim: Sim, v: number): void => {
+    ;(sim.state() as { bank: number }).bank = v
+  }
+
+  /** Compra a habilidade `i` direto no estado. A COMPRA tem teste próprio. */
+  const compra = (sim: Sim, i: number): void => {
+    sim.state().habilidades[i]!.nivel = 1
+  }
+  const nivel1 = (i: number) => tuning.habilidades[i]!.niveis[0]!
+
+  it("começa sem nenhuma, e nível 0 é NÃO COMPRADA", () => {
+    const s = createSim(1, tuning).state()
+    expect(s.habilidades.length).toBe(tuning.habilidades.length)
+    for (const h of s.habilidades) expect(h.nivel).toBe(0)
+  })
+
+  it("comprar na loja gasta a memória e entrega o nível 1", () => {
+    const sim = createSim(10, tuning)
+    põeSaldo(sim, 1200)
+    // Vai até a loja e clica na primeira linha.
+    const loja = tuning.hub.nodes.findIndex((n) => n.loja === true)
+    expect(loja, "nenhuma porta é loja").toBeGreaterThanOrEqual(0)
+    const node = tuning.hub.nodes[loja]!
+    sim.step(CLIQUE(node.x, node.y))
+    expect(sim.state().phase).toBe("painel")
+    sim.step(NONE)
+    const y0 = (tuning.arena.height - tuning.hub.panelH) / 2
+    sim.step(CLIQUE(tuning.arena.width / 2, y0 + tuning.hub.rowTop + 4))
+    const s = sim.state()
+    expect(s.habilidades[0]!.nivel).toBe(1)
+    expect(s.bank).toBe(1200 - tuning.habilidades[0]!.custo)
+    // Comprar é clique DENTRO do quadro, então não pode fechar a tela junto.
+    expect(s.phase).toBe("painel")
+  })
+
+  it("sem saldo não compra, e o clique não vira desconto", () => {
+    const sim = createSim(11, tuning)
+    põeSaldo(sim, tuning.habilidades[0]!.custo - 1)
+    const node = tuning.hub.nodes.find((n) => n.loja === true)!
+    sim.step(CLIQUE(node.x, node.y))
+    sim.step(NONE)
+    const y0 = (tuning.arena.height - tuning.hub.panelH) / 2
+    const antes = sim.state().bank
+    sim.step(CLIQUE(tuning.arena.width / 2, y0 + tuning.hub.rowTop + 4))
+    expect(sim.state().habilidades[0]!.nivel).toBe(0)
+    expect(sim.state().bank).toBe(antes)
+  })
+
+  it("comprar de novo não cobra de novo", () => {
+    const sim = createSim(12, tuning)
+    põeSaldo(sim, 5000)
+    const node = tuning.hub.nodes.find((n) => n.loja === true)!
+    const y0 = (tuning.arena.height - tuning.hub.panelH) / 2
+    sim.step(CLIQUE(node.x, node.y))
+    sim.step(NONE)
+    sim.step(CLIQUE(tuning.arena.width / 2, y0 + tuning.hub.rowTop + 4))
+    const depois = sim.state().bank
+    sim.step(NONE)
+    sim.step(CLIQUE(tuning.arena.width / 2, y0 + tuning.hub.rowTop + 4))
+    expect(sim.state().bank).toBe(depois)
+  })
+
+  it("a ADRENALINA carrega com patógeno, e NÃO com cria", () => {
+    /*
+     * Pedido literal do H: "patógeno, não bacilos filhos nem efeito
+     * secundário". É a promessa mais fácil de quebrar sem ninguém ver — a cria
+     * é o corpo mais numeroso do jogo, e contá-la encheria a carga sozinha.
+     */
+    const sim = start(4242)
+    compra(sim, IDX.adrenalina)
+    const cria = tuning.phases[0]!.counter.purge
+    const s = sim.state()
+    s.enemies.length = 0
+    for (let i = 0; i < 400; i++) tick(sim, NONE)
+    const carga0 = sim.state().habilidades[IDX.adrenalina]!.carga
+    // Um bando de CRIA em cima do jogador: engolir tudo não pode carregar nada.
+    const st = sim.state()
+    for (let i = 0; i < 6; i++) {
+      st.enemies.push({
+        ...st.enemies[0]!,
+        id: 9000 + i,
+        kind: cria,
+        x: st.player.x + i,
+        y: st.player.y,
+      })
+    }
+    expect(sim.state().habilidades[IDX.adrenalina]!.carga).toBe(carga0)
+  })
+
+  it("acionar SEM carga cheia não faz nada, e não gasta o que há", () => {
+    const sim = start(5)
+    compra(sim, IDX.adrenalina)
+    sim.state().habilidades[IDX.adrenalina]!.carga = nivel1(IDX.adrenalina).recarga - 1
+    tick(sim, HAB(1))
+    const h = sim.state().habilidades[IDX.adrenalina]!
+    expect(h.ativa).toBe(0)
+    expect(h.carga).toBe(nivel1(IDX.adrenalina).recarga - 1)
+  })
+
+  it("acionar com carga cheia gasta a carga e liga pelo prazo do nível", () => {
+    const sim = start(6)
+    compra(sim, IDX.adrenalina)
+    const nv = nivel1(IDX.adrenalina)
+    sim.state().habilidades[IDX.adrenalina]!.carga = nv.recarga
+    tick(sim, HAB(1))
+    const h = sim.state().habilidades[IDX.adrenalina]!
+    expect(h.carga).toBe(0)
+    // Cheio no tick do acionamento: a sim desconta o prazo ANTES de acionar, e
+    // quem acabou de ligar não perde um tick por isso.
+    expect(h.ativa).toBe(Math.round(nv.duracao * tuning.sim.hz))
+  })
+
+  it("não comprada NÃO aciona, mesmo com a carga cheia à força", () => {
+    // O caso nulo da posse: sem ele, os testes acima passariam com uma regra
+    // que ignora `nivel` e aciona qualquer coisa.
+    const sim = start(7)
+    sim.state().habilidades[IDX.adrenalina]!.carga = 99999
+    tick(sim, HAB(1))
+    expect(sim.state().habilidades[IDX.adrenalina]!.ativa).toBe(0)
+  })
+
+  it("a ADRENALINA freia o relógio do MUNDO enquanto dura", () => {
+    const sim = start(8)
+    compra(sim, IDX.adrenalina)
+    const nv = nivel1(IDX.adrenalina)
+    sim.state().habilidades[IDX.adrenalina]!.carga = nv.recarga
+    const normal = sim.state().worldScale
+    tick(sim, HAB(1))
+    expect(sim.state().worldScale).toBeCloseTo(normal * nv.escala, 5)
+    // E volta ao normal quando acaba.
+    for (let i = 0; i < Math.round(nv.duracao * tuning.sim.hz) + 2; i++) tick(sim, NONE)
+    expect(sim.state().habilidades[IDX.adrenalina]!.ativa).toBe(0)
+    expect(sim.state().worldScale).toBeCloseTo(normal, 5)
+  })
+
+  it("a duração da ADRENALINA é REAL, e não do mundo que ela mesma freia", () => {
+    /*
+     * O defeito que este teste existe para impedir: contar o prazo no relógio
+     * do mundo faria o efeito alimentar o próprio prazo — 3 segundos virariam
+     * 60, e uma habilidade que se estende sozinha não tem custo.
+     *
+     * Medido em TICKS, que é o relógio real da sim.
+     */
+    const sim = start(9)
+    compra(sim, IDX.adrenalina)
+    const nv = nivel1(IDX.adrenalina)
+    sim.state().habilidades[IDX.adrenalina]!.carga = nv.recarga
+    tick(sim, HAB(1))
+    let n = 0
+    while (sim.state().habilidades[IDX.adrenalina]!.ativa > 0 && n < 60 * 60) {
+      tick(sim, NONE)
+      n++
+    }
+    expect(n).toBe(Math.round(nv.duracao * tuning.sim.hz))
+  })
+
+  it("a FEBRE mata o que está no raio e deixa o que está fora", () => {
+    const sim = start(20)
+    compra(sim, IDX.febre)
+    const nv = nivel1(IDX.febre)
+    const s = sim.state()
+    s.habilidades[IDX.febre]!.carga = nv.recarga
+    // Copia o molde ANTES de esvaziar a cena: a primeira versão limpava e
+    // depois tentava copiar de uma lista vazia.
+    const dentro = criaInimigo(s, 8001, s.player.x + nv.raio * 0.4, s.player.y)
+    const fora = criaInimigo(s, 8002, s.player.x + nv.raio * 2.5, s.player.y)
+    s.enemies.length = 0
+    s.enemies.push(dentro, fora)
+    tick(sim, HAB(2))
+    const ids = sim.state().enemies.map((e) => e.id)
+    expect(ids).not.toContain(8001)
+    expect(ids).toContain(8002)
+  })
+
+  it("a FEBRE limpa o tecido em volta MAIS do que a presença sozinha", () => {
+    /*
+     * Contra CONTROLE e não contra o estado inicial, e a razão já custou um
+     * vermelho neste projeto em 13/08: o jogador cura o tecido embaixo dele em
+     * TODO tick, então "a infecção caiu" é verdade com ou sem a habilidade.
+     * O que a febre precisa provar é que ela cai MAIS.
+     */
+    const cena = (comFebre: boolean): number => {
+      const sim = start(21)
+      compra(sim, IDX.febre)
+      const nv = nivel1(IDX.febre)
+      const s = sim.state()
+      s.enemies.length = 0
+      /*
+       * O nível do campo tem DOIS tetos, e eu bati nos dois antes de acertar.
+       *
+       * No talo (`maxInfection`) a NECROSE morde todo tile todo tick e o piso
+       * devolve o que a cura tirou: as duas cenas empatavam, e o empate era a
+       * necrose funcionando. A 60% o campo passa de `loseFraction` e a run
+       * MORRE no primeiro tick: as duas cenas empatavam de novo, agora porque
+       * nada rodava. 30% fica abaixo dos dois, que é onde a febre é a única
+       * diferença entre as cenas.
+       */
+      s.field.fill(Math.floor(tuning.field.maxInfection * 0.3))
+      s.necrose.fill(0)
+      s.habilidades[IDX.febre]!.carga = comFebre ? nv.recarga : 0
+      tick(sim, comFebre ? HAB(2) : NONE)
+      for (let i = 0; i < 120; i++) tick(sim, NONE)
+      return sim.state().infection
+    }
+    expect(cena(true)).toBeLessThan(cena(false))
+  })
+
+  it("a FEBRE não desfaz CICATRIZ — só a presença faz isso, desde 05/08", () => {
+    /*
+     * Se ela apagasse necrose em área, o ratchet que dá ladeira à run
+     * desmontava. É a regra que mais custou a existir neste projeto, e uma
+     * habilidade nova é exatamente o tipo de coisa que a atropela sem querer.
+     */
+    const sim = start(22)
+    compra(sim, IDX.febre)
+    const nv = nivel1(IDX.febre)
+    const s = sim.state()
+    s.habilidades[IDX.febre]!.carga = nv.recarga
+    s.enemies.length = 0
+    s.necrose.fill(tuning.field.maxInfection)
+    const antes = sim.state().necrosed
+    tick(sim, HAB(2))
+    for (let i = 0; i < 20; i++) tick(sim, IN({ left: true }))
+    // Anda para longe do ponto: o que sobra de queda é a presença, não a febre.
+    expect(sim.state().necrosed).toBeGreaterThan(antes * 0.9)
+  })
+
+  it("o ÍCONE também aciona, para o dedo", () => {
+    // O H pediu as duas portas: no celular clica no ícone, no computador
+    // aperta 1..5. As duas têm que chegar no mesmo lugar.
+    const sim = start(23)
+    compra(sim, IDX.adrenalina)
+    const nv = nivel1(IDX.adrenalina)
+    sim.state().habilidades[IDX.adrenalina]!.carga = nv.recarga
+    tick(sim, CLIQUE(tuning.hud.habX, tuning.hud.habY))
+    expect(sim.state().habilidades[IDX.adrenalina]!.ativa).toBeGreaterThan(0)
+  })
+
+  it("clicar onde NÃO há ícone não aciona nada", () => {
+    const sim = start(24)
+    compra(sim, IDX.adrenalina)
+    sim.state().habilidades[IDX.adrenalina]!.carga = nivel1(IDX.adrenalina).recarga
+    tick(sim, CLIQUE(tuning.arena.width / 2, 20))
+    expect(sim.state().habilidades[IDX.adrenalina]!.ativa).toBe(0)
   })
 })

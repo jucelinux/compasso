@@ -32,6 +32,18 @@ export interface InputFrame {
   readonly pointerX: number
   readonly pointerY: number
   readonly click: boolean
+  /**
+   * Habilidade acionada NESTE tick: 0 = nenhuma, 1..N = a enésima. 14/08.
+   *
+   * Um número e não cinco booleanos, e a razão é o replay: cinco bits custam
+   * cinco bits em todo tick de todo replay para dizer, em 99,9% deles, que
+   * ninguém apertou nada. Três bits dizem a mesma coisa e ainda sobram slots.
+   *
+   * Acionar DUAS no mesmo tick não existe de propósito: são teclas separadas e
+   * dedos são um só. Se um dia forem simultâneas, isto vira máscara — e aí o
+   * custo estará pago pela mecânica que o pediu.
+   */
+  readonly ability: number
 }
 
 export interface SimSnapshot {
@@ -384,6 +396,51 @@ export interface Tuning {
    * tela: ela deixa de ser um menu com fundo bonito e vira um lugar pequeno com
    * uma porta — e a porta é a órbita dos patógenos.
    */
+  /**
+   * As HABILIDADES da loja — 14/08, chamada do H.
+   *
+   * Cada uma tem NÍVEIS, e o plano dele é explícito: "esses valores são do
+   * nível 1 de cada item; o nível 2, 3 e por aí vai". Por isso a lista de
+   * níveis já existe com um item — a segunda entrada é uma linha de JSON, e não
+   * uma reescrita da estrutura. Estrutura que só cabe o presente é a que obriga
+   * a reescrever quando o futuro chega.
+   *
+   * A forma de um nível é UNIFORME entre habilidades, mesmo com campos que uma
+   * delas não usa (a adrenalina não tem raio). Duas formas diferentes fariam a
+   * sim precisar saber QUAL habilidade está lendo, e é justamente isso que ela
+   * não sabe: ela conhece número, e quem conhece significado é quem desenha.
+   */
+  readonly habilidades: ReadonlyArray<{
+    readonly id: string
+    /** Preço em memória imunológica. */
+    readonly custo: number
+    /**
+     * O que carrega esta habilidade.
+     *
+     * `abate` — patógenos abatidos, e SÓ os que não são cria: o H foi explícito
+     *           ("não bacilos filhos nem efeito secundário").
+     * `limo`  — tiles de tecido levados a zero, que é o que "erradicar o limo"
+     *           significa em estado.
+     */
+    readonly gatilho: string
+    readonly niveis: ReadonlyArray<{
+      /** Segundos REAIS de efeito. Real e não de mundo: a adrenalina MEXE no relógio do mundo. */
+      readonly duracao: number
+      /** Quantos eventos do gatilho até encher uma carga. */
+      readonly recarga: number
+      /** Fator do relógio do mundo enquanto ativa. 1 = não mexe. */
+      readonly escala: number
+      /** Alcance do efeito em área. 0 = não tem área. */
+      readonly raio: number
+    }>
+  }>
+  /** Onde o HUD desenha os ícones de habilidade. Layout que o clique também usa. */
+  readonly hud: {
+    readonly habX: number
+    readonly habY: number
+    readonly habStep: number
+    readonly habRaio: number
+  }
   readonly hub: {
     /** Centro da ÓRBITA dos patógenos, onde se entra para escolher o inimigo. */
     readonly orbitX: number
@@ -421,6 +478,9 @@ export interface Tuning {
     readonly panelH: number
     /** Lado do [X] de fechar, no canto superior direito do quadro. */
     readonly closeSize: number
+    /** Altura de uma linha da loja, e onde a primeira começa dentro do quadro. */
+    readonly rowH: number
+    readonly rowTop: number
     /**
      * As outras quatro funcionalidades do cérebro, em 13/08 — pedido do H.
      *
@@ -433,6 +493,14 @@ export interface Tuning {
       readonly id: string
       readonly x: number
       readonly y: number
+      /**
+       * Esta porta é a LOJA: clicar numa linha dela compra.
+       *
+       * Marcado no tuning e não por `id === "upgrades"` na sim de propósito —
+       * a sim não conhece o nome de nenhuma porta, e abrir uma exceção para
+       * esta seria o primeiro fio de "a sim sabe o que é cada tela".
+       */
+      readonly loja?: boolean
     }>
   }
   /**
@@ -923,6 +991,21 @@ export interface SimState {
    * saber como foi a última, não a primeira. Ordenar na exibição seria decidir
    * duas vezes a mesma coisa.
    */
+/**
+   * As habilidades compradas, uma entrada por item de `tuning.habilidades`.
+   *
+   * `nivel` 0 é NÃO COMPRADA, e não "nível zero": quem não comprou não tem. O
+   * plano do H é que o upgrade suba o nível do mesmo item, então o número já é
+   * o nível e não um booleano de posse — o dia em que o nível 2 chegar não
+   * precisa mudar o formato do estado nem regravar fixture por isso.
+   */
+  habilidades: Array<{
+    nivel: number
+    /** Eventos do gatilho acumulados desde a última carga cheia. */
+    carga: number
+    /** Ticks REAIS restantes de efeito. 0 = parada. */
+    ativa: number
+  }>
   historico: RunRecord[]
   /** Tick em que a run atual começou. Só existe para medir a duração dela. */
   runStartTick: number

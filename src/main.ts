@@ -169,7 +169,7 @@ function readInput(): InputFrame {
     click: ponteiro.down || cliquePendente,
   }
   cliquePendente = false
-  if (t === undefined) return { ...k, ...m }
+  if (t === undefined) return { ...k, ...m, ability: k.ability }
   const morto = sim.state().phase === "dead"
   /*
    * O TOQUE CURTO vira CLIQUE, em coordenada de arena. 14/08.
@@ -190,6 +190,7 @@ function readInput(): InputFrame {
     right: k.right || t.right,
     action: k.action || (t.press && !morto),
     restart: k.restart || (t.press && morto),
+    ability: k.ability,
     ...m,
     ...(alvo === null ? {} : { pointerX: alvo.x, pointerY: alvo.y, click: true }),
   }

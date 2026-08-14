@@ -33,6 +33,15 @@ export const BIT_LEFT = 4
 export const BIT_RIGHT = 8
 export const BIT_ACTION = 16
 export const BIT_RESTART = 32
+/**
+ * A HABILIDADE ocupa TRÊS BITS (64/128/256), não cinco booleanos. 14/08.
+ *
+ * Cinco bits custariam cinco em todo tick de todo replay para dizer, na quase
+ * totalidade deles, que ninguém apertou nada. Três dizem 0..7 — as cinco teclas
+ * que o H pediu e mais duas de folga.
+ */
+export const HAB_SHIFT = 6
+export const HAB_MASK = 7
 
 /** Ponteiro ausente. Coordenada impossível, e não 0,0 — 0,0 é um canto real. */
 export const SEM_PONTEIRO = -1
@@ -47,6 +56,7 @@ export const EMPTY_INPUT: InputFrame = Object.freeze({
   pointerX: SEM_PONTEIRO,
   pointerY: SEM_PONTEIRO,
   click: false,
+  ability: 0,
 })
 
 export function packInput(f: InputFrame): number {
@@ -56,7 +66,8 @@ export function packInput(f: InputFrame): number {
     (f.left ? BIT_LEFT : 0) |
     (f.right ? BIT_RIGHT : 0) |
     (f.action ? BIT_ACTION : 0) |
-    (f.restart ? BIT_RESTART : 0)
+    (f.restart ? BIT_RESTART : 0) |
+    ((f.ability & HAB_MASK) << HAB_SHIFT)
   )
 }
 
@@ -68,6 +79,7 @@ export function unpackInput(bits: number): InputFrame {
     right: (bits & BIT_RIGHT) !== 0,
     action: (bits & BIT_ACTION) !== 0,
     restart: (bits & BIT_RESTART) !== 0,
+    ability: (bits >> HAB_SHIFT) & HAB_MASK,
     pointerX: SEM_PONTEIRO,
     pointerY: SEM_PONTEIRO,
     click: false,
@@ -85,8 +97,15 @@ export function encodeInput(f: InputFrame): string {
 export function decodeInput(text: string): InputFrame {
   const partes = text.split(".")
   const bits = Number.parseInt(partes[0] ?? "", 10)
-  // 0..63: seis bits. Replays antigos usam só 0..31 e continuam válidos.
-  if (!Number.isInteger(bits) || bits < 0 || bits > 63) {
+  /*
+   * 0..511: NOVE bits desde que a habilidade entrou, em 14/08.
+   *
+   * O teto subiu de 63 e nada quebra, porque todo valor antigo continua dentro
+   * da faixa nova e significa a mesma coisa — os três bits de habilidade valem
+   * zero num replay que não os tinha, e zero é "nenhuma". É a mesma propriedade
+   * que fez o ponteiro caber sem regravar fixture.
+   */
+  if (!Number.isInteger(bits) || bits < 0 || bits > 511) {
     throw new Error(`input inválido no replay: ${JSON.stringify(text)}`)
   }
   if (partes.length === 1) return unpackInput(bits)

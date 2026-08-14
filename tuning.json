@@ -229,6 +229,26 @@
     "maxOnField": 6,
     "instantEverySeconds": 18.0
   },
+  "habilidades": [
+    {
+      "id": "adrenalina",
+      "custo": 500,
+      "gatilho": "abate",
+      "niveis": [{ "duracao": 3.0, "recarga": 200, "escala": 0.05, "raio": 0 }]
+    },
+    {
+      "id": "febre",
+      "custo": 500,
+      "gatilho": "limo",
+      "niveis": [{ "duracao": 3.0, "recarga": 2000, "escala": 1.0, "raio": 66 }]
+    }
+  ],
+  "hud": {
+    "habX": 14,
+    "habY": 330,
+    "habStep": 34,
+    "habRaio": 11
+  },
   "hub": {
     "orbitX": 544,
     "orbitY": 96,
@@ -241,10 +261,12 @@
     "panelW": 240,
     "panelH": 176,
     "closeSize": 13,
+    "rowH": 34,
+    "rowTop": 34,
     "nodes": [
       { "id": "historico", "x": 96, "y": 96 },
       { "id": "inventario", "x": 96, "y": 264 },
-      { "id": "upgrades", "x": 320, "y": 180 },
+      { "id": "upgrades", "x": 320, "y": 180, "loja": true },
       { "id": "pandemia", "x": 544, "y": 264 }
     ]
   },

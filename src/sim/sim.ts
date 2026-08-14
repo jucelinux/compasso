@@ -12,6 +12,7 @@ import {
   crowdAt,
   fieldSpec,
   healAround,
+  zerados,
   healNecroseAround,
   applyNecroseFloor,
   liveInfection,
@@ -116,6 +117,20 @@ const KIND_SHARD = "ecoli_filha"
  * e raiz, que são exatas entre engines. `Math.pow` não é, e o rig inteiro
  * depende de Node e browser darem o mesmo hash.
  */
+/** O nível vigente de uma habilidade, ou `undefined` se não foi comprada. */
+export function nivelDe(
+  tuning: Tuning,
+  i: number,
+  nivel: number,
+): Tuning["habilidades"][number]["niveis"][number] | undefined {
+  if (nivel <= 0) return undefined
+  const h = tuning.habilidades[i]
+  if (h === undefined) return undefined
+  // Nível acima do que existe usa o último definido: comprar um upgrade que o
+  // tuning ainda não descreve não pode apagar a habilidade.
+  return h.niveis[Math.min(nivel - 1, h.niveis.length - 1)]
+}
+
 function worldScaleFor(tuning: Tuning, sp: number): number {
   if (!tuning.time.dilation) return 1
   const t01 = Math.min(1, sp / tuning.player.maxSpeed)
@@ -201,6 +216,7 @@ export function createSim(seed: number, tuning: Tuning): Sim {
     villain: 0,
     painel: -1,
     prevClick: false,
+    habilidades: tuning.habilidades.map(() => ({ nivel: 0, carga: 0, ativa: 0 })),
     historico: [],
     runStartTick: 0,
     coins: 0,
@@ -594,7 +610,104 @@ export function createSim(seed: number, tuning: Tuning): Sim {
     s.active[power] = Math.max(s.active[power] ?? 0, tuning.drops.durationTicks)
   }
 
-  const stepRun = (bits: number): void => {
+  /**
+   * As HABILIDADES: carga, acionamento e efeito. 14/08, chamada do H.
+   *
+   * A sim conhece ÍNDICE e NÚMERO — duração, recarga, escala, raio — e não sabe
+   * que uma se chama adrenalina e a outra febre. É a mesma separação das cinco
+   * portas do cérebro, e ela paga na terceira habilidade: se o efeito couber em
+   * `escala` e `raio`, ela é uma linha de `tuning.json`.
+   *
+   * O que NÃO cabe aí precisa de código, e isso é honesto — não vale inventar
+   * uma linguagem de efeitos para duas habilidades.
+   */
+  const escalaDeHabilidade = (): number => {
+    let f = 1
+    for (let i = 0; i < s.habilidades.length; i++) {
+      const h = s.habilidades[i]!
+      if (h.ativa <= 0) continue
+      const n = nivelDe(tuning, i, h.nivel)
+      if (n !== undefined) f *= n.escala
+    }
+    return f
+  }
+
+  /**
+   * Qual ícone de habilidade está sob o ponto (1-based), ou 0.
+   *
+   * Só as COMPRADAS ocupam lugar, e a fileira é fechada: quem não tem a
+   * primeira vê a segunda no lugar dela. Um espaço vazio reservado anunciaria
+   * uma habilidade que o jogador não pode acionar.
+   */
+  const iconeEm = (x: number, y: number): number => {
+    const r = tuning.hud.habRaio
+    let slot = 0
+    for (let i = 0; i < s.habilidades.length; i++) {
+      if (s.habilidades[i]!.nivel <= 0) continue
+      const cx = tuning.hud.habX + slot * tuning.hud.habStep
+      const dx = x - cx
+      const dy = y - tuning.hud.habY
+      if (dx * dx + dy * dy <= r * r) return i + 1
+      slot++
+    }
+    return 0
+  }
+
+  /** Soma uma carga a toda habilidade comprada cujo gatilho seja este. */
+  const carrega = (gatilho: string, quanto = 1): void => {
+    for (let i = 0; i < s.habilidades.length; i++) {
+      const spec = tuning.habilidades[i]
+      const h = s.habilidades[i]!
+      if (spec === undefined || spec.gatilho !== gatilho || h.nivel <= 0) continue
+      const n = nivelDe(tuning, i, h.nivel)
+      if (n === undefined) continue
+      // Teto na recarga: carga acumulada além de uma não é guardada. Sem teto,
+      // uma run longa daria cinco usos de uma vez na run seguinte, e a
+      // habilidade deixaria de ser ritmo para virar estoque.
+      h.carga = Math.min(n.recarga, h.carga + quanto)
+    }
+  }
+
+  /**
+   * Aciona a habilidade `n` (1-based), se houver carga cheia.
+   *
+   * Silencioso quando não dá: apertar sem carga não é erro, é a resposta "ainda
+   * não". Quem informa isso é a barra, não a sim.
+   */
+  const aciona = (num: number): void => {
+    const i = num - 1
+    const h = s.habilidades[i]
+    const spec = tuning.habilidades[i]
+    if (h === undefined || spec === undefined || h.nivel <= 0 || h.ativa > 0) return
+    const n = nivelDe(tuning, i, h.nivel)
+    if (n === undefined || h.carga < n.recarga) return
+    h.carga -= n.recarga
+    h.ativa = Math.round(n.duracao * tuning.sim.hz)
+  }
+
+  const stepRun = (bits: number, input: InputFrame): void => {
+    /*
+     * As habilidades correm no relógio REAL, e não no do mundo.
+     *
+     * A adrenatina MEXE no relógio do mundo — contar a duração dela nesse mesmo
+     * relógio faria os 3 segundos durarem 60, porque o efeito alimentaria o
+     * próprio prazo. Um efeito que se estende sozinho não tem custo, e uma
+     * habilidade sem custo não é decisão.
+     */
+    for (const h of s.habilidades) if (h.ativa > 0) h.ativa--
+    if (input.ability > 0) aciona(input.ability)
+    /*
+     * O ÍCONE também aciona, para o dedo — pedido do H: no celular clica no
+     * ícone, no computador aperta 1..5.
+     *
+     * A geometria sai de `tuning.hud`, a mesma que o render usa para desenhar.
+     * É a lição do quadro dos painéis, de ontem: layout que responde a input
+     * não é decoração, e duas cópias dele divergem na primeira mudança.
+     */
+    if (input.click && !s.prevClick) {
+      const n = iconeEm(input.pointerX, input.pointerY)
+      if (n > 0) aciona(n)
+    }
     const p = s.player
 
     if (s.frozen > 0) {
@@ -712,6 +825,21 @@ export function createSim(seed: number, tuning: Tuning): Sim {
 
     // --- O RELÓGIO. A escala do tempo é a sua velocidade, e nada mais.
     s.worldScale = worldScaleFor(tuning, sp)
+    /*
+     * A ADRENALINA multiplica o relógio do mundo, e é por aqui que a DILATAÇÃO
+     * volta ao jogo — por outra porta, como o H imaginou em 13/08.
+     *
+     * A diferença entre ela e o relógio desligado é toda a diferença: a
+     * dilatação de 31/07 era uma LEI (o mundo obedece à sua velocidade, sempre)
+     * e a adrenalina é um ATO (você gasta uma carga e o mundo cede por 3
+     * segundos). A lei era invisível para quem jogava; o ato tem ícone, barra e
+     * uma tecla. Se algum dia o portão for lido, é mais provável que seja aqui.
+     *
+     * MULTIPLICA em vez de fixar: com a dilatação religada um dia, os dois
+     * relógios se compõem em vez de um apagar o outro.
+     */
+    const esc = escalaDeHabilidade()
+    if (esc !== 1) s.worldScale *= esc
     const world = dt * s.worldScale
 
     // --- combo, rastro e cápsulas envelhecem em tempo real
@@ -1013,6 +1141,16 @@ export function createSim(seed: number, tuning: Tuning): Sim {
       s.kills++
       s.waveKills++
       /*
+       * A carga da ADRENALINA conta só o que NÃO é cria — pedido literal do H:
+       * "patógeno, não bacilos filhos nem efeito secundário".
+       *
+       * A cria é identificada pelo `counter.purge` da fase, que é o mesmo campo
+       * que o COMPLEMENTO usa para varrer filhas. Reusar é o que mantém "o que
+       * é cria" com uma definição só — duas listas divergiriam no segundo
+       * patógeno, e a habilidade passaria a carregar com o que não devia.
+       */
+      if (e.kind !== phaseSpec().counter.purge) carrega("abate")
+      /*
        * A MOEDA que o patógeno larga. Uma por corpo, chamada do H em 13/08.
        *
        * Objeto no campo e não um contador que sobe sozinho: o abate precisa
@@ -1297,6 +1435,10 @@ export function createSim(seed: number, tuning: Tuning): Sim {
       const n = Math.floor(s.healAcc)
       s.healAcc -= n
       healAround(s.field, FIELD, p.x, p.y, tuning.field.healRadius, n)
+      // A carga da FEBRE conta ERRADICAÇÃO de limo, não pontos curados: o H
+      // pediu "a cada X erradicação do limo", e tile limpo é o que isso quer
+      // dizer em estado. Medido antes de escolher o X — ver a âncora.
+      if (zerados > 0) carrega("limo", zerados)
       // A CICATRIZ cede ao mesmo gesto, mais devagar. É o único trabalho do
       // jogo que a velocidade não faz — e por isso é o que faz parar ter razão
       // de existir, que a medição de 05/08 mostrou que não tinha.
@@ -1439,6 +1581,50 @@ export function createSim(seed: number, tuning: Tuning): Sim {
         left.push(e)
       }
       s.enemies = left
+    }
+
+    /*
+     * A FEBRE: o efeito em ÁREA das habilidades, no mesmo padrão do pulso.
+     *
+     * Faz as DUAS coisas que "limpa a área" quer dizer: mata o que está dentro
+     * e apaga o tecido tomado. Uma sem a outra é meia limpeza — matar sem
+     * limpar deixa o campo doente, limpar sem matar deixa quem o suja.
+     *
+     * A CICATRIZ não é alcançada, e isso é decisão e não esquecimento: desde
+     * 05/08 só a PRESENÇA desfaz necrose, e uma habilidade que a apagasse em
+     * área desmontaria o ratchet que dá ladeira à run.
+     */
+    for (let hi = 0; hi < s.habilidades.length; hi++) {
+      const h = s.habilidades[hi]!
+      if (h.ativa <= 0) continue
+      const nv = nivelDe(tuning, hi, h.nivel)
+      if (nv === undefined || nv.raio <= 0) continue
+      const r2 = nv.raio * nv.raio
+      const sobram: Enemy[] = []
+      for (const e of s.enemies) {
+        const gx = e.x - p.x
+        const gy = e.y - p.y
+        if (gx * gx + gy * gy <= r2) {
+          e.hp--
+          if (e.hp <= 0) {
+            killed(e)
+            continue
+          }
+        }
+        sobram.push(e)
+      }
+      s.enemies = sobram
+      // O raio vem em PIXELS, e `healAround` conta em TILES: a conversão é aqui
+      // e não no tuning, porque raio de efeito é a mesma unidade do resto do
+      // mundo e só esta função pensa em grade.
+      const emTiles = Math.max(1, Math.round(nv.raio / (width / tuning.field.cols)))
+      s.healAcc += tuning.field.healRate * dt
+      if (s.healAcc >= 1) {
+        const q = Math.floor(s.healAcc)
+        s.healAcc -= q
+        healAround(s.field, FIELD, p.x, p.y, emTiles, q)
+        applyNecroseFloor(s.field, s.necrose)
+      }
     }
 
     if (hit) {
@@ -1725,7 +1911,53 @@ export function createSim(seed: number, tuning: Tuning): Sim {
    * Nada corre aqui dentro, pela mesma razão que nada corre no hub — é a mesma
    * safezone, com uma tela por cima.
    */
+  /**
+   * A LINHA da loja sob um ponto, ou -1. Geometria do `tuning.hub`.
+   *
+   * Uma linha por habilidade, na ordem de `tuning.habilidades`, dentro do mesmo
+   * quadro que todas as telas do cérebro usam. O render lê os mesmos números —
+   * é a regra de ontem, e o defeito que ela evita é o clique comprar a linha de
+   * cima da que está desenhada.
+   */
+  const linhaDaLoja = (x: number, y: number): number => {
+    const w = tuning.hub.panelW
+    const h = tuning.hub.panelH
+    const x0 = (width - w) / 2
+    const y0 = (height - h) / 2
+    if (x < x0 || x > x0 + w) return -1
+    const rel = y - (y0 + tuning.hub.rowTop)
+    if (rel < 0) return -1
+    const i = Math.floor(rel / tuning.hub.rowH)
+    return i >= 0 && i < tuning.habilidades.length ? i : -1
+  }
+
   const stepPainel = (bits: number, input: InputFrame): void => {
+    /*
+     * COMPRAR vem ANTES de fechar, e a ordem é o que faz a loja funcionar.
+     *
+     * Clicar numa linha é um clique DENTRO do quadro, e clique dentro do quadro
+     * não fecha — mas se `fechou` rodasse primeiro ele consumiria a borda, e a
+     * compra nunca veria o clique dela.
+     */
+    const node = tuning.hub.nodes[s.painel]
+    if (node?.loja === true && input.click && !s.prevClick) {
+      const i = linhaDaLoja(input.pointerX, input.pointerY)
+      const spec = i < 0 ? undefined : tuning.habilidades[i]
+      const h = i < 0 ? undefined : s.habilidades[i]
+      /*
+       * Compra só o que ainda não tem, e só com dinheiro em caixa.
+       *
+       * Silenciosa quando não dá — apertar sem saldo não é erro, é "ainda não",
+       * e quem informa isso é o preço na tela. O NÍVEL 2 não é comprado aqui
+       * ainda: o H disse que os níveis vêm depois, e vender um upgrade que não
+       * muda nada seria tirar 500 por nada.
+       */
+      if (spec !== undefined && h !== undefined && h.nivel === 0 && s.bank >= spec.custo) {
+        s.bank -= spec.custo
+        h.nivel = 1
+        return
+      }
+    }
     fechou(bits, input)
   }
 
@@ -1816,7 +2048,7 @@ export function createSim(seed: number, tuning: Tuning): Sim {
 
   const step = (input: InputFrame): void => {
     const bits = bitsOf(input)
-    if (s.phase === "run") stepRun(bits)
+    if (s.phase === "run") stepRun(bits, input)
     else if (s.phase === "hub") stepHub(bits, input)
     else if (s.phase === "select") stepSelect(bits, input)
     else if (s.phase === "painel") stepPainel(bits, input)
@@ -1862,6 +2094,12 @@ export function createSim(seed: number, tuning: Tuning): Sim {
     for (const r of s.historico) {
       packer.u32(r.wave).u32(r.kills).u32(r.coins).u8(r.venceu ? 1 : 0).u32(r.ticks)
     }
+    // Habilidade decide jogo — nível, carga e o que está ativo mudam o mundo —,
+    // então os três entram no hash. Carga sem hash faria dois replays iguais
+    // divergirem no primeiro acionamento.
+    for (const h of s.habilidades) {
+      packer.u32(h.nivel).u32(h.carga).u32(h.ativa)
+    }
     packer
       .u32(s.wave)
       .u32(s.waveKills)
@@ -1882,7 +2120,7 @@ export function createSim(seed: number, tuning: Tuning): Sim {
       .f64(s.worldScale)
       .u32(s.frozen)
       .u32(s.deadLock)
-      .u32(s.villain).u32(s.painel + 1).u8(s.prevClick ? 1 : 0).u32(s.historico.length).u32(s.coins).u32(s.bank).u32(s.pickups.length).u32(s.cardLock).u32(s.countdown).f64(s.fissionStun).u32(s.auraTicks).f64(s.instantAcc).u32(s.pick).u32(s.phaseIndex).u32(s.round)
+      .u32(s.villain).u32(s.painel + 1).u8(s.prevClick ? 1 : 0).u32(s.historico.length).u32(s.habilidades.length).u32(s.coins).u32(s.bank).u32(s.pickups.length).u32(s.cardLock).u32(s.countdown).f64(s.fissionStun).u32(s.auraTicks).f64(s.instantAcc).u32(s.pick).u32(s.phaseIndex).u32(s.round)
       .f64(s.fissionAcc)
       .u32(s.infection)
       .u32(s.necrosed)

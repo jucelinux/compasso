@@ -17,6 +17,7 @@ import {
   ORG2,
   PALETTE,
   ECO2,
+  INF2,
   INF3,
   LEU3,
   NEU2,
@@ -325,6 +326,33 @@ const PORTA_CORPO: Readonly<Record<string, (cur: SimState) => ReadonlyArray<stri
  * maior — e quantas são não muda isso.
  */
 const PORTA_LISTA: Readonly<Record<string, boolean>> = { historico: true }
+
+/**
+ * A cor de cada habilidade, e ela não é enfeite.
+ *
+ * A adrenalina veste o CIANO de velocidade — a mesma rampa que o corpo do
+ * jogador usa para dizer "estou a toda", e ela é literalmente uma habilidade de
+ * relógio. A febre veste o laranja da influenza, que é o vermelho-quente da
+ * paleta: calor é a coisa que ela é.
+ *
+ * Paleta travada, como sempre: escolhe-se entre o que já existe.
+ */
+const HAB_COR: Readonly<Record<string, number>> = {
+  adrenalina: FAST1,
+  febre: INF2,
+}
+
+/** O nome de cada habilidade na loja. A sim não conhece nenhum destes. */
+const HAB_NOME: Readonly<Record<string, string>> = {
+  adrenalina: "ADRENALINA",
+  febre: "FEBRE",
+}
+
+/** Uma linha do que ela faz. Curta: o quadro tem 240px e a fonte 6px por letra. */
+const HAB_BLURB: Readonly<Record<string, string>> = {
+  adrenalina: "O TEMPO CEDE POR 3S",
+  febre: "CALOR LIMPA A VOLTA POR 3S",
+}
 
 export async function createRenderer(
   mount: HTMLElement,
@@ -820,6 +848,8 @@ export async function createRenderer(
   const buildLabels = [0, 1, 2, 3].map(() => new Label(hud, atlas))
   const scoreLabel = new Label(hud, atlas)
   const multLabel = new Label(hud, atlas)
+  /** O número da tecla ao lado de cada ícone de habilidade. */
+  const habTeclas = [0, 1, 2, 3, 4].map(() => new Label(hud, atlas))
   const popLabels: Label[] = []
 
   const deadVeil = new Sprite(atlas.veil(INK, 2))
@@ -881,6 +911,10 @@ export async function createRenderer(
   const hubLabels = [0, 1, 2, 3, 4].map(() => new Label(overlay, atlas))
   /** As linhas do corpo de um painel. Cinco cabem no quadro; o histórico usa todas. */
   const painelLinhas = [0, 1, 2, 3, 4].map(() => new Label(overlay, atlas))
+  /** As linhas da LOJA: nome, preço e o que a habilidade faz. */
+  const lojaLinhas = [0, 1, 2, 3].map(() => new Label(overlay, atlas))
+  const lojaPrecos = [0, 1, 2, 3].map(() => new Label(overlay, atlas))
+  const lojaBlurbs = [0, 1, 2, 3].map(() => new Label(overlay, atlas))
   const cardBlurbs = [0, 1, 2].map(() => new Label(overlay, atlas))
   // O que SAI do build se você levar este. Só aparece com o build cheio.
   const cardCusto = [0, 1, 2].map(() => new Label(overlay, atlas))
@@ -1678,9 +1712,71 @@ export async function createRenderer(
     }
   }
 
+  /**
+   * As HABILIDADES no HUD: ícone e barra em PÍLULA. 14/08, desenho do H.
+   *
+   * "Um ícone com a progressão de ativação, e uma barra de progresso em formato
+   * de pill abaixo" — as palavras dele. A pílula é a peça que faz a espera ser
+   * legível de relance: um anel diria a mesma coisa e obrigaria a estimar
+   * ângulo, e o que se quer saber aqui é "falta muito?", não "quanto exatamente".
+   *
+   * Só as COMPRADAS ocupam lugar, e a fileira é fechada. Espaço vazio reservado
+   * anunciaria uma habilidade que não dá para acionar — e a mesma regra vale no
+   * `iconeEm` da sim, senão o dedo acertaria um slot que o olho não vê.
+   *
+   * ATIVA inverte o sentido da pílula: cheia ao ligar, esvaziando com o efeito.
+   * É a mesma barra dizendo as duas coisas que importam em momentos diferentes
+   * — quanto falta para poder, e quanto falta para acabar.
+   */
+  const drawHabilidades = (cur: SimState): void => {
+    const r = tuning.hud.habRaio
+    const py = tuning.hud.habY + r + 5
+    let slot = 0
+    for (let i = 0; i < cur.habilidades.length; i++) {
+      const h = cur.habilidades[i]!
+      if (h.nivel <= 0) continue
+      const spec = tuning.habilidades[i]
+      const nv = spec?.niveis[Math.min(h.nivel - 1, spec.niveis.length - 1)]
+      const cx = tuning.hud.habX + slot * tuning.hud.habStep
+      const cor = col(HAB_COR[spec?.id ?? ""] ?? WHITE)
+      const cheia = nv !== undefined && h.carga >= nv.recarga
+      const ativa = h.ativa > 0
+
+      // O corpo do ícone: cheio quando dá para usar, oco quando não dá. É a
+      // leitura mais rápida que existe, e não depende de ler a barra.
+      hudBars.circle(cx, tuning.hud.habY, r).fill({ color: col(INK), alpha: 0.75 })
+      if (cheia || ativa) hudBars.circle(cx, tuning.hud.habY, r - 3).fill({ color: cor, alpha: ativa ? 0.95 : 0.7 })
+      hudBars
+        .circle(cx, tuning.hud.habY, r)
+        .stroke({ width: 1, color: cor, alpha: cheia || ativa ? 0.95 : 0.45 })
+      // O número da tecla, no canto: o H pediu 1..5, e a tecla tem que estar
+      // onde a mão procura — junto do que ela aciona.
+      habTeclas[slot]!.set(`${i + 1}`, cheia || ativa ? WHITE : NUC2, cx + r - 1, tuning.hud.habY - r - 1, 1, true, true)
+
+      // A PÍLULA. Fundo sempre, preenchimento pela fração.
+      const pw = tuning.hud.habStep - 10
+      const px = cx - pw / 2
+      const frac =
+        nv === undefined
+          ? 0
+          : ativa
+            ? h.ativa / Math.round(nv.duracao * tuning.sim.hz)
+            : Math.min(1, h.carga / nv.recarga)
+      hudBars.roundRect(px, py, pw, 4, 2).fill({ color: col(INK), alpha: 0.8 })
+      if (frac > 0) {
+        hudBars
+          .roundRect(px, py, Math.max(2, Math.round(pw * frac)), 4, 2)
+          .fill({ color: cor, alpha: ativa ? 0.95 : 0.75 })
+      }
+      slot++
+    }
+    for (let k = slot; k < habTeclas.length; k++) habTeclas[k]!.hide()
+  }
+
   const drawHud = (cur: SimState, dt: number): void => {
     buildDots.clear()
     hudBars.clear()
+    drawHabilidades(cur)
 
     for (let i = 0; i < Math.max(0, cur.lives); i++) {
       hudBars.rect(tuning.arena.width - 11 - i * 7, 6, 5, 5).fill(col(WHITE))
@@ -2157,6 +2253,59 @@ export async function createRenderer(
    * em vez de encher com número inventado — placeholder que mente é pior que
    * placeholder que se assume.
    */
+  /**
+   * A LOJA dentro do painel de upgrades — 14/08, duas habilidades a 500.
+   *
+   * Uma linha por habilidade, na MESMA geometria que a sim usa para decidir o
+   * que o clique comprou (`hub.rowTop`, `hub.rowH`). É a regra de ontem
+   * aplicada de novo: layout que responde a input não é decoração, e duas
+   * cópias divergem na primeira mudança — aqui o sintoma seria comprar a linha
+   * de cima da que está desenhada, que é dinheiro do jogador.
+   *
+   * O preço vira "COMPRADA" quando já é dele, e apaga quando não dá para pagar.
+   * Três estados na mesma linha, sem texto extra explicando nenhum deles.
+   */
+  const desenhaLoja = (cur: SimState, x0: number, y0: number): void => {
+    for (let i = 0; i < lojaLinhas.length; i++) {
+      const spec = tuning.habilidades[i]
+      const h = cur.habilidades[i]
+      if (spec === undefined || h === undefined) {
+        lojaLinhas[i]!.hide()
+        lojaPrecos[i]!.hide()
+        continue
+      }
+      const cor = col(HAB_COR[spec.id] ?? WHITE)
+      const ry = y0 + tuning.hub.rowTop + i * tuning.hub.rowH
+      const tem = h.nivel > 0
+      const paga = cur.bank >= spec.custo
+      rewardPanels
+        .rect(x0 + 6, ry, tuning.hub.panelW - 12, tuning.hub.rowH - 4)
+        .fill({ color: cor, alpha: tem ? 0.16 : 0.07 })
+      // O ponto colorido é o mesmo ícone do HUD, em miniatura: o que se compra
+      // aqui é o que aparece lá, e a ligação não precisa de legenda.
+      rewardPanels.circle(x0 + 18, ry + 11, 5).fill({ color: cor, alpha: tem ? 0.95 : 0.5 })
+      lojaLinhas[i]!.set(HAB_NOME[spec.id] ?? spec.id.toUpperCase(), tem ? WHITE : NUC2, x0 + 30, ry + 5, 1)
+      /*
+       * O preço é alinhado à DIREITA, e isso é feito na mão porque `Label` só
+       * sabe alinhar à esquerda ou centralizar.
+       *
+       * A primeira versão passava a borda como x e o texto saía POR FORA do
+       * painel — "500" virava "50" com o zero na multidão de neurônios. Preço
+       * cortado num botão de compra é a pior classe de defeito de tela que
+       * existe: ele não parece quebrado, parece outro preço.
+       */
+      const txt = tem ? "NÍVEL 1" : `${spec.custo}`
+      lojaPrecos[i]!.set(
+        txt,
+        tem ? SHI1 : paga ? GLD2 : DIM0,
+        x0 + tuning.hub.panelW - 10 - textWidth(txt),
+        ry + 5,
+        1,
+      )
+      lojaBlurbs[i]!.set(HAB_BLURB[spec.id] ?? "", DIM1, x0 + 30, ry + 17, 1)
+    }
+  }
+
   const drawPainel = (cur: SimState): void => {
     const node = tuning.hub.nodes[cur.painel]
     const id = node?.id ?? ""
@@ -2220,10 +2369,27 @@ export async function createRenderer(
      * jogador vê o mesmo objeto nos três lugares, e a ligação entre juntar,
      * acumular e gastar não precisa de uma palavra.
      */
-    if (id === "upgrades") {
+    if (node?.loja === true) {
+      /*
+       * Na LOJA o saldo é uma linha fina no topo, e não o destaque grande.
+       *
+       * O destaque é para telas em que o número É a resposta; aqui a resposta
+       * são os itens, e o saldo é a condição para comprá-los. Na primeira
+       * versão ele saiu em escala 2 no meio do quadro e a primeira linha da
+       * loja passou por cima dele — dois textos disputando as mesmas fileiras,
+       * pela quarta vez nesta tela.
+       */
+      for (const l of painelLinhas) l.hide()
+      const saldo = `${cur.bank}`
       hubCoin.texture = frameOf(atlas.coin, 0, 0, Math.floor(selfClock * 8))
-      hubCoin.position.set(Math.round(cxq - textWidth(linhas[0] ?? "") - 8), y0 + 62)
+      hubCoin.position.set(Math.round(cxq - textWidth(saldo) / 2 - 9), y0 + 23)
       hubCoin.visible = true
+      painelLinhas[0]!.set(saldo, GLD2, cxq + 6, y0 + 20, 1, true)
+      desenhaLoja(cur, x0, y0)
+    } else {
+      for (const l of lojaLinhas) l.hide()
+      for (const l of lojaPrecos) l.hide()
+      for (const l of lojaBlurbs) l.hide()
     }
     for (const l of cardBlurbs) l.hide()
     cardLines[1]!.hide()
@@ -2333,6 +2499,11 @@ export async function createRenderer(
     hubCoin.visible = isHub
     for (const l of hubLabels) if (!isHub) l.hide()
     for (const l of painelLinhas) if (!isPainel) l.hide()
+    if (!isPainel) {
+      for (const l of lojaLinhas) l.hide()
+      for (const l of lojaPrecos) l.hide()
+      for (const l of lojaBlurbs) l.hide()
+    }
     for (const l of cardLines) if (!telaDeCima) l.hide()
     if (!isClosed && !isHub && !isSelect && !isPainel) {
       for (const l of cardPicks) l.hide()

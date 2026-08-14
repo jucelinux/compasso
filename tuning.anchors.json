@@ -151,6 +151,66 @@
         "A fórmula continua no código como caso nulo, e `field.sourcePerWave` continua no",
         "tuning por isso — não é número morto."
       ]
+    },
+    {
+      "valor": "habilidades.0.niveis.0.escala",
+      "ancora": "time.creep",
+      "fracao": 1.0,
+      "porque": [
+        "A ADRENALINA freia o mundo, e o quanto ela freia É o `time.creep` — o mesmo",
+        "numero que a dilatacao usa para o mundo de quem esta parado. Fracao 1.0: nao e",
+        "parecido, e o mesmo.",
+        "",
+        "Isso e escolha e nao economia. A dilatacao de 31/07 dizia 'parado, o mundo anda a",
+        "5%'; ela esta desligada desde 13/08 e o numero ficou sem uso. A adrenalina compra",
+        "os mesmos 5% por 3 segundos, gastando uma carga — e a diferenca entre as duas e",
+        "toda a diferenca: uma era LEI (o mundo obedece sempre, e ninguem percebia) e a",
+        "outra e ATO (voce aperta, e tem icone e barra dizendo que aconteceu).",
+        "",
+        "Se o H religar a dilatacao, os dois relogios se compoem em vez de brigar, porque",
+        "a habilidade MULTIPLICA a escala em vez de fixa-la. E se ele mudar o `creep`, a",
+        "adrenalina muda junto, que e o que esta ancora quer dizer."
+      ]
+    },
+    {
+      "valor": "habilidades.1.niveis.0.recarga",
+      "ancora": "habilidades.0.niveis.0.recarga",
+      "fracao": 10.0,
+      "porque": [
+        "A recarga da FEBRE, medida contra a da ADRENALINA. 14/08.",
+        "",
+        "Os 200 abates da adrenalina sao numero do H. Os 2000 tiles da febre sao MEDICAO:",
+        "cinco seeds com politica agressiva deram 145-329 patogenos-mae por run (mediana",
+        "184) e 1170-4183 tiles de limo erradicados (mediana 2044). A razao medida e ~11",
+        "tiles por mae; 10 e ela arredondada, e e o que faz as duas habilidades carregarem",
+        "na MESMA cadencia — cerca de uma carga por run bem jogada, que foi o que ele",
+        "descreveu ao dizer 'da pra acumular em 2 runs bem jogadas'.",
+        "",
+        "Ancorada uma na outra e nao cada uma no vazio porque o que importa e a razao: se",
+        "a adrenalina ficar mais rara, a febre tem que ficar junto, senao uma vira a",
+        "habilidade e a outra vira enfeite.",
+        "",
+        "NAO MEDIDO com as habilidades EM USO: os numeros vieram de runs sem elas. A febre",
+        "limpa o campo, entao usa-la muda a propria taxa de erradicacao — o laco esta",
+        "nomeado e a primeira medicao com as duas compradas vai desmenti-lo ou nao."
+      ]
+    },
+    {
+      "valor": "habilidades.1.niveis.0.raio",
+      "ancora": "powers.shockRadius",
+      "fracao": 1.0,
+      "porque": [
+        "O alcance da FEBRE, igual ao do PULSO. 14/08.",
+        "",
+        "O jogo ja tem um raio que significa 'efeito em area em volta de voce', e e o do",
+        "pulso. Inventar um segundo faria o jogador aprender duas distancias para a mesma",
+        "ideia — e a primeira coisa que se aprende de um efeito em area e ate onde ele",
+        "chega.",
+        "",
+        "Vale dizer o que ele NAO alcanca: cicatriz. Desde 05/08 so a PRESENCA desfaz",
+        "necrose, e uma habilidade que a apagasse a distancia desmontaria o ratchet que da",
+        "ladeira a run. Esta ancora e sobre a distancia, nao sobre o que cabe dentro dela."
+      ]
     }
   ]
 }

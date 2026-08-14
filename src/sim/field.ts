@@ -249,6 +249,17 @@ export function infectAt(field: Uint8Array, index: number, amount: number, max: 
  * Cura em volta de um ponto. `amount` no centro, caindo pela distância de tile.
  * Devolve quanto foi efetivamente curado, para quem quiser pontuar isso.
  */
+/**
+ * Quantos tiles a última cura ERRADICOU — levou de tomado a limpo.
+ *
+ * Fora do retorno porque o retorno já é "quanto curou", que três chamadores
+ * usam, e as duas grandezas são diferentes: mil pontos espalhados não erradicam
+ * nada, um tile no talo erradica um. Módulo-escopo em vez de out-param porque a
+ * sim é single-threaded por construção e lê o valor no tick da chamada — o
+ * mesmo padrão que qualquer contador de uma passada.
+ */
+export let zerados = 0
+
 export function healAround(
   field: Uint8Array,
   spec: FieldSpec,
@@ -261,6 +272,7 @@ export function healAround(
   const cx = Math.floor(x / spec.tileW)
   const cy = Math.floor(y / spec.tileH)
   let healed = 0
+  zerados = 0
   for (let ty = cy - radius; ty <= cy + radius; ty++) {
     if (ty < 0 || ty >= spec.rows) continue
     for (let tx = cx - radius; tx <= cx + radius; tx++) {
@@ -281,6 +293,10 @@ export function healAround(
       const after = before - dose
       field[i] = after < 0 ? 0 : after
       healed += before - field[i]!
+      // Tile ERRADICADO: passou de tomado a limpo neste passo. É a unidade que
+      // a febre conta para carregar, e ela é diferente de "quanto curou" — mil
+      // pontos espalhados não erradicam nada, e um tile no talo erradica um.
+      if (before > 0 && field[i] === 0) zerados++
     }
   }
   return healed
