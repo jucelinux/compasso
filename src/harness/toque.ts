@@ -57,6 +57,27 @@ try {
   await d.clicaArena(6, 6)
   await confere("toque fora fecha a escolha", "hub")
 
+  /*
+   * O gesto que o H pegou jogando, e o motivo desta sonda ter crescido.
+   *
+   * No aparelho de toque a metade DIREITA da tela é o impulso, e na `select` o
+   * impulso é LUTAR. Tocar à direita para fechar a tela começava a partida — o
+   * gesto de sair fazendo a única coisa que não dá para desfazer. Aqui o toque
+   * cai bem na direita, e BEM FORA do quadro: tem que fechar, não lutar.
+   */
+  await d.clicaArena(t.hub.orbitX, t.hub.orbitY)
+  await confere("toque na órbita abre a escolha (de novo)", "select")
+  await d.clicaArena(t.arena.width - 12, t.arena.height - 12)
+  await confere("toque na METADE DIREITA, fora do quadro, FECHA e não luta", "hub")
+
+  // E a outra metade do par: dentro do quadro, o toque confirma.
+  await d.clicaArena(t.hub.orbitX, t.hub.orbitY)
+  await confere("toque na órbita abre a escolha (terceira vez)", "select")
+  await d.clicaArena(t.arena.width / 2, t.arena.height / 2)
+  await confere("toque DENTRO do quadro confirma o inimigo", "card")
+  await d.clicaArena(t.arena.width / 2, t.arena.height - 20)
+  await confere("toque dispensa o card", "run")
+
   if (d.errors.length > 0) falhas.push(`erros no browser:\n${d.errors.join("\n")}`)
 } finally {
   await d.close()

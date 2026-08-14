@@ -1883,20 +1883,29 @@ export function createSim(seed: number, tuning: Tuning): Sim {
    * tela reabre no quadro seguinte — o mesmo defeito que a `select` já tinha e
    * que agora vale para cinco portas em vez de uma.
    */
-  const fechou = (bits: number, input: InputFrame): boolean => {
-    const novo = bits & ~s.prevBits
-    const clicou = input.click && !s.prevClick
-    const px = input.pointerX
-    const py = input.pointerY
+  /**
+   * Onde um ponto cai em relação ao quadro das telas do cérebro.
+   *
+   * Uma função só porque três regras dependem dela e elas são complementares:
+   * fora FECHA, no [X] FECHA, e dentro CONFIRMA. Se cada uma calculasse o
+   * próprio retângulo, a soma delas poderia deixar uma faixa que não faz nada —
+   * ou pior, uma que faz duas.
+   */
+  const noQuadro = (px: number, py: number): { fora: boolean; noX: boolean; dentro: boolean } => {
     const w = tuning.hub.panelW
     const h = tuning.hub.panelH
     const x0 = (width - w) / 2
     const y0 = (height - h) / 2
-    const foraDoQuadro = px < x0 || px > x0 + w || py < y0 || py > y0 + h
+    const fora = px < x0 || px > x0 + w || py < y0 || py > y0 + h
     const c = tuning.hub.closeSize
-    // O [X] fica DENTRO do quadro, então ele precisa ser dito à parte: sem isto
-    // a única região da tela que promete fechar seria a que não fecha.
-    const noX = px >= x0 + w - c && px <= x0 + w && py >= y0 && py <= y0 + c
+    const noX = !fora && px >= x0 + w - c && py <= y0 + c
+    return { fora, noX, dentro: !fora && !noX }
+  }
+
+  const fechou = (bits: number, input: InputFrame): boolean => {
+    const novo = bits & ~s.prevBits
+    const clicou = input.click && !s.prevClick
+    const { fora: foraDoQuadro, noX } = noQuadro(input.pointerX, input.pointerY)
     if ((novo & BIT_RESTART) === 0 && !(clicou && (foraDoQuadro || noX))) return false
     s.phase = "hub"
     s.painel = -1
@@ -1974,7 +1983,21 @@ export function createSim(seed: number, tuning: Tuning): Sim {
     const n = villainCount()
     if ((novo & BIT_LEFT) !== 0) s.villain = (s.villain + n - 1) % n
     if ((novo & BIT_RIGHT) !== 0) s.villain = (s.villain + 1) % n
-    if ((novo & BIT_ACTION) !== 0) {
+    /*
+     * CONFIRMAR: a tecla de ação, ou um clique DENTRO do quadro. 14/08.
+     *
+     * O clique entrou aqui por um defeito que só existia no toque, e que o H
+     * pegou jogando: no aparelho de toque a metade direita da tela é o impulso,
+     * e nesta fase o impulso é LUTAR. Tocar à direita para fechar a tela
+     * começava a partida — o gesto de sair fazia a única coisa que não dá para
+     * desfazer.
+     *
+     * Com o quadro dividido em três regiões complementares — fora fecha, [X]
+     * fecha, dentro confirma — o dedo passa a dizer a mesma coisa que o mouse
+     * diz, e a metade direita da tela deixa de ter opinião.
+     */
+    const dentro = input.click && !s.prevClick && noQuadro(input.pointerX, input.pointerY).dentro
+    if ((novo & BIT_ACTION) !== 0 || dentro) {
       startRun()
       return
     }
@@ -1984,12 +2007,23 @@ export function createSim(seed: number, tuning: Tuning): Sim {
     fechou(bits, input)
   }
 
-  const stepCard = (bits: number): void => {
+  /**
+   * Tela que se dispensa com qualquer coisa: tecla OU clique.
+   *
+   * O clique entrou em 14/08 junto com o resto: no toque, `action` deixou de
+   * ser produzido nas telas — a metade direita da tela parou de ter opinião —,
+   * então sem isto card e fechamento ficariam sem saída no aparelho do H.
+   */
+  const dispensou = (bits: number, input: InputFrame): boolean =>
+    ((bits & ~s.prevBits) & (BIT_ACTION | BIT_RESTART)) !== 0 ||
+    (input.click && !s.prevClick)
+
+  const stepCard = (bits: number, input: InputFrame): void => {
     if (s.cardLock > 0) {
       s.cardLock--
       return
     }
-    if (((bits & ~s.prevBits) & (BIT_ACTION | BIT_RESTART)) !== 0) s.phase = "run"
+    if (dispensou(bits, input)) s.phase = "run"
   }
 
   /**
@@ -1999,12 +2033,12 @@ export function createSim(seed: number, tuning: Tuning): Sim {
    * próxima. O `runIndex` sobe porque isto É uma run nova, e o gate conta por
    * ele; contar como continuação faria a vitória sumir do registro.
    */
-  const stepClosed = (bits: number): void => {
+  const stepClosed = (bits: number, input: InputFrame): void => {
     if (s.cardLock > 0) {
       s.cardLock--
       return
     }
-    if (((bits & ~s.prevBits) & (BIT_ACTION | BIT_RESTART)) !== 0) {
+    if (dispensou(bits, input)) {
       // Vencer também volta ao cérebro. É o mesmo lugar pelos dois caminhos, e
       // é o que faz dele um HUB em vez de uma tela de continue.
       bankCoins(true)
@@ -2052,9 +2086,9 @@ export function createSim(seed: number, tuning: Tuning): Sim {
     else if (s.phase === "hub") stepHub(bits, input)
     else if (s.phase === "select") stepSelect(bits, input)
     else if (s.phase === "painel") stepPainel(bits, input)
-    else if (s.phase === "card") stepCard(bits)
+    else if (s.phase === "card") stepCard(bits, input)
     else if (s.phase === "intervalo") stepIntervalo()
-    else if (s.phase === "closed") stepClosed(bits)
+    else if (s.phase === "closed") stepClosed(bits, input)
     else stepDead(bits)
     s.prevBits = bits
     s.prevClick = input.click

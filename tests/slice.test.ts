@@ -2187,3 +2187,92 @@ describe("as habilidades da loja", () => {
     expect(sim.state().habilidades[IDX.adrenalina]!.ativa).toBe(0)
   })
 })
+
+/*
+ * O QUADRO em três regiões, 14/08 — e ele nasceu de um defeito que só existia
+ * no toque, pego pelo H jogando.
+ *
+ * No aparelho de toque a metade direita da tela é o impulso, e na `select` o
+ * impulso é LUTAR: tocar à direita para fechar a tela começava a partida. O
+ * gesto de sair fazia a única coisa que não dá para desfazer.
+ *
+ * O conserto foi dar ao quadro três regiões COMPLEMENTARES — fora fecha, [X]
+ * fecha, dentro confirma — para que o dedo diga o mesmo que o mouse. O que
+ * estes testes travam é a complementaridade: nenhuma faixa que faça as duas
+ * coisas, e nenhuma que não faça nada.
+ */
+describe("o quadro: fora fecha, [X] fecha, dentro confirma", () => {
+  const CLIQUE = (x: number, y: number): InputFrame =>
+    IN({ pointerX: x, pointerY: y, click: true })
+  const cx = tuning.arena.width / 2
+  const cy = tuning.arena.height / 2
+  const x0 = (tuning.arena.width - tuning.hub.panelW) / 2
+  const y0 = (tuning.arena.height - tuning.hub.panelH) / 2
+
+  const naEscolha = (): Sim => {
+    const sim = createSim(400, tuning)
+    sim.step(CLIQUE(tuning.hub.orbitX, tuning.hub.orbitY))
+    expect(sim.state().phase).toBe("select")
+    sim.step(NONE)
+    return sim
+  }
+
+  it("clicar DENTRO do quadro confirma o inimigo", () => {
+    const sim = naEscolha()
+    sim.step(CLIQUE(cx, cy))
+    expect(sim.state().phase).toBe("card")
+  })
+
+  it("clicar FORA fecha, e não começa luta nenhuma", () => {
+    /*
+     * O canto inferior direito é exatamente onde o dedo do H caía: metade
+     * direita da tela, longe do quadro. Antes do conserto isto virava `card`.
+     */
+    const sim = naEscolha()
+    sim.step(CLIQUE(tuning.arena.width - 12, tuning.arena.height - 12))
+    expect(sim.state().phase).toBe("hub")
+  })
+
+  it("clicar no [X] fecha, mesmo estando dentro do retângulo", () => {
+    const sim = naEscolha()
+    const c = tuning.hub.closeSize
+    sim.step(CLIQUE(x0 + tuning.hub.panelW - c / 2, y0 + c / 2))
+    expect(sim.state().phase).toBe("hub")
+  })
+
+  it("as três regiões são complementares: todo ponto é exatamente uma", () => {
+    /*
+     * O caso nulo da geometria. Uma faixa que não fosse nenhuma das três seria
+     * uma região da tela onde o toque não faz nada, e o jogador leria isso como
+     * "travou"; uma que fosse duas seria um clique com dois sentidos.
+     *
+     * Varre a tela inteira em passo de 7px — primo em relação à largura do
+     * quadro, então a amostra não cai sempre na mesma coluna relativa.
+     */
+    const sim = naEscolha()
+    for (let x = 0; x < tuning.arena.width; x += 7) {
+      for (let y = 0; y < tuning.arena.height; y += 7) {
+        const s2 = createSim(401, tuning)
+        s2.step(CLIQUE(tuning.hub.orbitX, tuning.hub.orbitY))
+        s2.step(NONE)
+        s2.step(CLIQUE(x, y))
+        const f = s2.state().phase
+        expect(["hub", "card"], `ponto (${x},${y}) não fez nem uma coisa nem outra`).toContain(f)
+      }
+    }
+    void sim
+  })
+
+  it("o CARD se dispensa no clique, e não só na tecla", () => {
+    // Sem isto o card ficaria sem saída no toque: `action` deixou de ser
+    // produzido nas telas quando a metade direita parou de ter opinião.
+    const sim = naEscolha()
+    sim.step(CLIQUE(cx, cy))
+    expect(sim.state().phase).toBe("card")
+    let g = 0
+    while (sim.state().phase === "card" && g++ < 200) {
+      sim.step(g % 2 === 0 ? CLIQUE(cx, tuning.arena.height - 20) : NONE)
+    }
+    expect(sim.state().phase).toBe("run")
+  })
+})

@@ -1,6 +1,7 @@
 import tuningJson from "../tuning.json"
 import { createSim } from "./sim/sim.ts"
 import type { InputFrame, SimState, Tuning } from "./sim/types.ts"
+import { EMPTY_INPUT } from "./input/frame.ts"
 import { createKeyboard } from "./input/keyboard.ts"
 import {
   createTouchPad,
@@ -163,24 +164,54 @@ window.addEventListener("pointercancel", () => {
 function readInput(): InputFrame {
   const k = keyboard.frame()
   const t = pad?.state()
+  const cliqueTravado = ponteiro.down || cliquePendente
   const m = {
     pointerX: ponteiro.x,
     pointerY: ponteiro.y,
-    click: ponteiro.down || cliquePendente,
+    click: cliqueTravado,
   }
   cliquePendente = false
   if (t === undefined) return { ...k, ...m, ability: k.ability }
-  const morto = sim.state().phase === "dead"
+  const fase = sim.state().phase
+  const morto = fase === "dead"
   /*
-   * O TOQUE CURTO vira CLIQUE, em coordenada de arena. 14/08.
+   * NAS TELAS, o pad DEIXA DE SER PAD e vira ponteiro inteiro. 14/08.
    *
-   * Sem isto o iPad não tinha ponteiro nenhum: a camada de toque cobre a tela
-   * inteira, o guarda que impede o pad de virar clique engolia todo evento, e
-   * as cinco portas do cérebro — que abrem no ponteiro — eram inalcançáveis.
-   * Pior: um painel aberto ANDANDO virava armadilha, porque `restart` no toque
-   * só existe na tela de morte.
+   * O H pegou isto jogando, e a frase dele é o diagnóstico: "quando clico na
+   * metade direita da tela, em qualquer região, ativa o impulso". Numa tela não
+   * há o que impelir — e na `select` o impulso é LUTAR, então o gesto de sair
+   * fazia a única coisa que não dá para desfazer.
    *
-   * O toque tem prioridade sobre o `ponteiro`, que no iPad nunca é atualizado.
+   * Aqui o dedo encostado É o botão apertado, na posição em que ele está. Não
+   * depende do heurístico de toque curto: um dedo que demora ou escorrega
+   * continua fechando a tela, e "clicar fora" passa a significar no aparelho o
+   * mesmo que significa no mouse.
+   *
+   * O HUB fica DE FORA da lista de propósito: lá se anda, então o manche
+   * precisa continuar sendo manche e a distinção arrastou/tocou é o que separa
+   * caminhar de apontar.
+   */
+  const soPonteiro =
+    fase === "select" || fase === "painel" || fase === "card" || fase === "closed"
+  const dedo = t.dedo === null ? null : paraArena(t.dedo.x, t.dedo.y)
+  if (soPonteiro) {
+    return {
+      ...EMPTY_INPUT,
+      up: k.up,
+      down: k.down,
+      left: k.left,
+      right: k.right,
+      action: k.action,
+      restart: k.restart,
+      ability: k.ability,
+      ...(dedo === null
+        ? { pointerX: ponteiro.x, pointerY: ponteiro.y, click: cliqueTravado }
+        : { pointerX: dedo.x, pointerY: dedo.y, click: true }),
+    }
+  }
+  /*
+   * Fora das telas o pad é pad, e o toque curto vira clique — que é o que faz o
+   * ÍCONE de habilidade responder ao dedo, como o H pediu.
    */
   const alvo = t.tap === null ? null : paraArena(t.tap.x, t.tap.y)
   return {
