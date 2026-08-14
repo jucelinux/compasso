@@ -201,6 +201,8 @@ export function createSim(seed: number, tuning: Tuning): Sim {
     villain: 0,
     painel: -1,
     prevClick: false,
+    historico: [],
+    runStartTick: 0,
     coins: 0,
     bank: 0,
     pickups: [],
@@ -433,6 +435,7 @@ export function createSim(seed: number, tuning: Tuning): Sim {
   }
 
   const startRun = (): void => {
+    s.runStartTick = s.tick
     s.wave = 1
     /*
      * A run começa no vilão ESCOLHIDO no hub, não no primeiro da lista.
@@ -507,7 +510,26 @@ export function createSim(seed: number, tuning: Tuning): Sim {
    *
    * As moedas ainda no chão, não coletadas, NÃO entram. Pegar é o gesto.
    */
-  const bankCoins = (): void => {
+  /**
+   * Quantas runs o histórico guarda. Teto, e não "todas".
+   *
+   * Ele vive no estado, logo no hash, logo em todo replay. Sem teto, o custo do
+   * histórico cresceria com o tempo de jogo — e a tela mostra as últimas de
+   * qualquer forma, porque é isso que alguém quer saber ao abri-la.
+   */
+  const HISTORICO_MAX = 8
+
+  const bankCoins = (venceu: boolean): void => {
+    // O registro nasce ANTES do banco somar: `coins` é o que ESTA run rendeu, e
+    // depois de somar ele já não é de ninguém.
+    s.historico.unshift({
+      wave: s.wave,
+      kills: s.kills,
+      coins: s.coins,
+      venceu,
+      ticks: s.tick - s.runStartTick,
+    })
+    if (s.historico.length > HISTORICO_MAX) s.historico.length = HISTORICO_MAX
     s.bank += s.coins
     s.coins = 0
     s.pickups = []
@@ -533,7 +555,7 @@ export function createSim(seed: number, tuning: Tuning): Sim {
     s.phase = "dead"
     s.deadLock = tuning.run.deadLockTicks
     s.frozen = 0
-    bankCoins()
+    bankCoins(false)
   }
 
   /** Liga um poder. Instantâneos agem na hora e não ficam ativos. */
@@ -1753,7 +1775,7 @@ export function createSim(seed: number, tuning: Tuning): Sim {
     if (((bits & ~s.prevBits) & (BIT_ACTION | BIT_RESTART)) !== 0) {
       // Vencer também volta ao cérebro. É o mesmo lugar pelos dois caminhos, e
       // é o que faz dele um HUB em vez de uma tela de continue.
-      bankCoins()
+      bankCoins(true)
       s.phase = "hub"
       poeNoCerebro()
     }
@@ -1830,6 +1852,17 @@ export function createSim(seed: number, tuning: Tuning): Sim {
                 : 2,
       )
       .u32(s.runIndex)
+    /*
+     * O CONTEÚDO de cada registro do histórico, e não só quantos são.
+     *
+     * Contar sem olhar deixaria dois históricos diferentes com o mesmo hash, e
+     * o hash existe para que isso não aconteça. São no máximo 8 registros de
+     * cinco campos: barato o bastante para não ter desculpa.
+     */
+    for (const r of s.historico) {
+      packer.u32(r.wave).u32(r.kills).u32(r.coins).u8(r.venceu ? 1 : 0).u32(r.ticks)
+    }
+    packer
       .u32(s.wave)
       .u32(s.waveKills)
       .u32(s.quota)
@@ -1849,7 +1882,7 @@ export function createSim(seed: number, tuning: Tuning): Sim {
       .f64(s.worldScale)
       .u32(s.frozen)
       .u32(s.deadLock)
-      .u32(s.villain).u32(s.painel + 1).u8(s.prevClick ? 1 : 0).u32(s.coins).u32(s.bank).u32(s.pickups.length).u32(s.cardLock).u32(s.countdown).f64(s.fissionStun).u32(s.auraTicks).f64(s.instantAcc).u32(s.pick).u32(s.phaseIndex).u32(s.round)
+      .u32(s.villain).u32(s.painel + 1).u8(s.prevClick ? 1 : 0).u32(s.historico.length).u32(s.coins).u32(s.bank).u32(s.pickups.length).u32(s.cardLock).u32(s.countdown).f64(s.fissionStun).u32(s.auraTicks).f64(s.instantAcc).u32(s.pick).u32(s.phaseIndex).u32(s.round)
       .f64(s.fissionAcc)
       .u32(s.infection)
       .u32(s.necrosed)

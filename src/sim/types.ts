@@ -652,6 +652,28 @@ export type Phase =
   | "run"
   | "dead"
 
+/**
+ * Uma run TERMINADA, guardada para o histórico. 14/08.
+ *
+ * Nasce no fim da run — pela morte ou pela vitória — porque é lá que os números
+ * ainda existem: o próximo `startRun` zera onda, abates e moedas do campo. É o
+ * mesmo motivo pelo qual `bestKills` sempre morou ali.
+ *
+ * A lista é CURTA de propósito. Ela entra no hash, e um histórico sem teto
+ * cresceria sem limite dentro do estado que todo replay carrega — o custo
+ * apareceria como um replay ficando mais lento quanto mais tempo se joga.
+ */
+export interface RunRecord {
+  /** Onda em que parou. Com a curva de 10, é a leitura mais direta de "até onde". */
+  readonly wave: number
+  readonly kills: number
+  /** Moedas que ESTA run rendeu, não o banco. */
+  readonly coins: number
+  readonly venceu: boolean
+  /** Duração em ticks de sim. Segundos são coisa de quem exibe. */
+  readonly ticks: number
+}
+
 export interface Enemy {
   id: number
   kind: string
@@ -894,6 +916,16 @@ export interface SimState {
    * ao fechamento é estado que reabre sozinho na próxima entrada do hub.
    */
   painel: number
+  /**
+   * As últimas runs terminadas, da mais NOVA para a mais velha.
+   *
+   * Mais nova primeiro porque é assim que a tela lê: quem abre o histórico quer
+   * saber como foi a última, não a primeira. Ordenar na exibição seria decidir
+   * duas vezes a mesma coisa.
+   */
+  historico: RunRecord[]
+  /** Tick em que a run atual começou. Só existe para medir a duração dela. */
+  runStartTick: number
   /**
    * O botão do ponteiro no tick anterior. É o que dá BORDA ao clique.
    *

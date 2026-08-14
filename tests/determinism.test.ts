@@ -12,7 +12,7 @@ import type { Tuning } from "../src/sim/types.ts"
  */
 
 const SMOKE = resolve(projectRoot, "replays", "smoke.json")
-const BASELINE_HASH = "151c9191"
+const BASELINE_HASH = "1a3210b1"
 
 /**
  * Run real do humano, 7,6 min de input de verdade, do core do dash (`7c952a6`).
@@ -22,7 +22,7 @@ const BASELINE_HASH = "151c9191"
  * leitura de ritmo, e não como cobertura de morte.
  */
 const RUN_01 = resolve(projectRoot, "replays", "run-01.json")
-const RUN_01_HASH = "22748700"
+const RUN_01_HASH = "6e345970"
 
 /**
  * Segunda run real: 5 min, 10 ondas, uma morte. Gravada antes da tecla de
@@ -30,7 +30,7 @@ const RUN_01_HASH = "22748700"
  * Vale como determinismo sobre input humano longo.
  */
 const RUN_02 = resolve(projectRoot, "replays", "run-02.json")
-const RUN_02_HASH = "263d9dc2"
+const RUN_02_HASH = "7da3f752"
 
 /**
  * Terceira run real: 5,7 min de input humano, gravada quando os modificadores
@@ -40,7 +40,7 @@ const RUN_02_HASH = "263d9dc2"
  * sai mais do cérebro — ver o teste da cobertura, mais abaixo.
  */
 const RUN_03 = resolve(projectRoot, "replays", "run-03.json")
-const RUN_03_HASH = "56336abe"
+const RUN_03_HASH = "a629c5ce"
 
 /**
  * Fixture do core contínuo, gravada por `npm run rec`. Sintética, não humana:
@@ -68,7 +68,7 @@ const RUN_03_HASH = "56336abe"
  * deixou de ser zelo e virou a única forma de a suíte cobrir o fim da run.
  */
 const CORE_ATUAL = resolve(projectRoot, "replays", "core-atual.json")
-const CORE_ATUAL_HASH = "0636ef0f"
+const CORE_ATUAL_HASH = "eb5884dd"
 
 const smoke = () => loadReplay(SMOKE)
 const tuning = () => loadTuning()
@@ -276,6 +276,23 @@ const tuning = () => loadTuning()
  * apareceu no mesmo teste lateral de sempre — `muda o comportamento sem editar
  * código` parou de mudar hash, porque no cérebro não existe dash. É a segunda
  * vez que esse teste denuncia o que cinco baselines não denunciam.
+ *
+ * DÉCIMA QUARTA VEZ, em 14/08: o HISTÓRICO passou a existir.
+ *
+ * O H fechou a lacuna que a rodada anterior deixava: **só o modo pandemia
+ * continua inativo.** Para o histórico ser uma tela de verdade, a run terminada
+ * precisa deixar registro — onda, abates, moedas, se venceu e quanto durou — e
+ * esse registro é ESTADO, então entra no hash com o conteúdo e não só com a
+ * contagem. Contar sem olhar deixaria dois históricos diferentes com o mesmo
+ * hash, que é a única coisa que o hash existe para impedir.
+ *
+ * Esta deriva é diferente das treze anteriores num ponto que vale dizer: o
+ * `tuning.json` NÃO mudou. O `tuningMatches` da âncora continua verdadeiro, e
+ * por isso a mensagem que este arquivo dá ao cair é a de REGRESSÃO — "o tuning
+ * é o mesmo e o hash mudou assim mesmo, não rebaseie". A mensagem está certa
+ * como regra e errada neste caso, e a diferença é a intenção: eu acrescentei
+ * estado de propósito. A âncora foi regravada, e é isso que separa "declarei"
+ * de "rebasei porque estava vermelho".
  */
 
 /**
@@ -469,8 +486,8 @@ describe("determinismo", () => {
  * alguém dizer o que ele é.
  */
 const PROCEDENCIA: ReadonlyArray<readonly [string, string, string]> = [
-  ["smoke.json", "9cc7bf0", "sintética, regenerável byte a byte por `npm run smoke`"],
-  ["core-atual.json", "9cc7bf0", "sintética, VIVA — regravar com `npm run rec`"],
+  ["smoke.json", "96a57fc", "sintética, regenerável byte a byte por `npm run smoke`"],
+  ["core-atual.json", "96a57fc", "sintética, VIVA — regravar com `npm run rec`"],
   ["run-01.json", "7c952a6", "humana, core do dash; hoje só âncora de determinismo"],
   ["run-02.json", "7c952a6", "humana, core do dash; hoje só âncora de determinismo"],
   ["run-03.json", "7c952a6", "humana, core do dash; hoje só âncora de determinismo"],

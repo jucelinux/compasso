@@ -1799,3 +1799,108 @@ describe("as cinco portas do cérebro", () => {
     }
   })
 })
+
+/*
+ * O HISTÓRICO, 14/08 — a tela do canto superior esquerdo ficou ATIVA.
+ *
+ * O H fechou a lacuna: só o modo pandemia continua inativo. Para o histórico
+ * existir de verdade, a run terminada precisa deixar registro, e é isso que
+ * estes testes travam — não a aparência da tela, mas que o registro exista, com
+ * os números da run que acabou e não os da seguinte.
+ */
+describe("o histórico de runs", () => {
+  const morre = (sim: Sim): void => {
+    let guarda = 0
+    while (sim.state().phase !== "dead" && guarda++ < 60 * 60 * 6) tick(sim, NONE)
+  }
+
+  it("começa vazio", () => {
+    expect(createSim(1, tuning).state().historico).toEqual([])
+  })
+
+  it("uma run terminada deixa UM registro, com os números dela", () => {
+    const sim = start(4242)
+    const s0 = sim.state()
+    const ondaNaMorte = { wave: 0, kills: 0, coins: 0 }
+    let guarda = 0
+    while (sim.state().phase !== "dead" && guarda++ < 60 * 60 * 6) {
+      const s = sim.state()
+      ondaNaMorte.wave = s.wave
+      ondaNaMorte.kills = s.kills
+      ondaNaMorte.coins = s.coins
+      tick(sim, NONE)
+    }
+    expect(sim.state().phase, "a run não terminou; o teste não mediu nada").toBe("dead")
+    const h = sim.state().historico
+    expect(h.length).toBe(1)
+    expect(h[0]!.wave).toBe(ondaNaMorte.wave)
+    expect(h[0]!.kills).toBe(ondaNaMorte.kills)
+    // As moedas do registro são as DESTA run, colhidas antes de o banco somar.
+    expect(h[0]!.coins).toBe(ondaNaMorte.coins)
+    expect(h[0]!.venceu).toBe(false)
+    expect(h[0]!.ticks).toBeGreaterThan(0)
+    void s0
+  })
+
+  it("a run mais NOVA fica na frente", () => {
+    // É como a tela lê: quem abre o histórico quer saber da última.
+    const sim = start(77)
+    morre(sim)
+    const primeira = sim.state().historico[0]!
+    /*
+     * INSISTE no reinício: a tela de morte tem `deadLock`, e o primeiro toque
+     * cai dentro dele. A primeira versão deste teste apertava uma vez, seguia
+     * em frente e media a MESMA run — dava 1 registro onde eu esperava 2, e o
+     * defeito era do teste. O jogador insiste; o teste também.
+     */
+    let d = 0
+    while (sim.state().phase === "dead" && d++ < 300) {
+      // ALTERNA solto/apertado: a saída é por BORDA, e segurar a tecla não é
+      // apertá-la de novo. Segunda correção deste mesmo teste, e as duas foram
+      // do teste — o jogo estava cumprindo o que promete nas duas vezes.
+      sim.step(d % 2 === 0 ? RESTART : NONE)
+    }
+    expect(sim.state().phase, "não saiu da tela de morte").toBe("hub")
+    saiDoHub(sim)
+    let g = 0
+    while (TELA(sim.state().phase) && g++ < 900) sim.step(atravessa(sim))
+    morre(sim)
+    const h = sim.state().historico
+    expect(h.length).toBe(2)
+    expect(h[1]).toEqual(primeira)
+  })
+
+  it("o histórico tem TETO: ele vive no hash e não pode crescer sem fim", () => {
+    /*
+     * Sem teto, o custo cresceria com o tempo de jogo e apareceria como um
+     * replay ficando mais lento quanto mais alguém joga — que é a forma mais
+     * chata de um defeito aparecer, porque parece "o jogo está pesado".
+     *
+     * Aqui a lista é preenchida à mão em vez de por 9 runs: o que se mede é o
+     * teto, não a duração de nove partidas.
+     */
+    const sim = start(5)
+    const h = sim.state().historico
+    for (let i = 0; i < 40; i++) {
+      h.unshift({ wave: i, kills: i, coins: i, venceu: false, ticks: i })
+    }
+    morre(sim)
+    expect(sim.state().historico.length).toBeLessThanOrEqual(8)
+    // E o topo é o registro NOVO, não os enfiados à mão.
+    expect(sim.state().historico[0]!.wave).not.toBe(39)
+  })
+
+  it("o registro entra no HASH, com o conteúdo e não só a contagem", () => {
+    /*
+     * Contar sem olhar deixaria dois históricos diferentes com o mesmo hash, e
+     * o hash existe exatamente para que isso não aconteça. É o caso nulo desta
+     * peça: sem ele, o pacote poderia estar ignorando a lista inteira.
+     */
+    const a = createSim(9, tuning)
+    const b = createSim(9, tuning)
+    expect(a.snapshot().hash).toBe(b.snapshot().hash)
+    a.state().historico.push({ wave: 3, kills: 10, coins: 2, venceu: false, ticks: 600 })
+    b.state().historico.push({ wave: 3, kills: 10, coins: 2, venceu: true, ticks: 600 })
+    expect(a.snapshot().hash).not.toBe(b.snapshot().hash)
+  })
+})

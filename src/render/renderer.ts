@@ -260,35 +260,71 @@ const PORTA_COR: Readonly<Record<string, number>> = {
 /**
  * O CORPO de cada tela, e a regra dele é uma só: só o que hoje é VERDADE.
  *
- * O H nomeou as cinco portas e ainda não desenhou o que vai dentro de quatro
- * delas. Onde há estado real — runs terminadas, memória acumulada — o número
- * sai do estado. Onde não há, a tela diz que não há. Encher com número
- * inventado seria decidir por ele quatro funcionalidades de uma vez, e um
- * placeholder que MENTE é pior que um que se assume.
+ * Em 14/08 o H fechou a lacuna que a versão anterior deixava em quatro telas:
+ * **só o modo pandemia está inativo.** As outras três passam a mostrar coisa de
+ * verdade, e a nota apologética que cada uma carregava saiu junto — ela existia
+ * para confessar que a tela não fazia nada, e três delas fazem.
+ *
+ * O que cada uma podia honestamente mostrar saiu do que o estado já sabe, não
+ * de funcionalidade inventada: o histórico ganhou registro de run no fim de
+ * cada uma, o inventário mostra o que de fato atravessa a morte, e os upgrades
+ * mostram a moeda e o acumulado — que foi o que ele pediu para manter enquanto
+ * o que ela compra não existe.
  */
-const PORTA_CORPO: Readonly<Record<string, (cur: SimState) => ReadonlyArray<string>>> = {
-  historico: (cur) => [
-    `${cur.runIndex} ${cur.runIndex === 1 ? "RUN" : "RUNS"}`,
-    "O QUE FOI ATÉ AQUI",
-  ],
-  inventario: () => ["VAZIO", "O QUE VOCÊ CARREGA ENTRE RUNS"],
-  upgrades: (cur) => [`${cur.bank} DE MEMÓRIA`, "NADA PARA GASTAR AINDA"],
-  pandemia: () => ["FECHADO", "OUTRO JEITO DE JOGAR"],
+/** `mm:ss` a partir de ticks de sim. A sim conta ticks; segundo é coisa de tela. */
+const relogio = (ticks: number): string => {
+  const t = Math.max(0, Math.round(ticks / 60))
+  return `${Math.floor(t / 60)}:${String(t % 60).padStart(2, "0")}`
 }
 
 /**
- * A linha de baixo: o que a tela ainda NÃO faz, dita na própria tela.
+ * O HISTÓRICO: as últimas runs, uma por linha.
  *
- * Curtas porque o quadro tem 240px e a fonte 6px por letra: 38 caracteres é o
- * teto real, e a primeira versão passou dele — a nota do histórico saía pelos
- * dois lados do painel, sobre a multidão, na cor que só funciona sobre painel.
+ * Onda, tempo e abates, que são as três coisas que respondem "como foi". A
+ * moeda fica de fora da linha de propósito: ela já tem tela e faixa próprias, e
+ * repeti-la aqui gastaria a largura que o resto precisa.
  */
-const PORTA_NOTA: Readonly<Record<string, string>> = {
-  historico: "nada guardado entre sessões ainda",
-  inventario: "sem itens persistentes ainda",
-  upgrades: "o que ela compra vem depois",
-  pandemia: "regras ainda não definidas",
+const linhasHistorico = (cur: SimState): ReadonlyArray<string> => {
+  // O vazio é uma linha da mesma lista, e não um destaque: "ainda não houve
+  // run" não é uma resposta grande, é a ausência de linhas.
+  if (cur.historico.length === 0) return ["NENHUMA RUN AINDA"]
+  return cur.historico
+    .slice(0, 5)
+    .map((r) => `${r.venceu ? "LIMPOU" : `ONDA ${r.wave}`} · ${relogio(r.ticks)} · ${r.kills}`)
 }
+
+/**
+ * O INVENTÁRIO: o que de fato ATRAVESSA a morte.
+ *
+ * Hoje é uma coisa só, a memória imunológica, e a tela diz isso em vez de
+ * fingir uma mochila. Abaixo dela ficam os itens que se ACHA durante a run —
+ * eles não são carregados entre runs, e a linha diz isso também. Um inventário
+ * que listasse consumíveis de campo como se fossem posses prometeria uma
+ * mecânica que não existe.
+ */
+const linhasInventario = (cur: SimState): ReadonlyArray<string> => [
+  `${cur.bank} DE MEMÓRIA`,
+  "É O QUE ATRAVESSA A MORTE",
+  "SUPRESSÃO E COMPLEMENTO SÓ EM RUN",
+]
+
+const PORTA_CORPO: Readonly<Record<string, (cur: SimState) => ReadonlyArray<string>>> = {
+  historico: linhasHistorico,
+  inventario: linhasInventario,
+  upgrades: (cur) => [`${cur.bank}`],
+  pandemia: () => ["EM BREVE"],
+}
+
+/**
+ * Quais telas são LISTA — linhas iguais, sem destaque.
+ *
+ * É propriedade da TELA e não da contagem de linhas. A primeira versão usava
+ * "mais de três linhas vira lista", e o proxy quebra no caso mais comum que
+ * existe: com duas runs no histórico, a primeira saía grande e a segunda
+ * pequena, como se uma valesse mais. Numa lista de iguais, nenhuma pode ser
+ * maior — e quantas são não muda isso.
+ */
+const PORTA_LISTA: Readonly<Record<string, boolean>> = { historico: true }
 
 export async function createRenderer(
   mount: HTMLElement,
@@ -843,6 +879,8 @@ export async function createRenderer(
   const cardPicks = [0, 1, 2].map(() => new Label(overlay, atlas))
   /** Um rótulo por PORTA do cérebro: a órbita e as quatro de 13/08. */
   const hubLabels = [0, 1, 2, 3, 4].map(() => new Label(overlay, atlas))
+  /** As linhas do corpo de um painel. Cinco cabem no quadro; o histórico usa todas. */
+  const painelLinhas = [0, 1, 2, 3, 4].map(() => new Label(overlay, atlas))
   const cardBlurbs = [0, 1, 2].map(() => new Label(overlay, atlas))
   // O que SAI do build se você levar este. Só aparece com o build cheio.
   const cardCusto = [0, 1, 2].map(() => new Label(overlay, atlas))
@@ -2131,13 +2169,64 @@ export async function createRenderer(
 
     cardLines[0]!.set(PORTA_NOME[id] ?? id.toUpperCase(), GLD2, cxq, y0 + 5, 1, true)
 
+    /*
+     * Dois arranjos, e a escolha é do CONTEÚDO e não da tela.
+     *
+     * LISTA: uma coluna de iguais, nenhuma linha maior que as outras. É o
+     * histórico, onde cada linha é uma run e nenhuma vale mais que a vizinha.
+     * DESTAQUE: existe um número que é a RESPOSTA — quanto de memória, qual o
+     * estado — e as outras linhas o explicam.
+     *
+     * A tela declara qual ela é, em `PORTA_LISTA`. A primeira versão inferia
+     * pela contagem de linhas ("mais de três vira lista") e quebrava no caso
+     * mais comum que existe: com duas runs, a primeira saía grande e a segunda
+     * pequena, como se uma valesse mais que a outra.
+     */
     const linhas = PORTA_CORPO[id]?.(cur) ?? []
-    for (let i = 0; i < cardBlurbs.length; i++) {
+    const lista = PORTA_LISTA[id] === true
+    for (let i = 0; i < painelLinhas.length; i++) {
       const t = linhas[i]
-      if (t === undefined) cardBlurbs[i]!.hide()
-      else cardBlurbs[i]!.set(t, i === 0 ? WHITE : NUC2, cxq, y0 + 44 + i * 22, i === 0 ? 2 : 1, true)
+      if (t === undefined) {
+        painelLinhas[i]!.hide()
+        continue
+      }
+      if (lista) painelLinhas[i]!.set(t, i === 0 ? WHITE : NUC2, cxq, y0 + 42 + i * 20, 1, true)
+      else {
+        /*
+         * O destaque é escala 2 (14px de altura), então a primeira linha de
+         * apoio começa DEPOIS dele e não numa progressão que passa por cima.
+         *
+         * A primeira versão usava `40 + i * 26` para i>=1, o que dava 66 contra
+         * um destaque em 56..70: as duas linhas saíram uma dentro da outra na
+         * captura do inventário. Erro de aritmética meu, e do tipo que só a
+         * imagem pega — o texto estava certo, o número estava certo, e o
+         * resultado era ilegível.
+         */
+        painelLinhas[i]!.set(
+          t,
+          i === 0 ? WHITE : NUC2,
+          cxq,
+          y0 + (i === 0 ? 52 : 78 + (i - 1) * 20),
+          i === 0 ? 2 : 1,
+          true,
+        )
+      }
     }
-    cardLines[1]!.set(PORTA_NOTA[id] ?? "", DIM1, cxq, y0 + 140, 1, true)
+    /*
+     * A MOEDA desenhada nos upgrades — pedido do H: "manter apenas a moeda e o
+     * valor acumulado".
+     *
+     * Mesma peça que fica na faixa do cérebro e que cai no chão da arena. O
+     * jogador vê o mesmo objeto nos três lugares, e a ligação entre juntar,
+     * acumular e gastar não precisa de uma palavra.
+     */
+    if (id === "upgrades") {
+      hubCoin.texture = frameOf(atlas.coin, 0, 0, Math.floor(selfClock * 8))
+      hubCoin.position.set(Math.round(cxq - textWidth(linhas[0] ?? "") - 8), y0 + 62)
+      hubCoin.visible = true
+    }
+    for (const l of cardBlurbs) l.hide()
+    cardLines[1]!.hide()
     cardLines[2]!.hide()
     cardLines[3]!.hide()
     // Chão sob o prompt: ele fica FORA do quadro, sobre a multidão, e é a
@@ -2243,6 +2332,7 @@ export async function createRenderer(
     cardBicho.visible = isCard || isSelect
     hubCoin.visible = isHub
     for (const l of hubLabels) if (!isHub) l.hide()
+    for (const l of painelLinhas) if (!isPainel) l.hide()
     for (const l of cardLines) if (!telaDeCima) l.hide()
     if (!isClosed && !isHub && !isSelect && !isPainel) {
       for (const l of cardPicks) l.hide()

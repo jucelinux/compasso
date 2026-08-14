@@ -188,6 +188,26 @@ try {
   await d.page.waitForTimeout(600)
   await d.shot(resolve(dir, "3-morte.png"))
 
+  /*
+   * O HISTÓRICO CHEIO, e ele só existe aqui.
+   *
+   * A captura das quatro portas acontece antes de qualquer run, então a tela
+   * sai com "nenhuma run ainda" — que é um estado real e vale ser visto, mas
+   * não é o arranjo que precisa ser conferido. A lista de runs tem outro
+   * arranjo (linhas iguais, sem destaque), e o único jeito de vê-la é morrer
+   * primeiro. É o que este bloco faz, e é por isso que ele vem depois da morte.
+   */
+  let volta = 0
+  while ((await fase()) === "dead" && volta++ < 40) await d.hold(["KeyR"], 120)
+  if ((await fase()) === "hub") {
+    const h = HUB.nodes.find((n) => n.id === "historico")
+    if (h !== undefined) {
+      await d.clicaArena(h.x, h.y)
+      await d.page.waitForTimeout(220)
+      if ((await fase()) === "painel") await d.shot(resolve(dir, "5-historico-cheio.png"))
+    }
+  }
+
   console.log(`capturas em ${dir}`)
   console.log(
     viuIntervalo
