@@ -14,3 +14,7 @@ shots/
 # CHANGELOG.md e examples/ lidos por uma sessão fria viram requisito, e um projeto já
 # herdou o resíduo de outro domínio exatamente assim.
 taste-loop/
+
+# O pacote do itch é ARTEFATO de build, gerado do dist a cada publicação.
+# Versionar binário que `npm run build` reproduz é peso morto no histórico.
+compasso-itch.zip

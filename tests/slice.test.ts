@@ -443,7 +443,9 @@ describe("i-frames caem ao engolir", () => {
     takeHit(sim)
     // Macrófago mata sozinho, longe do corpo; a proteção tem que sobreviver.
     // O poder precisa estar ATIVO: sem ele a sim zera o array de macrófagos.
-    const macrofago = POWERS.findIndex((p) => p.name === "MACRÓFAGO")
+    // Pelo ID e não pelo NOME: `name` é texto de TELA, e em 26/08 ele mudou de
+    // idioma sem que o poder mudasse. Chave de teste não pode ser legenda.
+    const macrofago = POWERS.findIndex((p) => p.id === 3)
     mut(sim).active[macrofago] = 600
     park(sim)
     advance(sim, 1)

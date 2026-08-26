@@ -195,6 +195,27 @@ produz aquela leitura sozinho e já sabe a resposta.
 Contador zerado. As duas evidências que sobrevivem como CONTEXTO, não como strike: o filho em
 02/08 não leu a dilatação (seria "não" hoje), e a esposa leu — mas assistindo, não jogando.
 
+## A publicação no itch.io — 26/08
+
+Chamada do H: o jogo vai para o itch.io, e para isso o TEXTO DE TELA passou a ser inglês
+(código e log continuam em português). O que assentou está no `DECISIONS.md`; a página, com
+tagline, campos do formulário e corpo pronto para colar, está no `ITCH.md`.
+
+**O que a rodada deixou aberto:**
+
+1. **A tagline do projeto não descreve o build, e a página teve que dizer outra coisa.** O
+   pitch é *"time only moves when you move"* e `time.dilation` está `false` desde 13/08 —
+   pôr a frase na loja venderia uma mecânica que o jogador não encontra. A página foi escrita
+   sobre o que EXISTE (mover é atacar, curar é atravessar, conter é vencer), e a versão com a
+   dilatação ligada está pronta no fim do `ITCH.md` para o dia em que o toggle voltar.
+   **Ligar ou não é chamada dele.**
+2. **Publicar não destrava o portão.** Ele mede a dilatação sendo lida, e a dilatação não
+   está no jogo: visitante do itch hoje produz nulo pela mesma regra de 02/08. O que a
+   publicação abre é o CANAL — estranhos jogando sem ninguém explicar, que é o insumo que o
+   método não consegue fabricar. Ele passa a valer no dia em que o relógio voltar.
+3. **Falta a capa 630x500 e um GIF curto.** O itch exige capa para a listagem e nenhuma
+   captura de `shots/` está nessa proporção. Sem elas a página sobe, mas não aparece bem.
+
 ## Fora do tema, a pedido do H — o deploy e o iPad (05/08)
 
 Sessão pedida antes de retomar o relógio lento. Estado: **fechado, faltando a validação no

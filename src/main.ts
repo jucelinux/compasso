@@ -476,12 +476,12 @@ function frame(now: number): void {
   // `fase` está aqui para o `npm run rec` saber quando a run morreu sem
   // adivinhar por relógio. Instrumentação, como o resto desta linha.
   hud.textContent =
-    `run ${s.runIndex + 1} · seed ${seed} · tick ${s.tick} · fase ${s.phase} · ` +
+    `run ${s.runIndex + 1} · seed ${seed} · tick ${s.tick} · phase ${s.phase} · ` +
     `${sim.snapshot().hash} · ${fpsLabel}\n` +
     (touch
-      ? `arraste na esquerda pra mover · toque na direita = impulso`
-      : `WASD/setas movem · espaço = impulso · R recomeça · shift+F9 grava a run · ` +
-        `P troca a paleta (${variant}) · ?crowd=<n> muda a densidade das hemácias`)
+      ? `drag on the left to move · tap on the right to dash`
+      : `WASD/arrows move · space = dash · R restarts · shift+F9 records the run · ` +
+        `P cycles the palette (${variant}) · ?crowd=<n> changes red cell density`)
 
   requestAnimationFrame(frame)
 }

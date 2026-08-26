@@ -19,15 +19,15 @@ export interface Power {
 }
 
 export const POWERS: readonly Power[] = [
-  { id: 0, name: "CITOCINA", blurb: "seu rastro queima", color: 0x7fe9ff },
-  { id: 1, name: "FEBRE", blurb: "o corpo ferve a cada 6", color: 0xff8a3d },
-  { id: 2, name: "ANTICORPO", blurb: "orbita e corta", color: 0x8affc8 },
-  { id: 3, name: "MACRÓFAGO", blurb: "um aliado caça", color: 0xbfe6ff },
-  { id: 4, name: "HISTAMINA", blurb: "quem morre deixa nuvem", color: 0xffe58a },
-  { id: 5, name: "INTERFERON", blurb: "o que chega perto emperra", color: 0x8fd8ff },
-  { id: 6, name: "ENZIMA", blurb: "engole qualquer coisa", color: 0xff5ad0 },
-  { id: 7, name: "SURTO", blurb: "você fica mais rápida", color: 0xffd23d },
-  { id: 8, name: "MEMBRANA", blurb: "absorve um toque", color: 0xa0ffd0 },
+  { id: 0, name: "CYTOKINE", blurb: "your trail burns", color: 0x7fe9ff },
+  { id: 1, name: "FEVER", blurb: "the body boils every 6", color: 0xff8a3d },
+  { id: 2, name: "ANTIBODY", blurb: "orbits and cuts", color: 0x8affc8 },
+  { id: 3, name: "MACROPHAGE", blurb: "an ally hunts", color: 0xbfe6ff },
+  { id: 4, name: "HISTAMINE", blurb: "the dying leave a cloud", color: 0xffe58a },
+  { id: 5, name: "INTERFERON", blurb: "whatever comes close jams", color: 0x8fd8ff },
+  { id: 6, name: "ENZYME", blurb: "engulfs anything", color: 0xff5ad0 },
+  { id: 7, name: "SURGE", blurb: "you move faster", color: 0xffd23d },
+  { id: 8, name: "MEMBRANE", blurb: "absorbs one hit", color: 0xa0ffd0 },
   /*
    * PLAQUETA saiu do azul e foi para o VERDE do limo, a pedido do H em 13/08.
    *
@@ -36,7 +36,7 @@ export const POWERS: readonly Power[] = [
    * toda fase), então o item passa a anunciar o próprio alvo: você olha a
    * bolinha e sabe que ela mexe no LIMO, sem texto e sem tutorial.
    */
-  { id: 9, name: "PLAQUETA", blurb: "regenera o tecido", color: 0x6ee27a },
+  { id: 9, name: "PLATELET", blurb: "regrows the tissue", color: 0x6ee27a },
   /*
    * COMPLEMENTO — o item que ataca a REPRODUÇÃO, não o corpo.
    *
@@ -50,7 +50,7 @@ export const POWERS: readonly Power[] = [
    * `color` é só o palpite de rampa para quando não há fase (o preview). Contra
    * a E. coli o item sai amarelo, como o bacilo.
    */
-  { id: 10, name: "COMPLEMENTO", blurb: "quebra a colônia", color: 0xffd23d },
+  { id: 10, name: "COMPLEMENT", blurb: "breaks the colony", color: 0xffd23d },
 ]
 
 /** Efeito imediato, não temporário: acontece ao encostar e acaba ali. */

@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="pt-BR">
+<html lang="en">
   <head>
     <meta charset="utf-8" />
     <!--
@@ -19,7 +19,16 @@
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-    <title>COMPASSO — round zero</title>
+    <title>COMPASSO</title>
+    <!--
+      A descrição fala do build, e NÃO do pitch. A dilatação está atrás de
+      `time.dilation: false` desde 13/08 — anunciar "o tempo anda na sua
+      velocidade" aqui seria a mesma mentira que a tagline do itch quase levou.
+    -->
+    <meta
+      name="description"
+      content="A pixel-art arena inside a body: a white blood cell that kills by moving fast and heals the tissue it crosses."
+    />
     <style>
       html, body {
         margin: 0;
@@ -171,8 +180,8 @@
     <div id="hud"></div>
     <div id="toque">
       <div id="manche"><div id="botao-manche"></div></div>
-      <div id="impulso">IMPULSO</div>
-      <button id="tela-cheia" type="button" aria-label="tela cheia">⛶</button>
+      <div id="impulso">DASH</div>
+      <button id="tela-cheia" type="button" aria-label="fullscreen">⛶</button>
     </div>
     <script type="module" src="/src/main.ts"></script>
   </body>

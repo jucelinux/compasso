@@ -23,7 +23,7 @@ const falhas: string[] = []
 
 try {
   const fase = async (): Promise<string> =>
-    (await d.page.locator("#hud").textContent())?.match(/fase (\w+)/)?.[1] ?? "?"
+    (await d.page.locator("#hud").textContent())?.match(/phase (\w+)/)?.[1] ?? "?"
 
   const confere = async (nome: string, esperado: string): Promise<void> => {
     await d.page.waitForTimeout(260)

@@ -75,10 +75,11 @@ describe("instruções de toque", () => {
   it("toda letra existe na fonte bitmap", () => {
     const conhecidos = new Set(knownChars())
     const linhas = [
-      "TOQUE PRA COMEÇAR",
-      "ARRASTE ESCOLHE · TOQUE CONFIRMA",
-      "TOQUE PRA PRÓXIMA DOENÇA",
-      "TOQUE PRA OUTRA",
+      "TAP TO START",
+      "TAP TO FIGHT",
+      "TAP OUTSIDE TO GO BACK",
+      "TAP OUTSIDE TO CLOSE",
+      "TAP TO RETRY",
     ]
     for (const linha of linhas) {
       for (const ch of linha) {

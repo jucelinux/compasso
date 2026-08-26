@@ -221,18 +221,18 @@ class Pool {
  */
 const PROMPTS = {
   teclado: {
-    comecar: "ESPAÇO PRA COMEÇAR",
-    outra: "R OU ENTER PRA OUTRA",
-    lutar: "ESPAÇO PRA LUTAR",
-    voltar: "R OU CLIQUE FORA VOLTA",
-    fechar: "R OU CLIQUE FORA FECHA",
+    comecar: "SPACE TO START",
+    outra: "R OR ENTER TO RETRY",
+    lutar: "SPACE TO FIGHT",
+    voltar: "R OR CLICK OUTSIDE TO GO BACK",
+    fechar: "R OR CLICK OUTSIDE TO CLOSE",
   },
   toque: {
-    comecar: "TOQUE PRA COMEÇAR",
-    outra: "TOQUE PRA OUTRA",
-    lutar: "TOQUE PRA LUTAR",
-    voltar: "TOQUE FORA VOLTA",
-    fechar: "TOQUE FORA FECHA",
+    comecar: "TAP TO START",
+    outra: "TAP TO RETRY",
+    lutar: "TAP TO FIGHT",
+    voltar: "TAP OUTSIDE TO GO BACK",
+    fechar: "TAP OUTSIDE TO CLOSE",
   },
 } as const
 
@@ -245,10 +245,10 @@ const PROMPTS = {
  * esquecer.
  */
 const PORTA_NOME: Readonly<Record<string, string>> = {
-  historico: "HISTÓRICO",
-  inventario: "MEU INVENTÁRIO",
+  historico: "HISTORY",
+  inventario: "MY INVENTORY",
   upgrades: "UPGRADES",
-  pandemia: "MODO PANDEMIA",
+  pandemia: "PANDEMIC MODE",
 }
 
 const PORTA_COR: Readonly<Record<string, number>> = {
@@ -288,10 +288,10 @@ const relogio = (ticks: number): string => {
 const linhasHistorico = (cur: SimState): ReadonlyArray<string> => {
   // O vazio é uma linha da mesma lista, e não um destaque: "ainda não houve
   // run" não é uma resposta grande, é a ausência de linhas.
-  if (cur.historico.length === 0) return ["NENHUMA RUN AINDA"]
+  if (cur.historico.length === 0) return ["NO RUNS YET"]
   return cur.historico
     .slice(0, 5)
-    .map((r) => `${r.venceu ? "LIMPOU" : `ONDA ${r.wave}`} · ${relogio(r.ticks)} · ${r.kills}`)
+    .map((r) => `${r.venceu ? "CLEARED" : `WAVE ${r.wave}`} · ${relogio(r.ticks)} · ${r.kills}`)
 }
 
 /**
@@ -304,16 +304,16 @@ const linhasHistorico = (cur: SimState): ReadonlyArray<string> => {
  * mecânica que não existe.
  */
 const linhasInventario = (cur: SimState): ReadonlyArray<string> => [
-  `${cur.bank} DE MEMÓRIA`,
-  "É O QUE ATRAVESSA A MORTE",
-  "SUPRESSÃO E COMPLEMENTO SÓ EM RUN",
+  `${cur.bank} MEMORY`,
+  "IT IS WHAT SURVIVES DEATH",
+  "FIELD PICKUPS LAST ONE RUN ONLY",
 ]
 
 const PORTA_CORPO: Readonly<Record<string, (cur: SimState) => ReadonlyArray<string>>> = {
   historico: linhasHistorico,
   inventario: linhasInventario,
   upgrades: (cur) => [`${cur.bank}`],
-  pandemia: () => ["EM BREVE"],
+  pandemia: () => ["COMING SOON"],
 }
 
 /**
@@ -342,16 +342,47 @@ const HAB_COR: Readonly<Record<string, number>> = {
   febre: INF2,
 }
 
-/** O nome de cada habilidade na loja. A sim não conhece nenhum destes. */
-const HAB_NOME: Readonly<Record<string, string>> = {
-  adrenalina: "ADRENALINA",
-  febre: "FEBRE",
+/**
+ * A FORMA do patógeno em inglês — só para a TELA. 26/08.
+ *
+ * O `form` do `tuning.json` continua em português porque ele não é legenda: o
+ * `drawEnemies` decide a matriz de quadros por ele (`bacilo` e `flagelado`
+ * apontam para onde andam, os outros cambaleiam), e traduzir o dado faria a
+ * E. coli cair no ramo da esfera e perder a direção. Dado é dado, legenda é
+ * legenda — a mesma separação de `PORTA_NOME` e `HAB_NOME`.
+ *
+ * Traduzir aqui também não move o `tuningHash`: nenhum replay precisa ser
+ * regravado por causa de uma palavra que só existe na tela do card.
+ */
+const FORMA_NOME: Readonly<Record<string, string>> = {
+  esfera: "SPHERE",
+  bacilo: "BACILLUS",
+  cacho: "CLUSTER",
+  flagelado: "FLAGELLATE",
+  coroa: "CROWN",
 }
 
-/** Uma linha do que ela faz. Curta: o quadro tem 240px e a fonte 6px por letra. */
-const HAB_BLURB: Readonly<Record<string, string>> = {
-  adrenalina: "O TEMPO CEDE POR 3S",
-  febre: "CALOR LIMPA A VOLTA POR 3S",
+/** A forma como ela aparece no card, já em caixa alta. */
+const forma = (f: string | undefined): string =>
+  f === undefined || f === "" ? "" : (FORMA_NOME[f] ?? f.toUpperCase())
+
+/** O nome de cada habilidade na loja. A sim não conhece nenhum destes. */
+const HAB_NOME: Readonly<Record<string, string>> = {
+  adrenalina: "ADRENALINE",
+  febre: "FEVER",
+}
+
+/**
+ * Uma linha do que ela faz. Curta: o quadro tem 240px e a fonte 6px por letra.
+ *
+ * A DURAÇÃO vem do `tuning.json` e não do texto. A versão anterior escrevia "POR
+ * 3S" nas duas, e a adrenalina foi para 10s em 14/08 sem que a linha soubesse —
+ * a loja passou a vender um número que o jogo não entrega. Preço e duração são
+ * dado; frase é frase.
+ */
+const HAB_BLURB: Readonly<Record<string, (segundos: number) => string>> = {
+  adrenalina: (s) => `TIME YIELDS FOR ${s}S`,
+  febre: (s) => `HEAT CLEARS AROUND YOU ${s}S`,
 }
 
 export async function createRenderer(
@@ -1911,7 +1942,7 @@ export async function createRenderer(
     // tirou a tarja preta), e ali o tecido vai de quase branco a quase preto ao
     // longo de uma run. Nenhuma cor chapada é legível contra as duas pontas.
     waveLabel.set(
-      `ONDA ${cur.round}/${total}   INFECÇÃO ${Math.ceil(infFrac * 100)}%`,
+      `WAVE ${cur.round}/${total}   INFECTION ${Math.ceil(infFrac * 100)}%`,
       infFrac > tuning.field.loseFraction * 0.7 ? HURT1 : WHITE,
       tuning.arena.width / 2,
       4,
@@ -2108,7 +2139,7 @@ export async function createRenderer(
      * esta tela, e é o que a progressão nova precisa dizer de cara — sem isso
      * ele descobre que a run tem fim só quando ela acaba.
      */
-    cardLines[0]!.set(`${spec.waves} ONDAS`, DIM0, cx, y0 + 6, 1, true)
+    cardLines[0]!.set(`${spec.waves} WAVES`, DIM0, cx, y0 + 6, 1, true)
 
     if (sheet !== undefined) {
       // Cambaleia em 8 direções, como ele faz em campo. Parado no card o bicho
@@ -2122,7 +2153,7 @@ export async function createRenderer(
     }
 
     cardLines[1]!.set((kind?.real ?? spec.disease).toUpperCase(), WHITE, cx, y0 + 136, 2, true)
-    cardLines[2]!.set((kind?.form ?? "").toUpperCase(), GLD2, cx, y0 + 162, 1, true)
+    cardLines[2]!.set(forma(kind?.form), GLD2, cx, y0 + 162, 1, true)
     // Sem estratégia nesta tela. Só a tecla que segue.
     cardLines[3]!.set(cur.cardLock > 0 ? "" : prompt.comecar, WHITE, cx, y0 + 186, 1, true)
   }
@@ -2163,9 +2194,9 @@ export async function createRenderer(
      * altura, então ela mora em `cy - 88` e o dígito começa 22px abaixo.
      */
     rewardPanels.clear()
-    cardLines[0]!.set(`ONDA ${cur.round - 1} CONTIDA`, GLD2, cx, cy - 88, 2, true, true)
+    cardLines[0]!.set(`WAVE ${cur.round - 1} CONTAINED`, GLD2, cx, cy - 88, 2, true, true)
     cardLines[1]!.set(String(segundos), WHITE, cx, cy - 52, 4, true, true)
-    cardLines[2]!.set(`ONDA ${cur.round} DE ${total}`, SHI1, cx, cy + 30, 2, true, true)
+    cardLines[2]!.set(`WAVE ${cur.round} OF ${total}`, SHI1, cx, cy + 30, 2, true, true)
     cardLines[3]!.hide()
   }
 
@@ -2196,17 +2227,17 @@ export async function createRenderer(
       .rect(x0, y0, W, 18)
       .fill({ color: tint, alpha: 0.22 })
 
-    cardLines[0]!.set(`${nome} CONTIDA`.toUpperCase(), WHITE, cx, y0 + 6, 1, true)
-    cardLines[1]!.set(`${cur.score} PONTOS`, GLD2, cx, y0 + 34, 2, true)
+    cardLines[0]!.set(`${nome} CONTAINED`.toUpperCase(), WHITE, cx, y0 + 6, 1, true)
+    cardLines[1]!.set(`${cur.score} POINTS`, GLD2, cx, y0 + 34, 2, true)
     cardLines[2]!.set(
-      `${cur.kills} PATÓGENOS · ${spec.waves} ONDAS · MULT ${cur.bestMult}×`,
+      `${cur.kills} PATHOGENS · ${spec.waves} WAVES · MULT ${cur.bestMult}×`,
       DIM0,
       cx,
       y0 + 66,
       1,
       true,
     )
-    cardLines[3]!.set("O ORGANISMO SEGUE DE PÉ", GLD2, cx, y0 + 92, 1, true)
+    cardLines[3]!.set("THE ORGANISM STILL STANDS", GLD2, cx, y0 + 92, 1, true)
     cardPicks[0]!.set(cur.cardLock > 0 ? "" : prompt.outra, WHITE, cx, y0 + 122, 1, true)
     cardPicks[1]!.hide()
     cardPicks[2]!.hide()
@@ -2270,7 +2301,7 @@ export async function createRenderer(
       [
         tuning.hub.orbitX,
         tuning.hub.orbitY,
-        "COMBATER PATÓGENOS",
+        "FIGHT PATHOGENS",
         tuning.hub.orbitRadius + tuning.enemy.size,
       ],
       ...tuning.hub.nodes.map(
@@ -2401,7 +2432,7 @@ export async function createRenderer(
        * cortado num botão de compra é a pior classe de defeito de tela que
        * existe: ele não parece quebrado, parece outro preço.
        */
-      const txt = tem ? "NÍVEL 1" : `${spec.custo}`
+      const txt = tem ? "LEVEL 1" : `${spec.custo}`
       lojaPrecos[i]!.set(
         txt,
         tem ? SHI1 : paga ? GLD2 : DIM0,
@@ -2409,7 +2440,13 @@ export async function createRenderer(
         ry + 5,
         1,
       )
-      lojaBlurbs[i]!.set(HAB_BLURB[spec.id] ?? "", DIM1, x0 + 30, ry + 17, 1)
+      lojaBlurbs[i]!.set(
+        HAB_BLURB[spec.id]?.(spec.niveis[0]?.duracao ?? 0) ?? "",
+        DIM1,
+        x0 + 30,
+        ry + 17,
+        1,
+      )
     }
   }
 
@@ -2544,7 +2581,7 @@ export async function createRenderer(
       .rect(x0, y0 + H + 4, W, 32)
       .fill({ color: col(INK), alpha: 0.78 })
 
-    cardLines[0]!.set("ESCOLHA O INIMIGO", GLD2, cx, y0 + 5, 1, true)
+    cardLines[0]!.set("CHOOSE YOUR ENEMY", GLD2, cx, y0 + 5, 1, true)
     if (sheet !== undefined) {
       cardBicho.texture = frameOf(sheet, 0, Math.floor(phase * 0.18) & 7, phase)
       cardBicho.position.set(cx, y0 + 50)
@@ -2553,7 +2590,7 @@ export async function createRenderer(
       cardBicho.visible = false
     }
     cardLines[1]!.set((kind?.real ?? spec.disease).toUpperCase(), WHITE, cx, y0 + 90, 2, true)
-    cardLines[2]!.set(`${(kind?.form ?? "").toUpperCase()} · ${spec.waves} ONDAS`, GLD2, cx, y0 + 114, 1, true)
+    cardLines[2]!.set(`${forma(kind?.form)} · ${spec.waves} WAVES`, GLD2, cx, y0 + 114, 1, true)
     /*
      * Quantos existem, e onde você está — em pontos, não em setas.
      *
@@ -2586,7 +2623,7 @@ export async function createRenderer(
     if (teto > 1) {
       const fy = y0 + tuning.hub.ondaTop
       const cw = W / teto
-      lojaLinhas[0]!.set("RETOMAR DA ONDA", NUC2, cx, fy - 12, 1, true)
+      lojaLinhas[0]!.set("RESUME FROM WAVE", NUC2, cx, fy - 12, 1, true)
       for (let i = 1; i < lojaLinhas.length; i++) lojaLinhas[i]!.hide()
       for (let i = 0; i < ondaCelulas.length; i++) {
         if (i >= teto) {
@@ -2693,7 +2730,7 @@ export async function createRenderer(
      * no campo leva sombra e cor da rampa clara.
      */
     deadLines[0]!.set(
-      cur.lostByTissue ? "O TECIDO MORREU" : "A INFECÇÃO VENCEU",
+      cur.lostByTissue ? "THE TISSUE DIED" : "THE INFECTION WON",
       HURT1,
       cx,
       cy - 40,
@@ -2701,9 +2738,9 @@ export async function createRenderer(
       true,
       true,
     )
-    deadLines[1]!.set(`${cur.score} PONTOS · ${cur.kills} PATÓGENOS`, WHITE, cx, cy - 4, 1, true, true)
+    deadLines[1]!.set(`${cur.score} POINTS · ${cur.kills} PATHOGENS`, WHITE, cx, cy - 4, 1, true, true)
     deadLines[2]!.set(
-      cur.bestMult > 1 ? `MELHOR MULTIPLICADOR ${cur.bestMult}×` : "",
+      cur.bestMult > 1 ? `BEST MULTIPLIER ${cur.bestMult}×` : "",
       GLD2,
       cx,
       cy + 10,

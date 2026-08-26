@@ -49,7 +49,7 @@ mkdirSync(dir, { recursive: true })
 const d = await drive(seed)
 try {
   const fase = async (): Promise<string> =>
-    (await d.page.locator("#hud").textContent())?.match(/fase (\w+)/)?.[1] ?? "?"
+    (await d.page.locator("#hud").textContent())?.match(/phase (\w+)/)?.[1] ?? "?"
 
   /*
    * DISPENSA O CARD antes de qualquer captura — e isto é conserto, não passo

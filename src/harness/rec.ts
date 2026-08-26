@@ -79,7 +79,7 @@ try {
     [["ArrowRight", "ArrowUp"], 900],
   ]
   const fase = async (): Promise<string> =>
-    (await d.page.locator("#hud").textContent())?.match(/fase (\w+)/)?.[1] ?? "?"
+    (await d.page.locator("#hud").textContent())?.match(/phase (\w+)/)?.[1] ?? "?"
 
   /*
    * Testemunhas de hash, colhidas do HUD DURANTE a gravação.
@@ -97,7 +97,7 @@ try {
   const testemunhas = new Map<number, string>()
   const testemunha = async (): Promise<void> => {
     const hud = await d.page.locator("#hud").textContent()
-    const m = hud?.match(/tick (\d+) · fase \w+ · ([0-9a-f]+)/)
+    const m = hud?.match(/tick (\d+) · phase \w+ · ([0-9a-f]+)/)
     if (m !== null && m !== undefined) testemunhas.set(Number(m[1]), m[2]!)
   }
 

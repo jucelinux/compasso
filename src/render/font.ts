@@ -68,6 +68,17 @@ const G: Readonly<Record<string, Rows>> = {
   "-": [".....", ".....", ".....", "#####", ".....", ".....", "....."],
   "!": ["..#..", "..#..", "..#..", "..#..", "..#..", ".....", "..#.."],
   "?": [".###.", "#...#", "....#", "...#.", "..#..", ".....", "..#.."],
+  /*
+   * O `%` faltava, e o HUD pedia por ele desde sempre.
+   *
+   * `INFECÇÃO 2%` saía `INFECÇÃO 2` na tela: a fonte devolve `null` para glifo
+   * que não tem e quem chama trata como espaço, em silêncio — o defeito de
+   * 02/08 outra vez, e desta vez num número que sem a unidade lê como
+   * CONTAGEM de infecção em vez de fração do tecido. A captura de 26/08 é que
+   * mostrou; nenhum teste podia, porque o teste da fonte varre a lista de
+   * caracteres que alguém lembrou de escrever nele.
+   */
+  "%": ["##..#", "##.#.", "...#.", "..#..", ".#...", ".#.##", "#..##"],
   "×": [".....", "#...#", ".#.#.", "..#..", ".#.#.", "#...#", "....."],
   "·": [".....", ".....", ".....", "..#..", ".....", ".....", "....."],
   "'": ["..#..", "..#..", ".....", ".....", ".....", ".....", "....."],
